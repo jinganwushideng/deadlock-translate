@@ -1,0 +1,23 @@
+tools/
+artifacts/
+dist/
+**/bin/
+**/obj/
+**/node_modules/
+**/__pycache__/
+*.user
+.local/
+github-source/
+*.dpapi
+*.key
+.env
+.env.*
+!.env.example
+settings.json
+install-manifest.json
+*.log
+*.dmp
+# Generated from the builder's Valve installation.
+/mod/panorama/layout/chat.xml
+/src/Bridge/data/terms.json
+/src/Bridge/wwwroot/app.js

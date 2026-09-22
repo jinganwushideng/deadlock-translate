@@ -1,0 +1,30 @@
+const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+(async()=>{
+ const root=path.resolve(__dirname,'..'),base='http://localhost:17868',key=fs.readFileSync(path.join(root,'artifacts/pairing.key'),'utf8').trim();
+ assert.equal((await fetch(base+'/in-game/wrong')).status,404);
+ const login=await fetch(base+'/in-game/'+key,{redirect:'manual'});
+ assert.equal(login.status,302);assert.equal(login.headers.get('location'),'/?inGame=1');assert(login.headers.get('set-cookie').toLowerCase().includes('httponly'));
+ const browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1040,height:700}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ // Emulate missing modern DOM APIs used by older game HTML surfaces.
+ await page.addInitScript(()=>{Element.prototype.replaceChildren=undefined;File.prototype.text=undefined;Object.defineProperty(document,'hidden',{get:()=>true});});
+ await page.goto(base+'/in-game/'+key);await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
+ assert.equal(await page.locator('#save').count(),1);assert.equal(await page.locator('#mode').inputValue(),'hybrid');
+ const before=await page.evaluate(async()=>await(await fetch('/api/status')).json());
+ await page.locator('nav button[data-page="glossary"]').click();
+ await page.locator('#termFile').setInputFiles({name:'fixture-terms.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify([{source:'fixture',target:'样例',english:'',kind:'phrase',ambiguous:false}]))});
+ await page.waitForFunction(()=>document.querySelector('#termHint').textContent.includes('共 1 条'));
+ await page.locator('nav button[data-page="overview"]').click();
+ await page.locator('#mode').selectOption('fast');await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('设置已保存'));
+ await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));assert.equal(await page.locator('#mode').inputValue(),'fast');
+ const after=await page.evaluate(async()=>await(await fetch('/api/status')).json());assert.equal(after.engine.session,before.engine.session);
+ const firstTitle=await page.title();await page.waitForFunction(previous=>document.title!==previous&&document.title.startsWith('DLTSETTINGS:ready:'),firstTitle);
+ await page.route('**/api/status',route=>route.fulfill({status:503,json:{error:'fixture offline'}}));
+ await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:offline:'));
+ await page.unroute('**/api/status');await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
+ await page.locator('#mode').selectOption('hybrid');await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('设置已保存'));
+ await page.keyboard.press('Escape');assert.equal(await page.title(),'DLTSETTINGS:close');await page.waitForTimeout(1200);assert.equal(await page.title(),'DLTSETTINGS:close');
+ await page.goto(base+'/');await page.waitForFunction(()=>document.querySelector('#termCount').textContent!=='0');await page.keyboard.press('Escape');assert.notEqual(await page.title(),'DLTSETTINGS:close');
+ assert.deepEqual(errors,[]);await browser.close();
+ const result={passed:17,at:new Date().toISOString(),scope:'real backend + Edge with modern DOM APIs disabled; auth/save/FileReader import/status heartbeat/offline recovery/close; not actual game input'};
+ fs.writeFileSync(path.join(root,'artifacts/in-game-page-tests.json'),JSON.stringify(result,null,2));console.log(result);
+})().catch(e=>{console.error(e);process.exit(1)});

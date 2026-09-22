@@ -1,0 +1,15 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/citadel_base_styles.vcss_c" />
+        <include src="s2r://panorama/styles/hud_escape_menu.vcss_c" />
+        <include src="s2r://panorama/styles/dlt_menu.vcss_c" />
+    </styles>
+    <scripts><include src="s2r://panorama/scripts/dlt_menu.vjs_c" /></scripts>
+    <Panel class="SettingsRow DltMenuBlock">
+        <Button id="DltMenuSettings" class="nav_menu_item minor" onactivate="DLTMenuOpenSettings();">
+            <Label text="翻译设置" class="menuButtonLabel" />
+            <Image id="DltMenuGearIcon" class="smallIcon" src="s2r://panorama/images/icons/icon_gear.vsvg" />
+        </Button>
+        <Label id="DltMenuStatus" text="" hittest="false" />
+    </Panel>
+</root>

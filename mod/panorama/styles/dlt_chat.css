@@ -1,0 +1,5 @@
+.DltBridge { width: 1px; height: 1px; opacity: 0; position: -10px -10px 0px; }
+.DltTranslation, .DltBubbleTranslation { color: #28241e; background-color: #e9dec8f2; border-left: 2px solid #b99860; border-radius: 2px; font-size: 17px; font-weight: normal; width: fit-children; white-space: normal; text-overflow: shrink; padding: 3px 7px; margin-top: 3px; max-width: 320px; max-height: 100px; }
+.DltBubbleLayout { flow-children: down; height: fit-children; }
+.DltBubbleLayout .bubble_bg { ignore-parent-flow: true; width: 100%; height: 100%; }
+.DltBubbleTranslation { margin: 3px 12px 8px 12px; }

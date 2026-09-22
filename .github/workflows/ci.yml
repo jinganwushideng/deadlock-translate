@@ -1,0 +1,44 @@
+name: Source checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scan public source and validate export boundary
+        run: |
+          python tests/source-export.test.py
+          python scripts/export_source.py
+      - name: Compile settings
+        working-directory: src/Settings
+        run: |
+          npm ci --ignore-scripts
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run build
+      - name: Build backend
+        run: dotnet build src/Bridge -c Release
+      - name: Concurrency tests (mock HTTP only)
+        run: dotnet run --project tests/ConcurrencyTests
+      - name: Panorama and local data tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          foreach ($test in @('panorama.test.cjs', 'outgoing-ui.test.cjs', 'game-window.test.cjs')) {
+            node (Join-Path tests $test)
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python tests/terms-merge.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/steam-options.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

@@ -1,0 +1,20 @@
+Tongpin / DeadlockTranslate
+Copyright (C) 2026 DeadlockTranslate contributors
+
+Project-authored code and documentation are licensed under GPL-3.0-only.
+See LICENSE and THIRD-PARTY-NOTICES.md for scope and attribution.
+
+Panorama integration was developed with reference to BabelTower:
+https://github.com/c1375rick/BabelTower
+Reference revision: 078819cfa20dcaea52606a973980b3d772906635
+The locally consulted reference files carry this upstream notice:
+Contributor: Thirt927 (https://github.com/Thirt927/BabelTower),
+merged 2026-08-13 under GPL-3.0.
+This is a separately maintained implementation, not an upstream release.
+
+Steam launch wrapping was informed by qjimbo/SteamWrap (Apache-2.0).
+https://github.com/qjimbo/SteamWrap
+
+Deadlock and its game resources belong to Valve and their respective owners.
+The project license does not relicense Valve resources, third-party tools,
+libraries, trademarks, or translation services. No Valve affiliation is implied.

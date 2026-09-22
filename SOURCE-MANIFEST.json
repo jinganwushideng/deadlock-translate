@@ -1,0 +1,395 @@
+{
+  "version": "0.4.0",
+  "files": [
+    {
+      "file": ".gitattributes",
+      "sha256": "40228402aae0e1540cf7aac5527b3f696f561d20a47a13e5e35e9d7f7ac72b19"
+    },
+    {
+      "file": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "sha256": "9af85b46d129697e7d2bf2076c8f10529be6c68aca99a4ccd8ff8a4c85c8dcf8"
+    },
+    {
+      "file": ".github/pull_request_template.md",
+      "sha256": "4f74e318afcd1879cd66869368b162005f547fd96cb6e717e2e6d0aab4181717"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "sha256": "5b018b356b328567dca669fff36b5c6e011691e2c1d05758016d22543673a17b"
+    },
+    {
+      "file": ".gitignore",
+      "sha256": "43c26597841a285d0350a31e1df10c2c96e6411223fdb2a5daab9025992b0ac6"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "dbc9463b866a321eb79817872e29f5cb9a1b94c94cfb01e6a3982300d45ec3c7"
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "sha256": "b157473990b7e8b62e14aa53b6ba3436679e870bfbfeb35c863d10c0f6d23774"
+    },
+    {
+      "file": "docs/BUILDING.md",
+      "sha256": "588fa1139b653b3e143527d329fb8743b1c2dde4c453ba57e6f7306ef6735214"
+    },
+    {
+      "file": "docs/images/chat-bilingual.png",
+      "sha256": "a2fa5f4a0c75bb3cbcdb43240631a51bb9294ae9e543e608127593f06954d1e4"
+    },
+    {
+      "file": "docs/images/chat-bubbles.png",
+      "sha256": "7c314d6383f28b5ee15d8a2c92c93d7d055507d4563a0a43e5a7af7bc524322c"
+    },
+    {
+      "file": "docs/PUBLISHING.md",
+      "sha256": "41d82ab5006aa3f68a35a583cddaef4e106135979e910b2df8d385b15be7f937"
+    },
+    {
+      "file": "docs/SOURCE-AUDIT.md",
+      "sha256": "80d1e89daf5d5a51920013e61fd26912e52f4704f9b99122766f37d832ed73fd"
+    },
+    {
+      "file": "docs/USER-GUIDE.md",
+      "sha256": "7993469656f3ba098342a9b948aa10d5cc64e3bd43528956c008273cd9a14543"
+    },
+    {
+      "file": "docs/VALIDATION.md",
+      "sha256": "96655ea35918f51a1d4220753ce22d29af43182eeb3eefc5d4267cf676889b63"
+    },
+    {
+      "file": "LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "file": "LICENSES/dotnet-MIT.txt",
+      "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+    },
+    {
+      "file": "LICENSES/Playwright-Apache-2.0.txt",
+      "sha256": "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb"
+    },
+    {
+      "file": "LICENSES/README.md",
+      "sha256": "6c435431f347ac4d1c8bdac539585f4d39c6d0fd9e0a355bde28660d95a28cb4"
+    },
+    {
+      "file": "LICENSES/SteamWrap-Apache-2.0.txt",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "file": "LICENSES/TypeScript-Apache-2.0.txt",
+      "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47"
+    },
+    {
+      "file": "LICENSES/ValveResourceFormat-MIT.txt",
+      "sha256": "19549e9b3203eaf3938f35f98e63fc6b166a16af29936affa3df6ec7e2ae7f8d"
+    },
+    {
+      "file": "LICENSES/VPKEdit-MIT.txt",
+      "sha256": "e37f30f388419437479fedfac04d106a458c7766f2a9dfb24884a654b694fb04"
+    },
+    {
+      "file": "mod/panorama/layout/dlt_menu.xml",
+      "sha256": "e4a12147e64cf960bd419e310372a6c0a0be8a1e922833c6ac9bf875bd114e21"
+    },
+    {
+      "file": "mod/panorama/layout/dlt_settings_window.xml",
+      "sha256": "80381f673f1e0f3e54cc553a26fc75267dc7ac459de6cbdc0a557407dabee495"
+    },
+    {
+      "file": "mod/panorama/scripts/dlt_chat.js",
+      "sha256": "2a526e0fb3a2f64caa78f0613ddc7811460bad11797178ee6183e35979cbef29"
+    },
+    {
+      "file": "mod/panorama/scripts/dlt_menu.js",
+      "sha256": "c230c722a9d86a0279dccfe3babe1085238a720e5e7515ff321912348ff430bf"
+    },
+    {
+      "file": "mod/panorama/scripts/dlt_settings_window.js",
+      "sha256": "b331c8ce9b1f11243ad31759a47810550c13f80cce3e29315790309bb8d75f8c"
+    },
+    {
+      "file": "mod/panorama/styles/dlt_chat.css",
+      "sha256": "d601b7dfaaab210c21716a253b56acc2e977dadfd233ac68face67c4c4a4ca0f"
+    },
+    {
+      "file": "mod/panorama/styles/dlt_menu.css",
+      "sha256": "681266b264cde602bf9ffbe308ab1aec2078770df3dbcc8160a7211dee062a1b"
+    },
+    {
+      "file": "mod/panorama/styles/dlt_settings_window.css",
+      "sha256": "aa8e179fce9a85e540d71985d9ad1b701b50bd787756a67af009923c139a26d7"
+    },
+    {
+      "file": "NOTICE",
+      "sha256": "1a2600281735586d05da0b2ed0954a070097a93d050eab34e1d1b9f928be7f40"
+    },
+    {
+      "file": "README.md",
+      "sha256": "987fd7d211cc04cf082c31af8b1df0798b6287996abad4a670e1d5a1ce73b8e8"
+    },
+    {
+      "file": "scripts/build.ps1",
+      "sha256": "29a134a2f7a69b76247601fc53a34533d12c2fb9234a021a4c07f9e1314f3219"
+    },
+    {
+      "file": "scripts/build_terms.py",
+      "sha256": "30d5c7d13d58764a50518d46be94db3f8073cdf7d8aa2896192ce22b72fa03f1"
+    },
+    {
+      "file": "scripts/collect_licenses.py",
+      "sha256": "57361235cdc39b1880ececae3782f1f02cce913dbd46f9fe54173ae64c0ea21e"
+    },
+    {
+      "file": "scripts/export_source.py",
+      "sha256": "48175eafcd2f64cca8e522e97336e633cf40cfc0b869e6e18a288bf046e32a51"
+    },
+    {
+      "file": "scripts/Install.cmd",
+      "sha256": "9d80a3abcd286f86faf9fad544640916d2ceb79a22844b6fbbfc624c5d6a9bcd"
+    },
+    {
+      "file": "scripts/Launch.cmd",
+      "sha256": "e08e0547284ac6375f4688dd7402c9b122bb21af5b4e6ca2ca096abe79828767"
+    },
+    {
+      "file": "scripts/Manage-Mod.ps1",
+      "sha256": "0190ba1668d2ac04325495df51df8f254586322ef5c08d996dc47149074f3f7e"
+    },
+    {
+      "file": "scripts/merge_term_defaults.py",
+      "sha256": "22ccbcbf81b26cfbcf522301aaa4631e3cc18cf05a95ad83e60352537b7d0457"
+    },
+    {
+      "file": "scripts/package_docs.py",
+      "sha256": "444d5c83cacc0d827b33174306b364e2f30dd9ea546c0733a3d77c916e75ce4f"
+    },
+    {
+      "file": "scripts/prepare_mod.py",
+      "sha256": "f783cf08301336cb2c62b5af69bfbbcb3717702cdf3c8cd31973011053bb00c1"
+    },
+    {
+      "file": "scripts/Settings.cmd",
+      "sha256": "cffce76fde0502388915e88da3d0947932964a4ffbfafcb06084167db6c08a03"
+    },
+    {
+      "file": "scripts/steam_launch_options.py",
+      "sha256": "d73a6872c57b337bff006d830d7c132c2ee6c1b61cf1a0fe2e5a7287424d5f6c"
+    },
+    {
+      "file": "scripts/term_extensions.py",
+      "sha256": "c0b50a653d67c684f622a67bfad9f419631ad2950b3f4d5b91c1159c06a52212"
+    },
+    {
+      "file": "scripts/Uninstall.cmd",
+      "sha256": "de48e6d55d850e55474b1e7820921ee1f43796d97bc092534849e8b33c5af7d8"
+    },
+    {
+      "file": "scripts/vpk.py",
+      "sha256": "6c2c92e9df5aec8231adabf5b9b4c2685a7fa0dfb8cbc14331fd18dff234fff6"
+    },
+    {
+      "file": "SECURITY.md",
+      "sha256": "eae55b976f21bfdf97f1b1cf9a86a80fa602c40d3daa5e331ef3ff497a90b1b2"
+    },
+    {
+      "file": "src/Bridge/AsyncConcurrency.cs",
+      "sha256": "9e62fc6322deae46c145b24c27b78788958bef06a4f4d72deab94e0bfe03ccd2"
+    },
+    {
+      "file": "src/Bridge/Bridge.csproj",
+      "sha256": "9ee0e3498424f9bd739bbc67ae5a08650f0c99eddd0ae7ae7c699c74f9120a8b"
+    },
+    {
+      "file": "src/Bridge/Configuration.cs",
+      "sha256": "d236e9e29002a16954447ad876dad7fc0632f0254ff24e7cc188b50a7609ace8"
+    },
+    {
+      "file": "src/Bridge/GameLifecycle.cs",
+      "sha256": "744662bb063902276763eeef1872e16383259fddb47dbe0d051a2837e41fe2d6"
+    },
+    {
+      "file": "src/Bridge/Jobs.cs",
+      "sha256": "bfd0d76d91e40c70510a81d5f8e1036b4a05910b9b9511e8ba67f564421da5d2"
+    },
+    {
+      "file": "src/Bridge/NativeHotkey.cs",
+      "sha256": "e0fe80753345d3f79ab25b4832ee4b486c138bfdd40bd3df2b4ad29a4d2be691"
+    },
+    {
+      "file": "src/Bridge/Outgoing.cs",
+      "sha256": "f3565580694de94e663a4a769cbb784266cbd6930646ee927714b993ae6beaf7"
+    },
+    {
+      "file": "src/Bridge/Program.cs",
+      "sha256": "1282fc8efc93369e012613c5edaff5ed4ef45aff2d17e1172a6408ba5bbab719"
+    },
+    {
+      "file": "src/Bridge/Providers.cs",
+      "sha256": "b8e10953d83b4cd7c5ed1a49c31d552542582e7baa3735f5099d6fa47c7da51f"
+    },
+    {
+      "file": "src/Bridge/SteamGameLaunch.cs",
+      "sha256": "c27c206e4031eee037d47cb8d7cf679b285eb7bf7eea4c5a862cc1fd8f7ec873"
+    },
+    {
+      "file": "src/Bridge/Terms.cs",
+      "sha256": "84757854553f8b179dd0b41e21c3f7c1f15c78fe6f6d9d1f82da35d0d1b7c434"
+    },
+    {
+      "file": "src/Bridge/wwwroot/index.html",
+      "sha256": "ad6758e7adf8fa1df2caa8193dd521decff8ecfc85ae5dca55a7006dd47abb75"
+    },
+    {
+      "file": "src/Bridge/wwwroot/style.css",
+      "sha256": "2efd3395dbb65a516f287d92b2245664cff3d56f942e880c33bb772330e3944c"
+    },
+    {
+      "file": "src/Settings/app.ts",
+      "sha256": "c545d63495a56d492b5b7fae290e65fec39142b0ec63caf0004a02194419c184"
+    },
+    {
+      "file": "src/Settings/package-lock.json",
+      "sha256": "dc892577f46ea31606427a87289a6aeeaea05b2eeac8540b6d9393b28f6a8a99"
+    },
+    {
+      "file": "src/Settings/package.json",
+      "sha256": "3c2d93f74c0b66e65b2db4ef86692e90376a5cf0ba1101bb9d0a488d349ffbb2"
+    },
+    {
+      "file": "src/Settings/tsconfig.json",
+      "sha256": "d3ee9f08fbeeeadf5156b7ae213819eb01c4af89793685fbed170d48344200a9"
+    },
+    {
+      "file": "tests/browser.test.cjs",
+      "sha256": "84dc9d4793566135d7126c70a63e9fed4ddb23efa43d59665dcfdb86f17fdc43"
+    },
+    {
+      "file": "tests/ConcurrencyTests/ConcurrencyTests.csproj",
+      "sha256": "ff14f57392fc7f999c0c8bb8dff773bebe1909a3a281343715f8624e8664ace2"
+    },
+    {
+      "file": "tests/ConcurrencyTests/Program.cs",
+      "sha256": "da0aff78b52e7720721486dbee8726e477c82a9f2a3ad4221005d3510e7561ab"
+    },
+    {
+      "file": "tests/CoreTests/CoreTests.csproj",
+      "sha256": "7011889b5e1b98abae70b4950b406f3f0101f8aff39019adba4f04fa61e6fa6f"
+    },
+    {
+      "file": "tests/CoreTests/Program.cs",
+      "sha256": "fceebb5268a9fa71b12e24a821c16a2c9648be671466efdc4fa34a9fff4aae97"
+    },
+    {
+      "file": "tests/corpus.tsv",
+      "sha256": "d407acd961b6903db1afe042f05b40a2163de8cd30321e118426464e65a355b3"
+    },
+    {
+      "file": "tests/fake-llm.cjs",
+      "sha256": "b3d0874318afc7d581fb25cab4486c690873aff200a591af6ff9ecbb1f2f0e8b"
+    },
+    {
+      "file": "tests/final-smoke.cjs",
+      "sha256": "5f03de248623d4fd074a34c31879e5f7671c193dfaed29f34b59d45bfff18e2e"
+    },
+    {
+      "file": "tests/game-window.test.cjs",
+      "sha256": "396d58102ec13feadc0aea33019dfcbcf9d3425c5c4bf55960f50294ccee6a3a"
+    },
+    {
+      "file": "tests/in-game-page.test.cjs",
+      "sha256": "e7ef7469d649c1e3477d232318cd138f85ad9eb2416fee56e9164ad588a1cba7"
+    },
+    {
+      "file": "tests/installer.test.ps1",
+      "sha256": "a0d2a3983f6ae05ef9264c9804fcdb39dd00a8bb61abd463d70326520ebcf3cc"
+    },
+    {
+      "file": "tests/lifecycle.test.cjs",
+      "sha256": "2f9deda83ddcba83d4229533d1946ecefa925550f3feda675d2e71c662dcb721"
+    },
+    {
+      "file": "tests/live-corpus.cjs",
+      "sha256": "6cfc21e2a9a5b8c12f61235e8305792dd76bfcf57483229d821cf49ea9dbc62c"
+    },
+    {
+      "file": "tests/outgoing-http.test.cjs",
+      "sha256": "676684c21a9dbb676822df326c9b16b1e4879deb3701eeb665971667c6333421"
+    },
+    {
+      "file": "tests/outgoing-ui.test.cjs",
+      "sha256": "ebb0beb309c58a0c0e7d6d2641a4ec3edc40e6575320bfcdbebbd7c647e95cd1"
+    },
+    {
+      "file": "tests/package-lock.json",
+      "sha256": "3fb2c59ecb29c7dc64aa6d26f89f0176c13dc707193486affd9623ee5f6f56b8"
+    },
+    {
+      "file": "tests/package.json",
+      "sha256": "a800be24dbabff3a7b70874a73e2d85eda4d72c45bba3e31e609edcb76060245"
+    },
+    {
+      "file": "tests/package.test.py",
+      "sha256": "98e76947354fff80bc20c73afba9e423f396303c81811a412f6d126fabb877ca"
+    },
+    {
+      "file": "tests/panorama.test.cjs",
+      "sha256": "6720f2cd2870f8a1aa71db918b202acaf1665a8b74578889fa5b0fc7f2c14900"
+    },
+    {
+      "file": "tests/providers.test.cjs",
+      "sha256": "3034f7066af5495b7f21216673489fd39cfddf93d671dcd414924766d1d88239"
+    },
+    {
+      "file": "tests/release-smoke.cjs",
+      "sha256": "701e30b5686a73a25eea35967f1ec9d4e10a01e7de826acf93c301734eb9faba"
+    },
+    {
+      "file": "tests/source-export.test.py",
+      "sha256": "ec9a2eb7a9ed104c0ad60d66a1d84798708b157e25a3f38513be5bbe5168eacb"
+    },
+    {
+      "file": "tests/steam-launch.test.cjs",
+      "sha256": "66fdbe53a301a16e4e3ef0ba6f96b765930d7881be0311d4a2fa3c2390dd7831"
+    },
+    {
+      "file": "tests/steam-options.test.py",
+      "sha256": "218bb0c335d1d234455dafd43403c2ac77dab787ca352fdfd8af0f63cdabf442"
+    },
+    {
+      "file": "tests/SteamLaunchFixture/Program.cs",
+      "sha256": "36fb4b22fafc44cd0e0153ee609d2f4e1bdbd61f0f59afe69faa19c95b4ff33d"
+    },
+    {
+      "file": "tests/SteamLaunchFixture/SteamLaunchFixture.csproj",
+      "sha256": "cbe483c341ea4efc3bf5616d60812fa861bd38416d57f876acaccd95249df49c"
+    },
+    {
+      "file": "tests/stop-backend.cjs",
+      "sha256": "c878d528e41121464c39896fc99a4e4215609886c46b10b2767dec0bb2735475"
+    },
+    {
+      "file": "tests/terms-cases.json",
+      "sha256": "c7c562b82eb434a4c1f0b1b9c2605726c4149bc71d0d970267f612a49a014c5d"
+    },
+    {
+      "file": "tests/terms-merge.test.py",
+      "sha256": "14aab9adb6416fdade73a051a7bde22b9ff2d50720b4f8bbd2a49b9c553df3bb"
+    },
+    {
+      "file": "tests/ui-visual.cjs",
+      "sha256": "30fadc80108584baed578001b7724bb13c4ce1ebbac11fff39a616a152655f3d"
+    },
+    {
+      "file": "THIRD-PARTY-NOTICES.md",
+      "sha256": "8caf9e4b835ad418bc48e8c19d7024cc91c0bf154a253827590c8d241445c5a8"
+    },
+    {
+      "file": "version.json",
+      "sha256": "910e04936f115c265ed9034eabd8ba16ab456f53498492e1081387326f16353b"
+    }
+  ],
+  "scan": "known credential formats and personal Windows paths; not an exhaustive secret audit",
+  "screenshots": "Two author-provided PNG files, visually reviewed; third-party game imagery excluded from project license."
+}
