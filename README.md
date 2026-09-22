@@ -20,6 +20,18 @@ Windows 上的 Deadlock 聊天翻译 Mod：Panorama 游戏界面＋本地 .NET �
 
 ![游戏内聊天气泡下方显示中文译文](docs/images/chat-bubbles.png)
 
+## 直接下载安装
+
+**[下载 Windows x64 完整运行包](https://github.com/jinganwushideng/deadlock-translate/releases/latest/download/DeadlockTranslate-0.4.0-win-x64.zip)** · [全部版本与校验文件](https://github.com/jinganwushideng/deadlock-translate/releases)
+
+无需编译或另外安装 .NET。请下载 `DeadlockTranslate-0.4.0-win-x64.zip`，不要把 GitHub 自动提供的 `Source code` 当作运行程序。
+
+1. 解压整个文件夹到固定位置，先退出 Deadlock，再运行 `Install.cmd`。
+2. 运行 `Settings.cmd`，配置自己的翻译服务和 API Key；包内没有附赠 API 额度。
+3. 运行 `Launch.cmd`；若平时从 Steam 启动，请按包内 `Steam-Launch-Options.txt` 配置启动选项。
+
+不要只取出 EXE：VPK、配对文件、网页和词库必须保持配套。已有旧版时先按使用说明卸载旧 Mod，保留个人配置后再安装新版。完整步骤见包内“使用说明-先读我.txt”。
+
 ## 功能
 
 - 聊天记录和顶部聊天气泡追加中文译文，支持所有玩家消息及自身消息开关。
