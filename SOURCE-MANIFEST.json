@@ -51,7 +51,7 @@
     },
     {
       "file": "docs/USER-GUIDE.md",
-      "sha256": "7993469656f3ba098342a9b948aa10d5cc64e3bd43528956c008273cd9a14543"
+      "sha256": "15a45804be55e639301e1aafa2565a014dfd9b13de4dd63a3930f7eeb2826648"
     },
     {
       "file": "docs/VALIDATION.md",
@@ -127,7 +127,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "1400e7f799ede5abdc3e7682ea61192bb0a65f72c846550abcb3c3810693002a"
+      "sha256": "bd7c52de8edc64e53907e0ff3613421b46ef00ea081431c1a80c9e70ebb71572"
     },
     {
       "file": "scripts/build.ps1",
