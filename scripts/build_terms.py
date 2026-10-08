@@ -62,8 +62,10 @@ for token,name in en.items():
     if token in ru:add(ru[token],zh[token],name,'name',is_ambiguous,'official_abilities_russian')
 provenance.extend({'file':str(f),'sha256':hashlib.sha256(f.read_bytes()).hexdigest()} for f in files)
 
+# Current game resources renamed the item, while players still use its old SSB abbreviation.
+renamed_items={'Spirit Shredder Bullets':'Spirit Shredder'}
 for canonical,sources in ALIASES.items():
-    original=terms.get(canonical.casefold())
+    original=terms.get(canonical.casefold()) or terms.get(renamed_items.get(canonical,'').casefold())
     if not original:skipped_aliases.append(canonical);continue
     for source in sources:
         add(source,original['target'],original['english'],'name',source in AMBIGUOUS_ALIASES,'chat_aliases')

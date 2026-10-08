@@ -10,17 +10,18 @@ public interface ITranslator {
 }
 public sealed class Translators : ITranslator, IDisposable {
     private readonly ConfigStore store;private readonly Terms terms;private readonly HttpClient http;
-    private readonly AsyncConcurrency fastSlots,llmSlots;
+    private readonly AsyncConcurrency fastSlots;private readonly PriorityConcurrency llmSlots;
+    private readonly TranslationMemo qualityMemo=new();private long qualityEpoch;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string,long> blockedUntil=new();
-    public Translators(ConfigStore store,Terms terms,HttpClient http){this.store=store;this.terms=terms;this.http=http;fastSlots=new(store.Current.FastConcurrency);llmSlots=new(store.Current.LlmConcurrency);store.Changed+=UpdateLimits;}
-    private void UpdateLimits(){fastSlots.SetLimit(store.Current.FastConcurrency);llmSlots.SetLimit(store.Current.LlmConcurrency);}
-    public object Stats=>new{fast=fastSlots.Stats,llm=llmSlots.Stats};
+    public Translators(ConfigStore store,Terms terms,HttpClient http){this.store=store;this.terms=terms;this.http=http;fastSlots=new(store.Current.FastConcurrency);llmSlots=new(store.Current.LlmConcurrency,store.Current.OutgoingEnabled&&store.Current.ReserveSendSlot);store.Changed+=UpdateLimits;}
+    private void UpdateLimits(){fastSlots.SetLimit(store.Current.FastConcurrency);llmSlots.Configure(store.Current.LlmConcurrency,store.Current.OutgoingEnabled&&store.Current.ReserveSendSlot);Interlocked.Increment(ref qualityEpoch);qualityMemo.Clear();}
+    public object Stats=>new{fast=fastSlots.Stats,llm=llmSlots.Stats,qualityCache=qualityMemo.Stats};
     private void CheckCooldown(string provider){if(blockedUntil.TryGetValue(provider,out var until)&&until>Environment.TickCount64)throw new InvalidOperationException("服务限流冷却中，请稍后重试");}
-    private async Task<IDisposable> EnterProvider(string provider,CancellationToken ct){
-        CheckCooldown(provider);var lease=await (provider=="llm"?llmSlots:fastSlots).Enter(ct);
+    private async Task<IDisposable> EnterProvider(string provider,CancellationToken ct,bool priority=false){
+        CheckCooldown(provider);var lease=provider=="llm"?await llmSlots.Enter(ct,priority):await fastSlots.Enter(ct);
         try{ct.ThrowIfCancellationRequested();CheckCooldown(provider);return lease;}catch{lease.Dispose();throw;}
     }
-    public void Dispose(){store.Changed-=UpdateLimits;}
+    public void Dispose(){store.Changed-=UpdateLimits;qualityMemo.Dispose();}
 
     private readonly SemaphoreSlim bingLock = new(1);
     private sealed record BingCredentials(string Key,string Token,string Ig,DateTime Until);
@@ -76,7 +77,15 @@ public sealed class Translators : ITranslator, IDisposable {
         if(json.RootElement.ValueKind!=JsonValueKind.Array){Interlocked.CompareExchange(ref bing,null,credentials);throw new InvalidOperationException("Bing 暂不可用或已限流");}
         return json.RootElement[0].GetProperty("translations")[0].GetProperty("text").GetString()??"";
     }
-    public async Task<string> Quality(string text, string[] context, Settings config, CancellationToken ct) {
+    private string MemoKey(string direction,string text,string[] context,Settings config) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(new{direction,text,context,config.LlmBaseUrl,config.Model,config.BilingualNames,config.LlmTimeoutSeconds,terms.Revision,epoch=Interlocked.Read(ref qualityEpoch)}))));
+    public Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct) {
+        var exact=terms.Exact(text,config.BilingualNames);if(exact!=null)return Task.FromResult(exact);
+        if(store.LlmSecretFor(config).Length==0)throw new InvalidOperationException("未配置大模型密钥");
+        return qualityMemo.Get(MemoKey("zh",text,context,config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),token=>QualityUncached(text,context,config,token),ct);
+    }
+    private async Task<string> QualityUncached(string text, string[] context, Settings config, CancellationToken ct) {
         var exact=terms.Exact(text,config.BilingualNames);
         if(exact!=null) return exact; // A curated exact phrase does not need another cloud request.
         using var admission=await EnterProvider("llm",ct);
@@ -102,11 +111,17 @@ public sealed class Translators : ITranslator, IDisposable {
         if(choice.TryGetProperty("finish_reason",out var finish) && finish.GetString()=="length") throw new InvalidDataException("精翻输出被截断");
         return Terms.NormalizeQualityNames(choice.GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "",protectedText.Map);
     }
-    public async Task<string> ToEnglish(string text,Settings config,bool forceFast,CancellationToken ct) {
+    public Task<string> ToEnglish(string text,Settings config,bool forceFast,CancellationToken ct) {
+        var quality=!forceFast&&(config.OutgoingMode=="quality"||(config.OutgoingMode=="auto"&&store.Secret("llm").Length>0));
+        if(!quality)return ToEnglishUncached(text,config,true,ct);
+        if(store.LlmSecretFor(config).Length==0)throw new InvalidOperationException("未配置大模型密钥");
+        return qualityMemo.Get(MemoKey("en",text,[],config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),token=>ToEnglishUncached(text,config,false,token),ct);
+    }
+    private async Task<string> ToEnglishUncached(string text,Settings config,bool forceFast,CancellationToken ct) {
         var relevant=terms.MatchOutgoing(text);
         var source=terms.PrepareOutgoing(text,relevant);
         var quality=!forceFast && (config.OutgoingMode=="quality" || (config.OutgoingMode=="auto" && store.Secret("llm").Length>0));
-        using var admission=await EnterProvider(quality?"llm":config.FastProvider,ct);
+        using var admission=await EnterProvider(quality?"llm":config.FastProvider,ct,true);
         if(!quality)return config.FastProvider=="azure"?await Azure(source,config,ct,"en"):await Bing(source,ct,"en");
         var key=store.LlmSecretFor(config);if(key.Length==0)throw new InvalidOperationException("未配置大模型密钥");
         var endpoint=config.LlmBaseUrl.TrimEnd('/');if(!endpoint.EndsWith("/chat/completions",StringComparison.Ordinal))endpoint+="/chat/completions";

@@ -107,7 +107,7 @@ async Task<double> Benchmark(int concurrency){
  var timer=Stopwatch.StartNew();await Task.WhenAll(Enumerable.Range(0,12).Select(i=>service.Quality("benchmark sentence "+i,[],c.Current,CancellationToken.None)));return timer.Elapsed.TotalMilliseconds;
 }
 var serialMs=await Benchmark(1);var parallelMs=await Benchmark(4);
-Check(parallelMs<serialMs*.7,"four-way service concurrency shortens controlled twelve-message completion time");
+Check(parallelMs<serialMs*.7,"provider budget four with a reserved send slot shortens controlled twelve-message completion time");
 ConfigStore.Validate(config.Current with{LlmConcurrency=8,FastConcurrency=8,OutgoingConcurrency=8,OutgoingQueueLimit=32});
 Check(true,"maximum configured concurrency and capacity are accepted");
 bool invalid=false;try{ConfigStore.Validate(config.Current with{FastConcurrency=9});}catch(ArgumentException){invalid=true;}

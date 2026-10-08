@@ -52,6 +52,7 @@ dotnet build src/Bridge -c Release
 New-Item -ItemType Directory -Force artifacts
 python tests/source-export.test.py
 dotnet run --project tests/ConcurrencyTests
+dotnet run --project tests/OptimizationTests
 node tests/panorama.test.cjs
 node tests/outgoing-ui.test.cjs
 node tests/game-window.test.cjs
@@ -70,3 +71,5 @@ python scripts/export_source.py
 ```
 
 输出新的源码目录、ZIP、逐文件 SHA-256 清单。它不会清理或覆盖现有发行包。此导出不是游戏运行包，详见 PUBLISHING.md。
+
+完整构建后首次游戏内使用需运行 Trust-Local-Https.cmd，并完整重启 Steam。常规测试不能自动安装证书信任。optimization-ui.test.cjs 使用模拟 HTTP；expired-certificate.test.cjs 使用 OptimizationTests 生成的隔离过期证书验证 HTTP 设置降级，不更改 Windows 信任库。

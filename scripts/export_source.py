@@ -14,7 +14,7 @@ DOCS = ('USER-GUIDE.md', 'BUILDING.md', 'PUBLISHING.md', 'SOURCE-AUDIT.md', 'VAL
 SCRIPTS = ('build.ps1', 'prepare_mod.py', 'build_terms.py', 'term_extensions.py', 'vpk.py',
            'package_docs.py', 'collect_licenses.py', 'export_source.py', 'merge_term_defaults.py',
            'steam_launch_options.py', 'Manage-Mod.ps1', 'Install.cmd', 'Uninstall.cmd',
-           'Launch.cmd', 'Settings.cmd')
+           'Launch.cmd', 'Settings.cmd', 'Trust-Local-Https.ps1', 'Trust-Local-Https.cmd', 'Renew-Local-Https.cmd')
 SCREENSHOTS = ('docs/images/chat-bilingual.png', 'docs/images/chat-bubbles.png')
 GENERATED = {'mod/panorama/layout/chat.xml', 'src/Bridge/data/terms.json', 'src/Bridge/wwwroot/app.js'}
 EXTENSIONS = {'.cs', '.csproj', '.ts', '.js', '.cjs', '.json', '.xml', '.css', '.html',

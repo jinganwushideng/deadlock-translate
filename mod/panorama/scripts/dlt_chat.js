@@ -6,18 +6,18 @@
 var DLTOpenSettings = function () {};
 (function () {
     'use strict';
-    try { $.Msg('[DLT] chat adapter 0.2.7 initializing'); } catch (_) {}
+    try { $.Msg('[DLT] chat adapter 0.5.0 HTTPS initializing'); } catch (_) {}
     var context = $.GetContextPanel();
     var ROOT = context;
     while (ROOT.GetParent && ROOT.GetParent()) ROOT = ROOT.GetParent();
     if (ROOT.__dltOwner && valid(ROOT.__dltOwner)) return;
     ROOT.__dltOwner = context;
-    var base = 'http://localhost:17865/bridge/__PAIRING__';
+    var base = 'https://localhost:17866/bridge/__PAIRING__';
     var state = { session: String(Date.now()) + '-' + String(Math.random()).slice(2), seq: 0, serial: 0,
-        chat: null, chats: [], lobby: null, bridge: null, pending: null, records: [], outbox: [], render: [], hud: [],
+        chat: null, chats: [], lobby: null, bridge: null, pending: null, records: [], recordsById: Object.create(null), outbox: [], render: [], hud: [],
         online: false, initialized: false, openSettings: false, nextConnect: 0, nextDiscovery: 0,
         nextPoll: 0, nextMetrics: 0, nextScan: 0, hotkeySeen: 0, outgoingQueue: [], outgoingSent: [], outgoingKnown: {},
-        outgoingRefused: [],
+        outgoingRefused: [], recentOwn: [],
         config: { enabled: true, translateOwn: false, fontSize: 17, scanIntervalMs: 200, transport: 'fragment',
             outgoingEnabled: true, outgoingTimeoutSeconds: 30, incomingScope: 'all_players', outgoingDisplayMode: 'translation' },
         chatTarget: { readable: false, panel: null, lastNative: '', lastLabel: '', changes: 0 },
@@ -25,7 +25,7 @@ var DLTOpenSettings = function () {};
         pendingHotkey: null, closeWatch: null, forcePoll: false,
         metrics: { scans: 0, rows: 0, submitted: 0, rendered: 0, bridges: 0, errors: 0, maxScanMs: 0,
             regularRows: 0, hudRows: 0, lobbyRows: 0, skippedSelf: 0, skippedUnknown: 0, sendAttempts: 0, sendErrors: 0,
-            channelWaits: 0, channelRetargets: 0, channelFaults: 0, hotkeyDrops: 0, classChannelReads: 0 } };
+            channelWaits: 0, channelRetargets: 0, channelFaults: 0, hotkeyDrops: 0, classChannelReads: 0, localEchoReused: 0 } };
     function valid(panel) { try { return !!panel && (!panel.IsValid || panel.IsValid()); } catch (_) { return false; } }
     function find(panel, id) { try { return valid(panel) ? panel.FindChildTraverse(id) : null; } catch (_) { return null; } }
     function classes(panel, name) { try { return panel.FindChildrenWithClassTraverse(name) || []; } catch (_) { return []; } }
@@ -232,7 +232,7 @@ var DLTOpenSettings = function () {};
         var id = 'out-' + String(++state.serial);
         state.outgoingQueue.push({ id: id, text: value, channel: channel, displayMode: outgoingDisplayMode() });
         state.outgoingKnown[id] = { created: Date.now(), attempted: false, done: false, waiting: false, retargets: 0,
-            retryAt: 0, before: '', restored: false };
+            retryAt: 0, before: '', restored: false, original: value, displayMode: outgoingDisplayMode() };
         noteChannel('capture', { native: nativeName, label: labelName, channel: channel });
         input.text = '';
         // Empty native submit returns control exactly as normal chat submission does.
@@ -323,6 +323,9 @@ var DLTOpenSettings = function () {};
                 if (accepted !== false) {
                     state.outgoingSent.push(result.id);
                     state.echo = { text: payload.value, channel: result.channel, at: Date.now(), checked: false };
+                    state.recentOwn.push({ text: payload.value, original: job.original || result.original || '', channel: result.channel,
+                        displayMode: job.displayMode || result.displayMode, at: Date.now(), views: {} });
+                    while (state.recentOwn.length > 32) state.recentOwn.shift();
                     noteChannel('submit', { channel: result.channel, result: 'dispatched' });
                 } else { state.metrics.sendErrors++; noteChannel('submit', { channel: result.channel, result: 'rejected' }); refuseOutgoing(result.id, job, 'submit-rejected'); }
                 job.done = true;
@@ -373,24 +376,18 @@ var DLTOpenSettings = function () {};
         }
         return 0;
     }
-    function rowRole(row, kind, team) {
+    function rowRole(row, kind, team, channelText) {
         if (has(row, 'IsSelf') || classes(row, 'SenderLocalClient').length) return 'self';
         if (has(row, 'IsEnemy') || has(row, 'enemy')) return 'enemy';
-        var channel = text(classes(row, kind === 'lobby' ? 'ChatLinePrefix' : 'ChannelName')[0]);
+        var channel = channelText;
         if (channelOf(channel) === 'team' || channelOf(channel) === 'party') return 'peer';
         if (has(row, 'friend') || has(row, 'IsFriendly') || has(row, 'IsAlly')) return 'peer';
         if (kind === 'hud' && state.team && team) return team === state.team ? 'peer' : 'enemy';
         return 'unknown';
     }
-    function messageChannel(row, kind) {
-        if (kind === 'hud') return 'hud';
-        if (kind === 'lobby') return channelOf(text(classes(row, 'ChatLinePrefix')[0])) || 'lobby';
-        return channelOf(text(classes(row, 'ChannelName')[0]));
-    }
-    function rowText(row, kind) {
+    function rowText(row, kind, contents) {
         if (kind === 'hud') return normalized(text(find(row, 'MessageText')));
         if (kind === 'lobby') return contentText(classes(row, 'ChatLine')[0]);
-        var contents = find(row, 'MessageContents');
         return contentText(contents);
     }
     function shouldTranslate(value) {
@@ -411,7 +408,10 @@ var DLTOpenSettings = function () {};
         state.metrics.rows++; state.metrics[kind + 'Rows']++;
         var contents = find(row, 'MessageContents');
         var quick = has(row, 'Ping') || has(contents, 'Ping') || !!find(row, 'PingLabel');
-        var value = rowText(row, kind), role = rowRole(row, kind, team), channel = messageChannel(row, kind);
+        // Read these controls once per scan, rather than repeating tree searches for text, role and channel.
+        var channelText = text(classes(row, kind === 'lobby' ? 'ChatLinePrefix' : 'ChannelName')[0]);
+        var value = rowText(row, kind, contents), role = rowRole(row, kind, team, channelText);
+        var channel = kind === 'hud' ? 'hud' : channelOf(channelText) || (kind === 'lobby' ? 'lobby' : '');
         var sender = text(classes(row, kind === 'lobby' ? 'ChatPersona' : 'SenderName')[0]).slice(0, 100);
         var freshText = value !== row.__dltEchoObservedText;
         row.__dltEchoObservedText = value;
@@ -424,6 +424,19 @@ var DLTOpenSettings = function () {};
         if (role === 'self' && !roleAllowed(role)) state.metrics.skippedSelf++;
         if (role === 'unknown' && !roleAllowed(role)) state.metrics.skippedUnknown++;
         if (!state.config.enabled || quick || !shouldTranslate(value) || !roleAllowed(role)) return;
+        var own = null, now = Date.now();
+        while (state.recentOwn.length && now - state.recentOwn[0].at > 8000) state.recentOwn.shift();
+        if (role === 'self') for (var e = state.recentOwn.length - 1; e >= 0; e--) {
+            var sent = state.recentOwn[e];
+            if (!sent.views[kind] && sent.text === value && (channel === sent.channel || kind === 'hud')) { own = sent; sent.views[kind] = true; break; }
+        }
+        if (own && own.original) {
+            state.metrics.localEchoReused++;
+            if (own.displayMode === 'bilingual') return; // The original Chinese is already in the sent line.
+            var local = { id: 'local-' + String(++state.serial), original: value, sender: sender, role: role, channel: channel,
+                created: now, revision: 1, done: true, translation: own.original, stage: 'local', views: [{row:row,kind:kind,fingerprint:fingerprint}] };
+            state.records.push(local); state.recordsById[local.id] = local; queueRender(local); return;
+        }
         var record = null;
         for (var i = state.records.length - 1; i >= 0; i--) {
             var candidate = state.records[i];
@@ -442,7 +455,7 @@ var DLTOpenSettings = function () {};
         if (!record) {
             record = { id: String(++state.serial), original: value, sender: sender, role: role, channel: channel,
                 created: Date.now(), revision: 0, done: false, translation: '', stage: '', views: [] };
-            state.records.push(record);
+            state.records.push(record); state.recordsById[record.id] = record;
             if (state.outbox.length < 64) state.outbox.push({ id: record.id, text: value, sender: sender, channel: channel });
             else { record.done = true; state.metrics.errors++; }
         }
@@ -505,9 +518,10 @@ var DLTOpenSettings = function () {};
     function scanBubbles() {
         for (var h = 0; h < state.hud.length; h++) scanContainer(state.hud[h].panel, 'hud', state.hud[h].team, 12);
     }
-    function queueRender(record) { if (state.render.indexOf(record) < 0) state.render.push(record); }
+    function queueRender(record) { if (!record.renderQueued) { record.renderQueued = true; state.render.push(record); } }
     function updateLabel(label, value) { if (label.text !== value) label.text = value; label.style.fontSize = state.config.fontSize + 'px'; }
     function renderOne(record) {
+        record.renderQueued = false;
         var value = record.translation; if (!value) return;
         for (var i = 0; i < record.views.length; i++) {
             var view = record.views[i], row = view.row;
@@ -554,7 +568,7 @@ var DLTOpenSettings = function () {};
         if (payload.serverId && state.serverId && payload.serverId !== state.serverId) {
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingKnown = {};
             state.pendingHotkey = null; state.closeWatch = null; state.outgoingRefused = [];
-            state.echo = null; state.channelFault = '';
+            state.echo = null; state.channelFault = ''; state.recentOwn = [];
             state.hotkeySeen = payload.hotkey || 0;
             for (var s = 0; s < state.records.length; s++) {
                 var retry = state.records[s];
@@ -582,13 +596,11 @@ var DLTOpenSettings = function () {};
         var results = payload.results || [];
         for (var i = 0; i < results.length; i++) {
             var result = results[i];
-            for (var j = state.records.length - 1; j >= 0; j--) {
-                var record = state.records[j]; if (record.id !== result.id) continue;
-                record.done = result.done;
-                if (result.revision > record.revision && result.text) {
-                    record.revision = result.revision; record.translation = result.text; record.stage = result.stage; queueRender(record);
-                }
-                break;
+            var record = state.recordsById[result.id];
+            if (!record) continue;
+            record.done = result.done;
+            if (result.revision > record.revision && result.text) {
+                record.revision = result.revision; record.translation = result.text; record.stage = result.stage; queueRender(record);
             }
         }
         status(state.config.enabled ? (payload.configuredLlm ? '翻译已连接' : '快译已连接 · 精翻未配置') : '翻译已暂停');
@@ -601,7 +613,7 @@ var DLTOpenSettings = function () {};
         if (!title && state.bridge.GetAttributeString) { try { title = String(state.bridge.GetAttributeString('title', '') || ''); } catch (_) {} }
         if (title.indexOf('DLT:') === 0 && title !== state.lastTitle) {
             state.lastTitle = title;
-            if (title === 'DLT:ready') state.initialized = true;
+            if (title === 'DLT:ready') { state.initialized = true; state.nextConnect = 0; }
             else { try { receive(JSON.parse(title.slice(4))); state.initialized = true; } catch (_) { state.metrics.errors++; } }
         }
         if (state.pending && now - state.pending.at > 4500) {
@@ -631,7 +643,7 @@ var DLTOpenSettings = function () {};
         if (!state.outbox.length && !state.outgoingQueue.length && !state.outgoingSent.length && !state.outgoingRefused.length && !state.openSettings && !wantMetrics && !state.forcePoll && (!(ids.length || chatOpen || outgoingPending) || now < state.nextPoll)) return;
         state.forcePoll = false;
         var messages = state.outbox.slice(0, 8);
-        var payload = { session: state.session, seq: ++state.seq, messages: messages, poll: ids,
+        var payload = { clientVersion: '0.5.0', session: state.session, seq: ++state.seq, messages: messages, poll: ids,
             openSettings: state.openSettings, metrics: wantMetrics ? state.metrics : null,
             chatOpen: chatOpen, hotkeySeen: state.hotkeySeen, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),
@@ -656,7 +668,7 @@ var DLTOpenSettings = function () {};
         if (identity && state.matchIdentity && identity !== state.matchIdentity) changed = true;
         if (changed) {
             state.session = String(Date.now()) + '-' + String(Math.random()).slice(2);
-            state.records = []; state.outbox = []; state.render = []; state.pending = null;
+            state.records = []; state.recordsById = Object.create(null); state.outbox = []; state.render = []; state.pending = null; state.recentOwn = [];
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingKnown = {}; state.hotkeySeen = 0;
             state.echo = null; state.channelFault = ''; state.outgoingRefused = [];
             state.pendingHotkey = null; state.closeWatch = null; state.forcePoll = false;
@@ -678,7 +690,7 @@ var DLTOpenSettings = function () {};
             // At most two records update in one scheduled callback. No streaming or animations.
             for (var r = 0; r < 2 && state.render.length; r++) renderOne(state.render.shift());
             bridgeTick();
-            while (state.records.length > 300) state.records.shift();
+            while (state.records.length > 300) { var expiredRecord = state.records.shift(); delete state.recordsById[expiredRecord.id]; }
         } catch (error) { state.metrics.errors++; if (!state.lastErrorAt || started - state.lastErrorAt > 10000) { state.lastErrorAt = started; try { $.Msg('[DLT] adapter error: ' + String(error)); } catch (_) {} } }
         state.metrics.scans++; state.metrics.maxScanMs = Math.max(state.metrics.maxScanMs, Date.now() - started);
         $.Schedule(inputOpen() ? 0.05 : Math.max(0.1, Math.min(1, state.config.scanIntervalMs / 1000)), tick);

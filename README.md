@@ -4,7 +4,7 @@
 
 技术结构：Panorama 游戏界面＋本地 .NET 后台＋TypeScript 设置页。翻译调用云端服务，本地不运行翻译模型。
 
-当前源码版本 **0.4.0**。非 Valve 官方项目，与 Valve 无隶属或背书关系。
+当前源码版本 **0.5.0**。非 Valve 官方项目，与 Valve 无隶属或背书关系。
 
 翻译服务推荐、费用参考和模型 ID 填写要求见[使用说明](docs/USER-GUIDE.md)。
 
@@ -18,13 +18,14 @@
 
 ## 直接下载安装
 
-**[下载 Windows x64 完整运行包](https://github.com/jinganwushideng/deadlock-translate/releases/latest/download/DeadlockTranslate-0.4.0-win-x64.zip)** · [全部版本与校验文件](https://github.com/jinganwushideng/deadlock-translate/releases)
+**[下载 Windows x64 完整运行包](https://github.com/jinganwushideng/deadlock-translate/releases/download/v0.5.0/DeadlockTranslate-0.5.0-win-x64.zip)** · [全部版本与校验文件](https://github.com/jinganwushideng/deadlock-translate/releases)
 
-无需编译或另外安装 .NET。请下载 `DeadlockTranslate-0.4.0-win-x64.zip`，不要把 GitHub 自动提供的 `Source code` 当作运行程序。
+无需编译或另外安装 .NET。请下载 `DeadlockTranslate-0.5.0-win-x64.zip`，不要把 GitHub 自动提供的 `Source code` 当作运行程序。
 
 1. 解压整个文件夹到固定位置，先退出 Deadlock，再运行 `Install.cmd`。
-2. 运行 `Settings.cmd`，配置自己的翻译服务和 API Key；包内没有附赠 API 额度。
-3. 运行 `Launch.cmd`；若平时从 Steam 启动，请按包内 `Steam-Launch-Options.txt` 配置启动选项。
+2. 首次使用 HTTPS 时运行 `Trust-Local-Https.cmd`，核对本机证书并确认信任，然后完整退出并重启 Steam。已有 0.4.2 且 HTTPS 正常的用户无需重复安装证书。
+3. 运行 `Settings.cmd`，配置自己的翻译服务和 API Key；包内没有附赠 API 额度。
+4. 运行 `Launch.cmd`；若平时从 Steam 启动，请按包内 `Steam-Launch-Options.txt` 配置启动选项。
 
 不要只取出 EXE：VPK、配对文件、网页和词库必须保持配套。已有旧版时先按使用说明卸载旧 Mod，保留个人配置后再安装新版。完整步骤见包内“使用说明-先读我.txt”。
 
@@ -37,6 +38,8 @@
 - 快译与精翻分别排队，共享服务并发上限；发送按频道保持顺序。
 - Steam 启动选项联动后台，无需常驻监视程序或开机自启。
 - 游戏内设置窗口及浏览器设置入口，密钥使用当前 Windows 用户的 DPAPI 保存。
+
+0.5.0 新增发送预留名额、精翻请求合并/缓存、双语回显复用和连接自检。首次使用 HTTPS 需按使用说明信任本机证书并重启 Steam。
 
 ## 使用与开发
 

@@ -55,7 +55,7 @@ try {
     if($LASTEXITCODE){throw 'VPK packing failed'}
     & tools\vpkedit\vpkeditcli.exe (Join-Path $taskDist 'dlt_translate_dir.vpk') --verify-checksums all --no-progress
     if($LASTEXITCODE){throw 'VPK checksums failed'}
-    Copy-Item -LiteralPath scripts\Manage-Mod.ps1,scripts\Install.cmd,scripts\Uninstall.cmd,scripts\Launch.cmd,scripts\Settings.cmd -Destination $taskDist -Force
+    Copy-Item -LiteralPath scripts\Manage-Mod.ps1,scripts\Install.cmd,scripts\Uninstall.cmd,scripts\Launch.cmd,scripts\Settings.cmd,scripts\Trust-Local-Https.ps1,scripts\Trust-Local-Https.cmd,scripts\Renew-Local-Https.cmd -Destination $taskDist -Force
     Copy-Item -LiteralPath artifacts\term-sources.json -Destination (Join-Path $taskDist 'terms-provenance.json') -Force
     if(Test-Path docs\README.md){Copy-Item -LiteralPath docs\README.md -Destination (Join-Path $taskDist 'README.md') -Force}
     if(Test-Path docs\TEST-REPORT.md){Copy-Item -LiteralPath docs\TEST-REPORT.md -Destination (Join-Path $taskDist 'TEST-REPORT.md') -Force}

@@ -11,9 +11,12 @@ var port = 17865;
 string Arg(string name,string fallback) { var i=Array.IndexOf(args,name); return i>=0 && i+1<args.Length ? args[i+1] : fallback; }
 var dataDir = Arg("--data-dir",Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DeadlockTranslate"));
 port=int.Parse(Arg("--port","17865"));
+var httpsPort=int.Parse(Arg("--https-port",(port+1).ToString()));
+if(port is <1 or >65535 || httpsPort is <1 or >65535 || port==httpsPort)throw new ArgumentException("Invalid local HTTP/HTTPS ports");
 var followGame=args.Contains("--launch") || args.Contains("--follow-game") || steamGame!=null;
 var gameExecutable=Arg("--game-exe","");
 if(followGame && gameExecutable.Length==0)gameExecutable=GameProcess.ResolveGame(dataDir);
+if(args.Contains("--prepare-https")||args.Contains("--renew-https")){using var prepared=LocalHttps.Load(dataDir,args.Contains("--renew-https"));Console.WriteLine(JsonSerializer.Serialize(new { thumbprint=prepared.Thumbprint,expires=prepared.NotAfter.ToUniversalTime(),publicCertificate=Path.Combine(dataDir,"localhost-certificate.cer") }));return;}
 var config = new ConfigStore(dataDir);
 var pairingPath=Arg("--pairing-file",Path.Combine(AppContext.BaseDirectory,"pairing.key"));
 if(!File.Exists(pairingPath)) { Directory.CreateDirectory(Path.GetDirectoryName(pairingPath)!); File.WriteAllText(pairingPath,Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant()); }
@@ -21,7 +24,12 @@ var pairing=File.ReadAllText(pairingPath).Trim();
 if(pairing.Length != 48 || !pairing.All(Uri.IsHexDigit)) throw new InvalidDataException("Invalid pairing key");
 var settingsToken=Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 var builder=WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args=[], ContentRootPath=AppContext.BaseDirectory, WebRootPath=Path.Combine(AppContext.BaseDirectory,"wwwroot") });
-builder.WebHost.UseUrls($"http://localhost:{port}");
+System.Security.Cryptography.X509Certificates.X509Certificate2? loadedCertificate=null;
+string? certificateError=null;
+try {loadedCertificate=LocalHttps.Load(dataDir);} catch(Exception e) when(e is IOException or CryptographicException or UnauthorizedAccessException){certificateError="本机证书无法读取。浏览器设置仍可用，请退出后台后修复或续期证书。";}
+using var localCertificate=loadedCertificate;
+var certificateDiagnostics=new CertificateDiagnostics(localCertificate,certificateError);
+builder.WebHost.ConfigureKestrel(options=>{options.ListenLocalhost(port);if(certificateDiagnostics.CanServe)options.ListenLocalhost(httpsPort,listen=>listen.UseHttps(localCertificate!));});
 builder.WebHost.ConfigureKestrel(options=>{options.Limits.MaxRequestBodySize=2*1024*1024;options.Limits.MaxRequestLineSize=32768;});
 builder.Logging.ClearProviders();
 var staticRoot=Path.Combine(AppContext.BaseDirectory,"wwwroot");
@@ -37,7 +45,14 @@ if(gameExecutable.Length==0)gameExecutable=SafeGamePath();
 await using var gameLifecycle=new GameLifecycle(gameExecutable,()=>app.Lifetime.StopApplication());
 string SafeGamePath(){try{return GameProcess.ResolveGame(dataDir);}catch{return "";}}
 var bridgeTraffic=new System.Collections.Concurrent.ConcurrentDictionary<string,int>();
-string Origin()=>$"http://localhost:{port}";
+EvidenceSnapshot? gameEvidence=null;string? clientVersion=null;
+object Diagnostics(bool force=false){
+    var certificate=certificateDiagnostics.Inspect(force);
+    var phase=certificate.State is "unavailable" or "expired" or "not-yet-valid"?"https-unavailable":certificate.State=="untrusted"?"certificate-untrusted":engine.Connected?"connected":bridgeTraffic.GetValueOrDefault("gamePost")>0?"game-stale":bridgeTraffic.GetValueOrDefault("bridgePage")>0?"bridge-no-reply":"waiting-for-game";
+    return new{version="0.5.0",clientVersion=Volatile.Read(ref clientVersion),port,httpsPort,certificate,phase,hotkeyAvailable=hotkey?.Available??false,bridgeTraffic,metrics=Volatile.Read(ref gameEvidence)?.Metrics};
+}
+string Origin(HttpContext? ctx=null)=>ctx?.Request.IsHttps==true?$"https://localhost:{httpsPort}":$"http://localhost:{port}";
+string SessionCookie(HttpContext ctx)=>ctx.Request.IsHttps?"dlt-session-tls":"dlt-session";
 string SettingsUrl()=>Origin()+"/settings/"+settingsToken;
 bool Same(string? a,string b)=>a!=null && a.Length==b.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a),Encoding.UTF8.GetBytes(b));
 void OpenSettings()=>Process.Start(new ProcessStartInfo(SettingsUrl()){UseShellExecute=true});
@@ -57,25 +72,25 @@ app.Use(async(ctx,next)=>{
     if(path.StartsWith("/bridge/",StringComparison.Ordinal) || path.StartsWith("/menu/",StringComparison.Ordinal))
         ctx.Response.Headers["Content-Security-Policy"]="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'";
     if(path.StartsWith("/api/",StringComparison.Ordinal)) {
-        if(!Same(ctx.Request.Cookies["dlt-session"],settingsToken)) {ctx.Response.StatusCode=401; return;}
-        if(ctx.Request.Method!="GET" && (ctx.Request.Headers.Origin!=Origin() || ctx.Request.Headers["X-DLT-Request"]!="1")) {ctx.Response.StatusCode=403;return;}
+        if(!Same(ctx.Request.Cookies[SessionCookie(ctx)],settingsToken)) {ctx.Response.StatusCode=401; return;}
+        if(ctx.Request.Method!="GET" && (ctx.Request.Headers.Origin!=Origin(ctx) || ctx.Request.Headers["X-DLT-Request"]!="1")) {ctx.Response.StatusCode=403;return;}
     }
     try { await next(); }
     catch(ArgumentException ex) {ctx.Response.StatusCode=400; await ctx.Response.WriteAsJsonAsync(new {error=ex.Message});}
     catch(JsonException) {ctx.Response.StatusCode=400; await ctx.Response.WriteAsJsonAsync(new {error="JSON 格式无效"});}
 });
-app.MapGet("/health",()=>new {app="DeadlockTranslate",version="0.4.0",port,followingGame=gameLifecycle.Active,features=new[]{"escape-settings","outgoing-alt-space","native-chat-submit","independent-hud-intake","native-chat-target-restore","outgoing-display-mode","incoming-scope-all-players","strict-channel-wait-echo","game-linked-exit","steam-command-launch","native-chat-target-classes"}});
+app.MapGet("/health",()=>new {app="DeadlockTranslate",version="0.5.0",port,httpsPort,httpsReady=certificateDiagnostics.CanServe,certificateThumbprint=localCertificate?.Thumbprint,followingGame=gameLifecycle.Active,features=new[]{"escape-settings","outgoing-alt-space","native-chat-submit","independent-hud-intake","native-chat-target-restore","outgoing-display-mode","incoming-scope-all-players","strict-channel-wait-echo","game-linked-exit","steam-command-launch","native-chat-target-classes"}});
 app.MapGet("/settings/{token}",(string token,HttpContext ctx)=>{
     if(!Same(token,settingsToken)) return Results.NotFound();
-    ctx.Response.Cookies.Append("dlt-session",settingsToken,new CookieOptions{HttpOnly=true,SameSite=SameSiteMode.Strict,IsEssential=true,Path="/"});
+    ctx.Response.Cookies.Append(SessionCookie(ctx),settingsToken,new CookieOptions{Secure=ctx.Request.IsHttps,HttpOnly=true,SameSite=SameSiteMode.Strict,IsEssential=true,Path="/"});
     return Results.Redirect("/");
 });
 app.MapGet("/in-game/{key}",(string key,HttpContext ctx)=>{
     if(!Same(key,pairing))return Results.NotFound();
-    ctx.Response.Cookies.Append("dlt-session",settingsToken,new CookieOptions{HttpOnly=true,SameSite=SameSiteMode.Strict,IsEssential=true,Path="/"});
-    return Results.Redirect("/?inGame=1");
+    ctx.Response.Cookies.Append(SessionCookie(ctx),settingsToken,new CookieOptions{Secure=ctx.Request.IsHttps,HttpOnly=true,SameSite=SameSiteMode.Strict,IsEssential=true,Path="/"});
+    return Results.File(Path.Combine(staticRoot,"index.html"),"text/html; charset=utf-8");
 });
-app.MapGet("/",(HttpContext ctx)=> Same(ctx.Request.Cookies["dlt-session"],settingsToken) ? Results.File(Path.Combine(staticRoot,"index.html"),"text/html; charset=utf-8") : Results.Content("请通过游戏内“翻译设置”按钮或 Settings.cmd 打开此页面。","text/plain; charset=utf-8"));
+app.MapGet("/",(HttpContext ctx)=> Same(ctx.Request.Cookies[SessionCookie(ctx)],settingsToken) ? Results.File(Path.Combine(staticRoot,"index.html"),"text/html; charset=utf-8") : Results.Content("请通过游戏内“翻译设置”按钮或 Settings.cmd 打开此页面。","text/plain; charset=utf-8"));
 app.MapGet("/app.js",()=>Results.File(Path.Combine(staticRoot,"app.js"),"text/javascript; charset=utf-8"));
 app.MapGet("/style.css",()=>Results.File(Path.Combine(staticRoot,"style.css"),"text/css; charset=utf-8"));
 app.MapGet("/api/config",()=>config.Public());
@@ -83,7 +98,8 @@ app.MapPut("/api/config",(Settings value)=>{config.Save(value);engine.ClearCache
 app.MapGet("/api/terms",()=>terms.All);
 app.MapGet("/api/outgoing",()=>new{hotkeyAvailable=hotkey?.Available??false,items=outgoing.Recent,stats=outgoing.Stats});
 app.MapPut("/api/terms",(Term[] value)=>{terms.Save(value);engine.ClearCache();return Results.Ok(new{count=value.Length});});
-app.MapGet("/api/status",()=>new{engine=engine.Stats,bridgeTraffic,terms=terms.All.Length,requests=translators.Stats,sending=outgoing.Stats,uptimeSeconds=(DateTime.UtcNow-Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,gameEvidence=File.Exists(Path.Combine(dataDir,"game-evidence.json"))?JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(dataDir,"game-evidence.json"))):(JsonElement?)null});
+app.MapGet("/api/status",()=>new{engine=engine.Stats,bridgeTraffic,terms=terms.All.Length,requests=translators.Stats,sending=outgoing.Stats,uptimeSeconds=(DateTime.UtcNow-Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,gameEvidence=Volatile.Read(ref gameEvidence),diagnostics=Diagnostics()});
+app.MapGet("/api/diagnostics",()=>Diagnostics(true));
 app.MapPost("/api/test",async(TestRequest req)=>{
     if(req.Text.Length is <1 or >1024 || (req.Provider!="fast" && req.Provider!="quality")) return Results.BadRequest(new{error="测试输入无效"});
     var timer=Stopwatch.StartNew(); var c=config.Current;
@@ -95,12 +111,14 @@ app.MapPost("/api/test",async(TestRequest req)=>{
 app.MapPost("/api/stop",(IHostApplicationLifetime life)=>{_ = Task.Run(async()=>{await Task.Delay(300);life.StopApplication();});return Results.Ok();});
 var lastOpen=0L;
 app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
-    if(!Same(key,pairing) || ctx.Request.Headers.Origin!=Origin()) return Results.Unauthorized();
+    if(!Same(key,pairing) || ctx.Request.Headers.Origin!=Origin(ctx)) return Results.Unauthorized();
     if(req.OpenSettings && Environment.TickCount64-lastOpen>2000) {lastOpen=Environment.TickCount64;OpenSettings();}
     if(req.Metrics!=null) {
-        // Persist counters only. Never persist chat text, player identifiers or API payloads.
-        ConfigStore.WriteAtomic(Path.Combine(dataDir,"game-evidence.json"),JsonSerializer.SerializeToUtf8Bytes(new{at=DateTime.UtcNow,req.Metrics},ConfigStore.Json));
+        // Current-process counters only; no synchronous disk I/O on the game bridge.
+        Volatile.Write(ref gameEvidence,new EvidenceSnapshot(DateTime.UtcNow,req.Metrics));
     }
+    if(req.ClientVersion?.Length>32)throw new ArgumentException("客户端版本字段过长");
+    if(req.ClientVersion!=null)Volatile.Write(ref clientVersion,req.ClientVersion);
     var result=engine.Exchange(req.Session,req.Messages??[],req.Poll??[]);
     hotkey?.UpdateFocus(req.ChatOpen);
     var outgoingResults=outgoing.Exchange(req.Session,req.Outgoing??[],req.OutgoingSent??[],req.OutgoingWaiting??[],req.OutgoingRefused??[]);
@@ -126,14 +144,14 @@ addEventListener('hashchange',dispatch);dispatch();
 """.Replace("PAIRING",pairing);
     return Results.Content(script,"text/html; charset=utf-8");
 });
-app.MapPost("/control/{key}/settings",(string key,HttpContext ctx)=>{if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin()))return Results.NotFound();OpenSettings();return Results.Ok();});
+app.MapPost("/control/{key}/settings",(string key,HttpContext ctx)=>{if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();OpenSettings();return Results.Ok();});
 app.MapGet("/menu/{key}",(string key)=>{
     if(!Same(key,pairing)) return Results.NotFound();
     return Results.Content("<!doctype html><meta charset=\"utf-8\"><title>DLTMENU:loading</title><script>fetch('/control/"+pairing+"/settings',{method:'POST'}).then(r=>{document.title=r.ok?'DLTMENU:opened':'DLTMENU:error';}).catch(()=>document.title='DLTMENU:error');</script>","text/html; charset=utf-8");
 });
-app.MapPost("/control/{key}/session",(string key,HttpContext ctx)=>{if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin()))return Results.NotFound();return Results.Ok(new{url=SettingsUrl()});});
+app.MapPost("/control/{key}/session",(string key,HttpContext ctx)=>{if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();return Results.Ok(new{url=SettingsUrl()});});
 app.MapPost("/control/{key}/follow-game",(string key,HttpContext ctx)=>{
-    if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin()))return Results.NotFound();
+    if(!Same(key,pairing) || (ctx.Request.Headers.Origin.Count>0 && ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();
     if(gameExecutable.Length==0)return Results.Conflict();
     gameLifecycle.Arm();return Results.Ok();
 });
@@ -156,5 +174,7 @@ try {
     } catch { }
 }
 public record TestRequest(string Provider,string Text);
-public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0);
-public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null);
+public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0);
+public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null,string? ClientVersion=null);
+
+public record EvidenceSnapshot(DateTime At,Metrics Metrics);

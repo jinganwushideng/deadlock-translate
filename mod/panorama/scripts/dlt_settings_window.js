@@ -79,7 +79,7 @@ var DLTSettingsKeepOpen = function () { return true; };
         observedEscape = observedEscape || escapeVisible();
         status.text = '正在连接本地设置…';
         try {
-            page.SetURL('http://localhost:17865/in-game/__PAIRING__?open=' + Date.now());
+            page.SetURL('https://localhost:17866/in-game/__PAIRING__?open=' + Date.now());
         } catch (_) { status.text = '页面加载失败，请确认翻译后台已启动'; return; }
         try { if (page.SetFocus) page.SetFocus(); } catch (_) {}
         function poll() {

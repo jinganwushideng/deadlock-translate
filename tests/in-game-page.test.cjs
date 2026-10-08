@@ -3,7 +3,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
  const root=path.resolve(__dirname,'..'),base='http://localhost:17868',key=fs.readFileSync(path.join(root,'artifacts/pairing.key'),'utf8').trim();
  assert.equal((await fetch(base+'/in-game/wrong')).status,404);
  const login=await fetch(base+'/in-game/'+key,{redirect:'manual'});
- assert.equal(login.status,302);assert.equal(login.headers.get('location'),'/?inGame=1');assert(login.headers.get('set-cookie').toLowerCase().includes('httponly'));
+ assert.equal(login.status,200);assert.equal(login.headers.get('location'),null);assert((await login.text()).includes('id="save"'));assert(login.headers.get('set-cookie').toLowerCase().includes('httponly'));
  const browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1040,height:700}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  // Emulate missing modern DOM APIs used by older game HTML surfaces.
  await page.addInitScript(()=>{Element.prototype.replaceChildren=undefined;File.prototype.text=undefined;Object.defineProperty(document,'hidden',{get:()=>true});});

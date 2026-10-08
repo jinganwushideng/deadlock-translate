@@ -30,6 +30,8 @@ jobs:
         run: dotnet build src/Bridge -c Release
       - name: Concurrency tests (mock HTTP only)
         run: dotnet run --project tests/ConcurrencyTests
+      - name: Scheduling, cache and certificate diagnostics tests
+        run: dotnet run --project tests/OptimizationTests
       - name: Panorama and local data tests
         shell: pwsh
         run: |

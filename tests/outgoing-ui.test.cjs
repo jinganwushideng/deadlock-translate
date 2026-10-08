@@ -564,6 +564,22 @@ for (const scenario of ['hud','foreign','old']) {
     });
 }
 
+// Optimization regressions: no real keyboard input or messages are sent.
+check('ready bridge exchanges data without the old five-second hold',()=>{
+ const w=world();w.step(4);assert(w.packets.length>0);assert(w.now<105000);
+});
+check('own bilingual echo is not sent back to cloud in either view',()=>{
+ const w=world({displayMode:'bilingual',nativeClasses:true});w.step(60);w.openChat('team');w.capture('等我大招');w.deferResult=false;w.step(20);
+ const line='等我大招 | Wait for my ult';w.addEcho('regular','team',true,line);w.addEcho('hud','team',true,line);w.step(8);
+ assert(!w.packets.flatMap(p=>p.messages||[]).some(m=>m.text===line));
+ w.addEcho('regular','team',false,line);w.step(8);assert(w.packets.flatMap(p=>p.messages||[]).some(m=>m.text===line),'another player is still translated');
+});
+check('own English-only echo reuses original without another cloud request',()=>{
+ const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('等我大招');w.deferResult=false;w.step(20);
+ w.addEcho('regular','team',true,'Wait for my ult');w.step(8);
+ assert(!w.packets.flatMap(p=>p.messages||[]).some(m=>m.text==='Wait for my ult'));
+});
+
 const failed = results.filter(r => !r.ok);
 const result = {
     passed: results.length - failed.length, total: results.length,

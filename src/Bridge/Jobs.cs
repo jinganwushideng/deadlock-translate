@@ -39,7 +39,8 @@ public sealed class JobEngine : IAsyncDisposable {
         workers = Enumerable.Range(0,8).Select(_=>Worker(fast.Reader,false)).Concat(Enumerable.Range(0,8).Select(_=>Worker(quality.Reader,true))).ToArray();
     }
     private void UpdateLimits(){fastSlots.SetLimit(config.Current.FastConcurrency);qualitySlots.SetLimit(config.Current.LlmConcurrency);}
-    public object Stats { get { lock(gate) return new { session = sessionId, messages = jobs.Count, pending=jobs.Values.Count(j=>!j.View.Done), completed, failed, connected = Environment.TickCount64-lastClient<15000 }; } }
+    public bool Connected {get{lock(gate)return lastClient>0&&Environment.TickCount64-lastClient<15000;}}
+    public object Stats { get { lock(gate) return new { session = sessionId, messages = jobs.Count, pending=jobs.Values.Count(j=>!j.View.Done), completed, failed, connected = Connected }; } }
     public void ClearCache() { Interlocked.Increment(ref cacheEpoch); fastCache.Clear(); }
     public JobView[] Exchange(string currentSession, Incoming[] inputs, string[] ids) {
         if(currentSession.Length is < 1 or > 100 || inputs.Length>16 || ids.Length>64 || inputs.Any(i=>i.Id.Length is <1 or >100 || i.Text.Length is <1 or >1024 || i.Sender.Length>100 || i.Channel.Length>16)) throw new ArgumentException("消息批次无效");

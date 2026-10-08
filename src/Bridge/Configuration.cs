@@ -25,6 +25,7 @@ public record Settings {
     public string Transport { get; init; } = "fragment";
     public int ScanIntervalMs { get; init; } = 200;
     public bool OutgoingEnabled { get; init; } = true;
+    public bool ReserveSendSlot { get; init; } = true;
     public string OutgoingMode { get; init; } = "auto";
     public int OutgoingTimeoutSeconds { get; init; } = 30;
     public bool OutgoingFallbackFast { get; init; } = false;
