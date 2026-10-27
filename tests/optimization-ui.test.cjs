@@ -31,7 +31,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
   assert.equal(await page.locator('.outgoing-task').first().getAttribute('data-task-id'),'two');
   items=items.filter(i=>i.id!=='two');await page.waitForFunction(()=>!document.querySelector('[data-task-id="two"]'));assert(await page.evaluate(()=>window.savedRow===document.querySelector('[data-task-id="one"]')));
   slow=true;await page.waitForTimeout(3800);assert.equal(maxActive,1,'slow polling must not overlap');slow=false;await page.waitForTimeout(2300);
-  await page.locator('[data-page="overview"]').click();phase='certificate-untrusted';await page.locator('#checkConnection').click();assert((await page.locator('#diagnosticsSummary').textContent()).includes('信任本机证书'));
+  await page.locator('[data-page="diagnostics"]').click();phase='certificate-untrusted';await page.locator('#checkConnection').click();assert((await page.locator('#diagnosticsSummary').textContent()).includes('信任本机证书'));
   assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(root,'artifacts/optimization-ui-tests.json'),JSON.stringify({passed:7,scope:'mock HTTP + real Edge DOM; stable row/button identity, focus preservation, keyed updates/removal, non-overlapping polling and diagnostics'},null,2));console.log('PASS 7 incremental settings UI checks');
  }finally{await browser.close();}

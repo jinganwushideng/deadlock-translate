@@ -64,11 +64,11 @@ glossaryConfig.Save(glossaryConfig.Current with{LlmKey="FAKE-LOCAL-KEY",LlmBaseU
 var capturedHttp=new CaptureHttp();using var glossaryHttp=new HttpClient(capturedHttp);
 var glossaryTranslator=new Translators(glossaryConfig,terms,glossaryHttp);
 capturedHttp.Reply="Seven has no ult. Buy Quicksilver Reload.";
-await glossaryTranslator.ToEnglish("老七没大招，买水银装填",glossaryConfig.Current,false,CancellationToken.None);
+await glossaryTranslator.TranslateOutgoing("老七没大招，买水银装填",glossaryConfig.Current,false,CancellationToken.None);
 using(var captured=JsonDocument.Parse(capturedHttp.Body!)){
     using var payload=JsonDocument.Parse(captured.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!);
     Check(payload.RootElement.GetProperty("current").GetString()=="Seven没大招，买Quicksilver Reload","outgoing provider receives canonical names for Chinese nicknames");
-    Check(payload.RootElement.GetProperty("glossary").EnumerateArray().Any(x=>x.GetProperty("chinese").GetString()=="老七"),"outgoing provider receives the matched nickname glossary");
+    Check(payload.RootElement.GetProperty("requiredNames").EnumerateArray().Select(x=>x.GetString()).Contains("Seven")&&!payload.RootElement.GetProperty("glossary").EnumerateArray().Any(x=>x.GetProperty("source").GetString()=="老七"),"resolved nickname remains required without redundant glossary hints");
 }
 capturedHttp.Reply="魔力装填（Quicksilver Reload）还在冷却。";
 var glossaryQuality=await glossaryTranslator.Quality("QSR on cooldown",[],glossaryConfig.Current,CancellationToken.None);
@@ -133,11 +133,11 @@ Check(OutgoingService.BuildSendText("等我大招","Wait for my ult","translatio
 Check(OutgoingService.BuildSendText("等我大招","Wait for my ult","bilingual")=="等我大招 | Wait for my ult","bilingual send text keeps the original first");
 Check(OutgoingService.BuildSendText("  Hello   world ","hello world","bilingual")=="hello world","whitespace-identical sides collapse to one copy");
 Check(OutgoingService.BuildSendText("hello","HELLO","bilingual")=="HELLO","case-identical sides collapse to one copy");
-Check(OutgoingService.BuildSendText(new string('x',250),new string('y',247),"bilingual").Length==500,"combined length counts the separator exactly");
-bool overCombined=false;try{OutgoingService.BuildSendText(new string('x',250),new string('y',248),"bilingual");}catch(InvalidDataException){overCombined=true;}Check(overCombined,"one unit over the combined limit is refused");
+Check(OutgoingService.BuildSendText(new string('x',38),new string('y',39),"bilingual").Length==80,"combined native limit counts the separator exactly");
+Check(OutgoingService.BuildSendText(new string('x',39),new string('y',39),"bilingual")==new string('x',39)+" | "+new string('y',38),"one unit over combined native limit clips only the tail");
 Check(OutgoingService.NormalizeLine("a\nb\tc")=="a b c","newlines and tabs fold into single spaces");
-bool tooLong=false;try{OutgoingService.BuildSendText(new string('x',600),"y","bilingual");}catch(InvalidDataException ex){tooLong=ex.Message.Contains("组合消息过长");}Check(tooLong,"over long combined message fails with the bilingual hint");
-bool longEnglish=false;try{OutgoingService.BuildSendText("x",new string('y',501),"translation");}catch(InvalidDataException){longEnglish=true;}Check(longEnglish,"over long English is rejected without truncation");
+Check(OutgoingService.BuildSendText(new string('x',600),"y","bilingual")==new string('x',80),"over long combined message sends original-first prefix");
+Check(OutgoingService.BuildSendText("x",new string('y',501),"translation")==new string('y',80),"over long English sends the maximum bounded prefix");
 var contextDir=Path.Combine(temp,"context");Directory.CreateDirectory(contextDir);
 await using var contextEngine=new JobEngine(new ConfigStore(contextDir),fake);
 contextEngine.Exchange("ctx",[new Incoming("c1","team line one","","team"),new Incoming("c2","all line one","","all"),new Incoming("c3","no channel line","","")],[]);
@@ -180,6 +180,15 @@ bilingual.Exchange("s1",[new OutgoingInput("r2","原文","all")],[]);
 await WaitOutgoing(bilingual,"r2");
 bilingual.Exchange("s1",[],[],[],[new OutgoingRefusal("r2","something-unknown")]);
 Check(bilingual.Recent.First(x=>x.Id=="r2").Error!.Contains("未提交"),"an unknown refusal reason still reports not sent");
+foreach(var (reason,expected) in new[]{("native-close","聊天框未能收起"),("submit-unconfirmed","无法确认发送")}){
+    var requestId="guard-"+reason;
+    bilingual.Exchange("s1",[new OutgoingInput(requestId,"保留原文","all")],[]);
+    await WaitOutgoing(bilingual,requestId);
+    bilingual.Exchange("s1",[],[],[],[new OutgoingRefusal(requestId,reason)]);
+    Check(bilingual.Diagnostics.RefusalCode==reason&&bilingual.Recent.First(x=>x.Id==requestId).Error!.Contains(expected),"native guard retains specific diagnostic and recovery message "+reason);
+    bilingual.Exchange("s1",[],[requestId]);
+    Check(bilingual.Recent.First(x=>x.Id==requestId).State=="failed"&&bilingual.Recent.First(x=>x.Id==requestId).Original=="保留原文","late dispatch ack cannot override native guard or lose original "+reason);
+}
 var hotkeyNow=Environment.TickCount64;
 long expiryClock=1000;
 await using(var expiryService=new OutgoingService(config,(text,settings,fallback,token)=>Task.FromResult("Hello"),()=>expiryClock)){
@@ -221,7 +230,7 @@ using var fakeHttp=new HttpClient{Timeout=TimeSpan.FromSeconds(5)};
 var fakeTranslators=new Translators(fakeConfig,new Terms(fakeDir,Path.Combine(root,"src/Bridge/data/terms.json")),fakeHttp);
 bool fakeUp=false;try{using var probe=await fakeHttp.GetAsync("http://127.0.0.1:17870/none");fakeUp=probe.StatusCode==System.Net.HttpStatusCode.NotFound;}catch{fakeUp=false;}
 if(fakeUp){
-    var english=await fakeTranslators.ToEnglish("等我大招，别打。",fakeConfig.Current,false,CancellationToken.None);
+    var english=await fakeTranslators.TranslateOutgoing("等我大招，别打。",fakeConfig.Current,false,CancellationToken.None);
     Check(english=="Wait for my ultimate, don't attack.","outgoing English reaches the configured Chat Completions service");
     var composed=OutgoingService.BuildSendText("等我大招，别打。",english,"bilingual");
     Check(composed=="等我大招，别打。 | "+english,"composed bilingual send text uses the service result");

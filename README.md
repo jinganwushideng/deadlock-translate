@@ -4,7 +4,7 @@
 
 技术结构：Panorama 游戏界面＋本地 .NET 后台＋TypeScript 设置页。翻译调用云端服务，本地不运行翻译模型。
 
-当前源码版本 **0.5.0**。非 Valve 官方项目，与 Valve 无隶属或背书关系。
+当前源码和安装包版本 **0.7.0**。设置界面采用贴近游戏的分组导航与自动保存，提供静态、半透明及实时模糊背景，并改善翻译发送关框确认和新草稿隔离；具体变化见 [本版更新说明](docs/UPDATE-0.7.0.md)。保留接收/发送独立模型与思考、双语分条、快捷短语、API 保活和备份清理。后台、设置页、游戏 VPK 与安装器使用统一构建编号。QQ 反馈群 **923443423**。
 
 翻译服务推荐、费用参考和模型 ID 填写要求见[使用说明](docs/USER-GUIDE.md)。
 
@@ -18,22 +18,24 @@
 
 ## 直接下载安装
 
-**[下载 Windows x64 完整运行包](https://github.com/jinganwushideng/deadlock-translate/releases/download/v0.5.0/DeadlockTranslate-0.5.0-win-x64.zip)** · [全部版本与校验文件](https://github.com/jinganwushideng/deadlock-translate/releases)
+[已发布版本与下载文件](https://github.com/jinganwushideng/deadlock-translate/releases)。源码中的版本号不代表该版本已上传；请以 Release 附件为准。
 
-无需编译或另外安装 .NET。请下载 `DeadlockTranslate-0.5.0-win-x64.zip`，不要把 GitHub 自动提供的 `Source code` 当作运行程序。
+**0.6.8 起提供图形安装器 `DeadlockTranslate-Setup-0.7.0.exe`，首次安装和更新使用同一个文件。** 完整离线包已内置，无需单独解压或安装 .NET。
 
-1. 解压整个文件夹到固定位置，先退出 Deadlock，再运行 `Install.cmd`。
-2. 首次使用 HTTPS 时运行 `Trust-Local-Https.cmd`，核对本机证书并确认信任，然后完整退出并重启 Steam。已有 0.4.2 且 HTTPS 正常的用户无需重复安装证书。
-3. 运行 `Settings.cmd`，配置自己的翻译服务和 API Key；包内没有附赠 API 额度。
-4. 运行 `Launch.cmd`；若平时从 Steam 启动，请按包内 `Steam-Launch-Options.txt` 配置启动选项。
+1. 退出 Deadlock，运行安装器；第 1 步先处理本机证书，请本人在电脑前确认 Windows 弹窗。已有有效证书自动跳过重复安装。
+2. 选择“安装 / 覆盖更新”。自动检测游戏、原程序目录和 Steam 账号；找不到时可手动选择或限时深层扫描。
+3. 检查资源冲突和操作预览，再执行。已有安装会成套更新后台、设置页和游戏 VPK，保留个人设置、密钥和证书。
+4. 首次信任证书后完整重启 Steam，从 Steam 启动游戏，在设置页配置自己的服务；包内没有 API 额度。
 
-不要只取出 EXE：VPK、配对文件、网页和词库必须保持配套。已有旧版时先按使用说明卸载旧 Mod，保留个人配置后再安装新版。完整步骤见包内“使用说明-先读我.txt”。
+安装器另有修复、卸载、安装日志导出、可选管理员兼容及安装记录恢复。完整步骤和限制见 [GUI 安装器说明](docs/GUI-INSTALLER.md)。
+
+原 ZIP + 外置 `覆盖更新.cmd` 方式仍可使用，两个文件放在一起运行更新器。手动安装方法见 [使用说明](docs/USER-GUIDE.md)；不要把 GitHub 自动提供的 Source code 当成运行包，也不要只复制运行包里的后台 EXE。
 
 ## 功能
 
 - 聊天记录和顶部聊天气泡追加中文译文，支持所有玩家消息及自身消息开关。
 - 快译、精翻、先快后精；Bing 网页通道、Azure Translator、Chat Completions 兼容接口。
-- 死锁术语及英俄常用简称适配，可编辑、导入和导出词库。
+- 死锁术语、中英俄外号及新旧译名适配，可选旧译名显示，可编辑、导入和导出词库。
 - 左 Alt＋空格提交翻译发送，支持英文或原文＋英文、队伍和全体频道。
 - 快译与精翻分别排队，共享服务并发上限；发送按频道保持顺序。
 - Steam 启动选项联动后台，无需常驻监视程序或开机自启。
@@ -41,15 +43,20 @@
 
 0.5.0 新增发送预留名额、精翻请求合并/缓存、双语回显复用和连接自检。首次使用 HTTPS 需按使用说明信任本机证书并重启 Steam。
 
+0.6.0 加入可选的接收/发送目标语言：18 个预设及自定义语言，默认仍为简体中文接收、英语发送。详见使用说明。
+
 ## 使用与开发
 
 - [详细使用说明](docs/USER-GUIDE.md)：安装、启动选项、API 配置、快捷键及卸载。
+- [给 AI 的安装说明](docs/AI-INSTALL-GUIDE.md)：证书优先、已有证书跳过、定点修改 Steam 启动项和分项验收。
 - [从源码构建](docs/BUILDING.md)：工具、资源生成和打包。
 - [来源与许可证范围](THIRD-PARTY-NOTICES.md)、[来源核对记录](docs/SOURCE-AUDIT.md)。
 - [验证范围](docs/VALIDATION.md)、[发布到 GitHub](docs/PUBLISHING.md)。
 - [参与贡献](CONTRIBUTING.md)、[隐私与安全](SECURITY.md)。
 
-源码目录：`src/Bridge` 后台，`src/Settings` 设置页，`mod` Panorama 脚本与样式，`scripts` 构建安装工具，`tests` 测试。
+源码目录：`src/Installer` GUI 安装器，`src/Bridge` 后台，`src/Settings` 设置页，`mod` Panorama 脚本与样式，`scripts` 构建安装工具，`tests` 测试。
+
+工作区中的正式交付统一放在 `release/版本号/`：GUI 安装器、完整运行 ZIP、外置更新器、安装说明和已解压运行目录集中在一起。`dist/` 是内部构建输出，`artifacts/` 是验证与备份，不作为用户查找最新版的入口。
 
 ## 当前限制
 
@@ -62,3 +69,5 @@ Bing 网页通道不是稳定性有保障的正式 API，失效时不会静默�
 本项目可授权的代码和文档使用 **GPL-3.0-only**，见 [LICENSE](LICENSE)。保留第三方署名，详见 [NOTICE](NOTICE)。主要游戏接入参考 BabelTower，Steam 启动方式参考 SteamWrap。
 
 Valve 游戏资源不受本项目许可证授权：公开源码不包含反编译的原版聊天布局、生成的游戏本地化词库、游戏图标或工具二进制；构建时从使用者自己的游戏安装生成所需资源。
+
+0.6.5 增加有界异步日志、一键导出、自定义发送快捷键/检测/监听重建，以及手动路径和限时深层安装定位。故障包不含聊天正文、译文或密钥。

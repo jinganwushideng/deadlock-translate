@@ -1,0 +1,25 @@
+/* The material contains no scene lighting. Alpha belongs to background layers, never UI text. */
+html[data-settings-background]{background:transparent}
+html[data-settings-background] body{background:#141414;isolation:isolate}
+html[data-settings-background] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(#12121299,#12121299),url("settings-background-v3-flat.png") center/cover no-repeat}
+html[data-settings-background="translucent"] body,html[data-settings-background="blur"] body{background:transparent}
+/* A dark root color-scheme can make an embedded Chromium surface synthesize an
+   opaque canvas even when html/body are transparent. Keep dark UA controls local. */
+html[data-settings-background="translucent"],html[data-settings-background="blur"],html[data-surface-probe]{color-scheme:normal}
+html[data-settings-background] :is(input,textarea,select,button){color-scheme:dark}
+html[data-settings-background="translucent"] body::before,html[data-settings-background="blur"] body::before{background:rgba(18,18,18,.58)}
+html[data-settings-background="translucent"] .shell,html[data-settings-background="blur"] .shell,
+html[data-settings-background="translucent"] .shell>aside,html[data-settings-background="blur"] .shell>aside,
+html[data-settings-background="translucent"] main,html[data-settings-background="blur"] main{background-color:transparent;background-image:none}
+html[data-settings-background="translucent"] body::after,html[data-settings-background="blur"] body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:url("settings-background-v3-flat.png") center/cover no-repeat;opacity:.10}
+html[data-settings-background] .page>.card.is-current-group{background-color:rgba(98,98,98,.86)}
+html[data-settings-background="translucent"] .page>.card.is-current-group,html[data-settings-background="blur"] .page>.card.is-current-group{background-image:var(--grain);background-color:rgba(98,98,98,.76)}
+/* Browser-only demonstration. The native mode never applies CSS blur to HTML or text. */
+.dlt-background-demo #backgroundDemoScene{display:block;position:fixed;inset:0;z-index:-3;pointer-events:none;background:radial-gradient(ellipse at 28% 72%,#245964,transparent 45%),radial-gradient(ellipse at 88% 38%,#743c26,transparent 50%),repeating-linear-gradient(110deg,#9993 0 2px,transparent 2px 64px),#152126}
+.dlt-background-demo body::before{z-index:-1}
+.dlt-background-demo[data-settings-background="blur"] body::before{backdrop-filter:blur(8px)}
+@media(prefers-reduced-transparency:reduce){.dlt-background-demo #backgroundDemoScene{background:#202020}}
+
+/* Short-lived, user-invoked native alpha-channel probe. No global page opacity. */
+html[data-surface-probe] body,html[data-surface-probe] body::before,html[data-surface-probe] body::after{background:none!important}
+html[data-surface-probe] .shell,html[data-surface-probe] .shell>aside,html[data-surface-probe] main{background:none!important}

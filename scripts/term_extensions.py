@@ -1,28 +1,31 @@
 """Maintained chat aliases. Canonical names resolve against installed game resources."""
 ALIASES = {
-    'Seven': ['7', 'sev', '老七', '电男', '七爷', 'севеном', 'севену'],
+    'Seven': ['7', 'sev', '老七', '电男', '七爷', '赛文', '賽文', 'севеном', 'севену'],
     'Infernus': ['inferno', 'infer', '火男', 'инферно', 'инфернусу'],
-    'Vindicta': ['vindi', 'vind', '狙娘', 'винда', 'виндиктой'],
+    'Vindicta': ['vindi', 'vind', '狙娘', '飞天狙', '飛天狙', 'винда', 'виндиктой'],
     'Grey Talon': ['gray talon', 'talon', 'gt', '弓男', '弓箭手', 'талон', 'серый коготь'],
     'Lady Geist': ['lady', 'lg', '鬼夫人', 'гейст', 'гейста'],
-    'Abrams': ['abe', '蓝胖', 'абрам', 'абрамсом'],
-    'McGinnis': ['mcg', 'ginnis', 'mcginnes', '炮台姐', '炮台女', 'макгиннис', 'макгинис'],
+    'Abrams': ['abe', 'abram', '蓝胖', '蓝牛', '藍牛', 'blue cow', 'bluecow', 'blue bull', 'cow', 'bull', 'абрам', 'абрамсом', 'абрамсу', 'абрамсе'],
+    'McGinnis': ['mcg', 'ginnis', 'mcginnes', '炮台姐', '炮台女', '机枪妹', '機槍妹', 'макгиннис', 'макгинис'],
     'Mo & Krill': ['mo and krill', 'mo n krill', 'mnk', 'mokrill', '莫克', '钻地双雄', 'мо и крилл', 'крилл'],
     'Kelvin': ['kelv', '冰男', '冰哥', 'кельвина', 'кельвином'],
-    'Viscous': ['goo', 'goo man', '史莱姆', '绿胖', '黏液', 'вязкий'],
+    'Viscous': ['goo', 'goo man', '史莱姆', '绿胖', '凝胶人', '凝膠人', '绿泡泡', '綠泡泡', '黏液', 'вязкий'],
     'Dynamo': ['dyn', 'динамо'],
     'Ivy': ['石像鬼', 'айви'],
     'Pocket': ['口袋哥', 'покетом'],
-    'Paradox': ['para', 'парадокса'],
-    'Wraith': ['врейс', 'врейсом'],
-    'Warden': ['варден', 'вардена', 'варденом'],
+    'Paradox': ['para', '灯泡女', '燈泡女', 'парадокса'],
+    'Wraith': ['卡牌姐', '黑帮女', '黑幫女', 'врейс', 'врейсом'],
+    'Warden': ['警长', '警長', 'варден', 'вардена', 'варденом'],
     'Shiv': ['шива', 'шивом'],
-    'Yamato': ['yama', '亚马托'],
+    'Yamato': ['yama', '亚马托', '刀姐'],
     'Bebop': ['机器人', 'бебоп', 'бебопа', 'бибопом'],
     'Holliday': ['holiday', 'холидей'],
     'Sinclair': ['魔术师', 'синклер'],
     'The Doorman': ['doorman', '门哥', '门卫'],
     'Vyper': ['viper', 'вайпер'],
+    # Supplied by players; canonical spelling/translation still comes from game resources.
+    # Silver is localized as 西尔芙 in this build; 希尔芙 is accepted as an alternate spelling.
+    'Silver': ['狼女', '希尔芙', '希爾芙', '西尔芙', '西爾芙', 'wolf girl', 'wolf-girl', 'wolfgirl', 'wolf', 'werewolf', 'сильвера', 'сильверу', 'сильвером', 'волчица', 'волчицы', 'волчицу', 'волчице', 'волчицей', 'оборотень', 'оборотня'],
     'Unstoppable': ['unstopp', 'unstoppable active', 'bkb', '免控装'],
     'Metal Skin': ['metal-skin', '金属皮肤', '铁皮'],
     'Ethereal Shift': ['ethereal', '金身'],
@@ -44,10 +47,50 @@ ALIASES = {
     'Spirit Shredder Bullets': ['ssb'],
     'Bullet Resist Shredder': ['brs'],
     'Mystic Reverb': ['reverb'],
+    'Stamina Mastery': ['跑酷大师', '跑酷', '跑酷装'],
 }
 
 # Short forms with several plausible meanings remain glossary hints, not forced replacements.
-AMBIGUOUS_ALIASES = {'7','sev','infer','vin','vind','gt','talon','lady','lg','abe','goo','dyn','para','机器人','弓箭手','黏液','门卫','铁皮','金身','ethereal','bkb'}
+AMBIGUOUS_ALIASES = {'跑酷','跑酷装','7','sev','infer','vin','vind','gt','talon','lady','lg','abe','goo','dyn','para','机器人','弓箭手','黏液','门卫','铁皮','金身','ethereal','bkb','cow','bull','wolf','werewolf','волчица','волчицы','волчицу','волчице','волчицей','оборотень','оборотня','警长','警長','刀姐'}
+
+# Preferred historical Chinese name first, then alternate spellings. These are
+# recognition/display aliases, never replacements for the game's resource names.
+# Hero history: old guides and player localization accounts. Equipment/objectives
+# also retain the earlier names used by this mod's maintained glossary.
+LEGACY_NAMES = {
+    'Abrams': ['亚伯拉姆斯', '亞伯拉姆斯'],
+    'Vindicta': ['复仇女巫', '復仇女巫', '复仇之影', '復仇之影'],
+    'Lash': ['神鞭'],
+    'Mo & Krill': ['隧底双煞', '隧底雙煞'],
+    'McGinnis': ['麦金尼斯', '麥金尼斯'],
+    'Warden': ['守望者'],
+    'Haze': ['暗影'],
+    'Dynamo': ['奇能博士'],
+    'Kelvin': ['凯尔文', '凱爾文'],
+    'Shiv': ['西弗'],
+    'Metal Skin': ['金属皮肤', '金屬皮膚'],
+    'Quicksilver Reload': ['水银装填', '水銀裝填'],
+    'Bullet Resilience': ['高级子弹护甲', '高級子彈護甲'],
+    'Spirit Resilience': ['高级元灵护甲', '高級元靈護甲'],
+    'Silence Wave': ['沉默符文'],
+    'Cursed Relic': ['诅咒遗物', '詛咒遺物'],
+    'Rescue Beam': ['救援光束'],
+    'Healing Nova': ['群体治疗环', '群體治療環'],
+    'Return Fire': ['反弹甲', '反彈甲'],
+    'Guardian': ['守卫', '守衛'],
+    'Base Guardians': ['基地守卫', '基地守衛'],
+    'Walker': ['行者'],
+    'Patron': ['主宰'],
+    'Urn': ['灵魂坛', '靈魂壇'],
+    'Rejuvenator': ['复活强化', '復活強化'],
+}
+AMBIGUOUS_LEGACY_NAMES = {'暗影', '守望者', '守卫', '守衛', '行者', '主宰', '卫士', '基地卫士', '机甲', '守护神'}
+LEGACY_ENGLISH_NAMES = {
+    'Spirit Shredder': ['Spirit Shredder Bullets', 'Soul Shredder Bullets'],
+    'Bullet Resilience': ['Improved Bullet Armor'],
+    'Spirit Resilience': ['Improved Spirit Armor'],
+    'Silence Wave': ['Silence Glyph'],
+}
 
 PHRASES = {
  'cc':'控制', 'aoe':'范围效果', 'dot':'持续伤害', 'dps':'每秒伤害', 'cdr':'冷却缩减',

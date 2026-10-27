@@ -1,0 +1,44 @@
+using DeadlockTranslate;
+using System.Text.Json;
+
+var root=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../"));var passed=0;
+void Check(bool ok,string name){if(!ok)throw new Exception("FAIL: "+name);passed++;Console.WriteLine("PASS: "+name);}
+var recorder=new HotkeyRecorder();long now=10000;const int window=100;
+string Begin(bool game=false){var id=recorder.Begin(now,window,game);Check(recorder.Status(id,now)!.State=="arming","starts arming, without collecting keys");Check(recorder.Activate(now,window,true),"hook activates after fresh installation");return id;}
+RecordingDecision Down(int key,int scan=0,int flags=0)=>recorder.Process(key,scan,flags,true,false,++now,window,true);
+RecordingDecision Up(int key,int scan=0,int flags=0)=>recorder.Process(key,scan,flags,false,true,++now,window,true);
+var id=Begin(true);Check(Down(0xA4).Suppress,"Alt down is owned before browser/game handling");Check(Down(87).Suppress,"W down is owned before browser/game handling");
+Check(recorder.Status(id,now) is {State:"completed",Binding:"LAlt+W"},"Alt plus virtual W records Alt+W, never Alt+F11");
+var runtime=HotkeyChord.Parse(recorder.Status(id,now)!.Binding!);Check(runtime.VirtualKey==87&&runtime.Matches(KeyModifiers.LeftAlt)&&runtime.VirtualKey!=122,"recorded code and sending code are identical");
+Check(Down(87).Suppress,"main-key repeat cannot produce a second recording");Check(Up(87).Suppress&&Up(0xA4).Suppress&&!recorder.HasSuppressedKeys,"completed capture consumes owned releases including Alt-up");
+Check(!Down(65).Suppress&&!recorder.HasSuppressedKeys,"ordinary keyboard input resumes after recording");
+id=Begin();Down(0x12);Down(87);Up(87);Check(Up(0xA4).Suppress&&!recorder.HasSuppressedKeys,"generic Alt-down and side-specific Alt-up share release ownership");
+id=Begin();Down(0xA4);Up(0xA4);Down(0xA5,flags:1);Down(87);
+Check(recorder.Status(id,now)!.Binding=="RAlt+W","released left Alt cannot contaminate a later right Alt chord");Up(87);Up(0xA5,flags:1);
+id=Begin();Down(0xA2);Down(0xA3,flags:1);Down(13);
+Check(recorder.Status(id,now)!.Binding=="Ctrl+Enter","both Ctrl sides map to explicit any-side Ctrl");Up(13);Up(0xA2);Up(0xA3,flags:1);
+id=Begin();Down(0x10,0x36);Down(0xA4);Down(87);
+Check(recorder.Status(id,now)!.Binding=="LAlt+RShift+W","right Shift scan and modifier ordering are preserved");Up(87);Up(0xA4);Up(0x10,0x36);
+id=Begin();Down(122);Check(recorder.Status(id,now)!.Binding=="F11","an actual F11 remains F11");Up(122);
+id=Begin();Down(87);Check(recorder.Status(id,now)!.State=="recording"&&recorder.Status(id,now)!.Error!=null,"unmodified W is rejected without saving a chord");Up(87);Down(0xA4);Down(115);
+Check(recorder.Status(id,now)!.State=="recording","Alt+F4 never completes or closes the settings window");Up(115);Up(0xA4);Down(27);
+Check(recorder.Status(id,now)!.State=="cancelled"&&Up(27).Suppress,"Escape cancels only recording and pairs its release");
+id=Begin();Down(0xA4);recorder.Cancel(id);Check(Up(0xA4).Suppress,"cancellation still drains owned Alt release");
+id=Begin();Check(!recorder.Process(87,0,0,true,false,++now,window+1,true).Suppress&&recorder.Status(id,now)!.State=="cancelled","another foreground window is never captured");
+id=Begin(true);Check(!recorder.Process(87,0,0,true,false,++now,window,false).Suppress&&recorder.Status(id,now)!.State=="cancelled","closing the native game settings cancels capture before gameplay");
+id=Begin();Check(recorder.Status(id,now+1500)!.State=="expired","lost page heartbeat ends recording automatically");
+now+=2000;id=Begin();for(var i=0;i<30;i++){now+=400;recorder.Status(id,now);}Check(recorder.Status(id,now+3000)!.State=="expired","heartbeat cannot extend the absolute 15-second deadline");
+now+=4000;id=Begin();Down(0xA4,flags:0x10);Down(87,flags:0x10);
+Check(recorder.Status(id,now)!.Binding=="LAlt+W","explicit scoped recording supports remote/assisted input without sending");Up(87,flags:0x10);Up(0xA4,flags:0x10);
+var older=Begin();var newer=recorder.Begin(now,window,false);Check(recorder.Status(older,now)==null&&recorder.Status(newer,now)!.State=="arming","superseded window cannot poll another recording result");recorder.Cancel(older);Check(recorder.Active(now),"stale cancellation cannot cancel the new session");recorder.Cancel(newer);
+id=Begin();Down(0xA4);recorder.Cancel(id);recorder.RecoverReleases(_=>false);Check(!recorder.HasSuppressedKeys,"lost release can be recovered after session cancellation");
+Check(recorder.Status(id,now)!.Binding==null,"cancelled session never fabricates a saved binding");
+var state=new HotkeyState();var chord=HotkeyChord.Parse("LAlt+W");state.Process(chord,0xA4,0,0,true,false,new(true,true,true,true,false,false));
+Check(state.Process(chord,87,0,0x10,true,false,new(true,true,true,true,false,false)).Action==HotkeyAction.Pass,"normal sending still ignores injected events");
+Check(state.Process(chord,87,0,0,true,false,new(false,false,false,false,false,false)).Action==HotkeyAction.Pass,"recording-owned keys cannot enter normal sending");
+var finished=new List<HotkeyRecordingView>();var audited=new HotkeyRecorder(finished.Add);var auditedId=audited.Begin(now,window,false);audited.Activate(now,window,true);
+audited.Process(0xA4,0,0,true,false,++now,window,true);audited.Process(87,0,0,true,false,++now,window,true);audited.Status(auditedId,now);audited.Cancel(auditedId);
+Check(finished.Count==1&&finished[0].Binding=="LAlt+W","completion audit receives one chosen chord, not keyboard history");
+var throwing=new HotkeyRecorder(_=>throw new Exception("test audit failure"));var failId=throwing.Begin(now,window,false);throwing.Activate(now,window,true);throwing.Process(0xA4,0,0,true,false,++now,window,true);
+Check(throwing.Process(87,0,0,true,false,++now,window,true).Suppress&&throwing.Status(failId,now)!.State=="completed","audit failure cannot leak the owned key to the browser");
+File.WriteAllText(Path.Combine(root,"artifacts/native-recording-tests.json"),JsonSerializer.Serialize(new{passed,scope="raw Windows key codes, time/window/game state and release ownership; no real keyboard, game input, cloud API or saved configuration"},ConfigStore.Json));Console.WriteLine($"TOTAL {passed} passed");

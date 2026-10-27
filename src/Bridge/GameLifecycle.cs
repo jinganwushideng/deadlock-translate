@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace DeadlockTranslate;
 
@@ -47,9 +49,18 @@ public static class GameProcess {
         var candidates=Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable));
         try{foreach(var process in candidates){
             try{
-                if(string.Equals(process.MainModule?.FileName,executable,StringComparison.OrdinalIgnoreCase))return true;
+                var path=ImagePath(process.Id);if(path==null){unknown=true;continue;}
+                if(string.Equals(path,executable,StringComparison.OrdinalIgnoreCase))return true;
             }catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){unknown=true;}
         }}finally{foreach(var process in candidates)process.Dispose();}
         return unknown?null:false;
     }
+    // Limited query rights suffice even when reading modules would require higher rights.
+    public static string? ImagePath(int processId){
+        var handle=OpenProcess(0x1000,false,processId);if(handle==IntPtr.Zero)return null;
+        try{var buffer=new StringBuilder(32768);var size=buffer.Capacity;return QueryFullProcessImageName(handle,0,buffer,ref size)?buffer.ToString():null;}finally{CloseHandle(handle);}
+    }
+    [DllImport("kernel32.dll",SetLastError=true)]private static extern IntPtr OpenProcess(uint access,bool inherit,int processId);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]private static extern bool QueryFullProcessImageName(IntPtr process,uint flags,StringBuilder name,ref int size);
+    [DllImport("kernel32.dll")]private static extern bool CloseHandle(IntPtr handle);
 }

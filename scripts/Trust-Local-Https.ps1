@@ -1,6 +1,6 @@
-param([string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'),[switch]$ConfirmTrust,[switch]$RemoveTrust,[switch]$Renew)
+﻿param([string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'),[switch]$ConfirmTrust,[switch]$RemoveTrust,[switch]$Renew,[string]$RuntimeFolder=$PSScriptRoot)
 $ErrorActionPreference='Stop'
-$taskExe=Join-Path $PSScriptRoot 'DeadlockTranslate.exe'
+$taskExe=Join-Path $RuntimeFolder 'DeadlockTranslate.exe'
 if($Renew -and $RemoveTrust){throw 'Renew and RemoveTrust cannot be combined.'}
 if($Renew){
     $taskHealth=$null
@@ -43,8 +43,9 @@ try{
         foreach($taskMatch in $taskMatches){$taskStore.Remove($taskMatch)}
         Write-Output 'Removed trust only for this local certificate.'
     }else{
-        $taskStore.Add($taskCert)
-        Write-Output 'Trusted local HTTPS certificate for the current Windows user.'
+        $taskExisting=$taskStore.Certificates.Find([System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,$taskCert.Thumbprint,$false)
+        if($taskExisting.Count){Write-Output 'Certificate already trusted; no duplicate trust installation.'}
+        else{$taskStore.Add($taskCert);Write-Output 'Trusted local HTTPS certificate for the current Windows user.'}
         Write-Output 'Fully exit and restart Steam after first-time trust installation so its HTML browser reloads the trust store.'
     }
 }finally{$taskStore.Close();$taskCert.Dispose()}

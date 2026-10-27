@@ -7,12 +7,16 @@ def merge(old,new,user):
         for item in items:
             key=item['source'].casefold()
             if key in result:raise ValueError('Duplicate glossary source')
+            legacy=item.get('legacyTarget','')
+            if not isinstance(legacy,str) or len(legacy)>150:raise ValueError('Invalid legacy display name')
             result[key]=item
         return result
     previous,updated,saved=index(old),index(new),index(user)
+    def same(left,right):
+        return {**left,'legacyTarget':left.get('legacyTarget','')}=={**right,'legacyTarget':right.get('legacyTarget','')}
     output=[];seen=set()
     for key,item in saved.items():
-        if key in previous and item==previous[key]:
+        if key in previous and same(item,previous[key]):
             if key not in updated:continue
             item=updated[key]
         output.append(item);seen.add(key)

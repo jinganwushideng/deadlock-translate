@@ -44,7 +44,7 @@ var sceneProbe=new SceneProbe();await using(var engine=new JobEngine(sceneConfig
 var httpConfig=Config("shared",3,4);var network=new ProbeHttp{Hold=new(TaskCreationOptions.RunContinuationsAsynchronously)};
 using(var http=new HttpClient(network))using(var service=new Translators(httpConfig,terms,http)){
  var tasks=Enumerable.Range(0,8).Select(i=>service.Quality("synthetic sentence "+i,[],httpConfig.Current,CancellationToken.None))
-  .Concat(Enumerable.Range(0,4).Select(i=>service.ToEnglish("测试消息"+i,httpConfig.Current,false,CancellationToken.None))).ToArray();
+  .Concat(Enumerable.Range(0,4).Select(i=>service.TranslateOutgoing("测试消息"+i,httpConfig.Current,false,CancellationToken.None))).ToArray();
  await Until(()=>network.Max==3);await Task.Delay(40);
  Check(network.Active==3,"received and outgoing LLM requests share one global budget");
  httpConfig.Save(httpConfig.Current with{LlmConcurrency=5});await Until(()=>network.Active==5);
@@ -59,7 +59,7 @@ using(var http=new HttpClient(network))using(var service=new Translators(httpCon
 var bingConfig=Config("bing");var bingNetwork=new ProbeHttp();
 using(var http=new HttpClient(bingNetwork))using(var service=new Translators(bingConfig,terms,http)){
  var tasks=Enumerable.Range(0,6).Select(i=>service.Fast("synthetic sentence "+i,bingConfig.Current,CancellationToken.None))
-  .Concat(Enumerable.Range(0,2).Select(i=>service.ToEnglish("测试消息"+i,bingConfig.Current,true,CancellationToken.None))).ToArray();
+  .Concat(Enumerable.Range(0,2).Select(i=>service.TranslateOutgoing("测试消息"+i,bingConfig.Current,true,CancellationToken.None))).ToArray();
  await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
  Check(bingNetwork.TokenCalls==1,"simultaneous Bing startup refreshes credentials once");
  Check(bingNetwork.Max==4&&bingNetwork.Calls==8,"Bing translation POSTs run concurrently across receive and send");
@@ -68,7 +68,7 @@ using(var http=new HttpClient(bingNetwork))using(var service=new Translators(bin
 var limitedConfig=Config("limited");var limitedNetwork=new ProbeHttp{RateLimit=true};
 using(var http=new HttpClient(limitedNetwork))using(var service=new Translators(limitedConfig,terms,http)){
  try{await service.Fast("synthetic first",limitedConfig.Current,CancellationToken.None);throw new Exception("expected 429");}catch(HttpRequestException e) when(e.StatusCode==HttpStatusCode.TooManyRequests){}
- try{await service.ToEnglish("测试第二句",limitedConfig.Current,true,CancellationToken.None);throw new Exception("expected cooldown");}catch(InvalidOperationException){}
+ try{await service.TranslateOutgoing("测试第二句",limitedConfig.Current,true,CancellationToken.None);throw new Exception("expected cooldown");}catch(InvalidOperationException){}
  Check(limitedNetwork.Calls==1,"a 429 prevents new requests from the other queue during Retry-After");
 }
 

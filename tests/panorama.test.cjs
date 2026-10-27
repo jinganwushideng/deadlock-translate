@@ -1,3 +1,4 @@
+const nativeBubble=require('./helpers/native-bubble.cjs'),hudLabel=nativeBubble.translated;
 // Receive-path regression. The default scope is all_players: teammates, enemies,
 // the local player and player messages whose side is unknown are all translated.
 // teammates keeps the old conservative behaviour for comparison.
@@ -24,17 +25,19 @@ class Panel {
         const raw = url.split('#')[1] || url.split('?d=')[1];
         const data = JSON.parse(decodeURIComponent(raw));
         events.push(data);
-        this.title = 'DLT:' + JSON.stringify({ seq: data.seq, results: [...data.messages.map(m => ({ id: m.id, text: '译文 ' + m.text, revision: 1, stage: 'fast', done: true }))], config: { enabled: true, fontSize: 17, scanIntervalMs: 200, transport: 'fragment', incomingScope: scope, outgoingDisplayMode: 'translation' }, configuredLlm: true });
+        this.title = 'DLT:' + JSON.stringify({ seq: data.seq, results: [...data.messages.map(m => ({ id: m.id, text: m.contextOnly?'':'译文 ' + m.text, revision: 1, stage: m.contextOnly?'skipped':'fast', done: true }))], config: { enabled: true, fontSize: 17, scanIntervalMs: 200, transport: 'fragment', incomingScope: scope, incomingTargetLanguage:receiveLanguage,outgoingUseContext:useContext,outgoingDisplayMode: 'translation' }, configuredLlm: true });
     }
 }
+nativeBubble.install(Panel);
+const mountNative=host=>nativeBubble.mount((id,parent,cls)=>new Panel('Label',id,parent,cls),host);
 const root = new Panel('Root', 'Root'), context = new Panel('CitadelChat', 'Chat', root), messages = new Panel('Panel', 'ChatMessages', context), bridge = new Panel('HTML', 'DltBridge', context), status = new Panel('Label', 'DltStatus', context), hud = new Panel('Panel', 'Team1Chat', root), bubbles = new Panel('Panel', 'Messages', hud);
 Panel.prototype.SetParent = function (parent) { if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this); this.parent = parent; parent.children.push(this); };
-let scope = 'all_players';
+let scope = 'all_players',receiveLanguage='zh-Hans',useContext=false;
 new Panel('TextEntry', 'ChatInput', context); new Panel('Label', 'ChatTargetLabel', context);
 const menuParent = new Panel('Panel', 'SubOptions', root); new Panel('Panel', 'DltMenuMount', menuParent);
 for (let i = 0; i < 5000; i++) new Panel('Panel', 'unrelated' + i, root);
 function row(value, sender = 'teammate', channel = '[ALLIES]', own = false) { const r = new Panel('Panel', '', messages, 'ChatMessage'); if (own) new Panel('Panel', '', r, 'SenderLocalClient'); const body = new Panel('Panel', '', r, 'MessageBody'); const src = new Panel('Panel', 'MessageSource', body); new Panel('Label', '', src, 'ChannelName').text = channel; new Panel('Label', '', src, 'SenderName').text = sender; const contents = new Panel('Panel', 'MessageContents', body), text = new Panel('Panel', '', contents, 'Text'); new Panel('Label', '', text).text = value; return r; }
-function bubble(value, parent = bubbles, extra = '') { const r = new Panel('Panel', '', parent, 'ChatMessage ' + extra), contents = new Panel('Panel', 'MessageContents', r), shape = new Panel('Panel', '', contents, 'ChatBubble'), c = new Panel('Panel', '', shape, 'TextContainer'); new Panel('Label', 'MessageText', c).text = value; return r; }
+function bubble(value, parent = bubbles, extra = '') { const r = new Panel('Panel', '', parent, 'ChatMessage ' + extra), contents = new Panel('Panel', 'MessageContents', r), shape = new Panel('Panel', '', contents, 'ChatBubble'), c = new Panel('Panel', '', shape, 'TextContainer'); new Panel('Label', 'MessageText', c).text = value; mountNative(contents); return r; }
 const sandbox = { Date: { now: () => now }, Math, JSON, encodeURIComponent, String, Players: { GetLocalPlayer: () => 0, GetTeam: () => 2 }, $: { GetContextPanel: () => context, Schedule: (seconds, fn) => { tick = fn; }, CreatePanel: (type, parent, id) => { created++; return new Panel(type, id, parent); } } };
 vm.runInNewContext(source, sandbox);
 function step(n = 1) { for (let i = 0; i < n; i++) { now += 200; tick(); } }
@@ -46,12 +49,12 @@ step(30); events = [];
 const r = row('wait for my ult'); const b = bubble('wait for my ult'); step(4);
 assert.equal(requested('wait for my ult').length, 1, 'one request per message across the two views');
 assert.equal(r.FindChildTraverse('DltTranslation').text, '译文 wait for my ult');
-assert.equal(b.FindChildTraverse('DltBubbleTranslation').text, '译文 wait for my ult');
+assert.equal(hudLabel(b).text, '译文 wait for my ult');
 assert.equal(queued('wait for my ult')[0].channel, 'team', 'a team chat line is tagged with the team channel');
 const hudOnly = bubble('help on blue lane'); step(4);
 assert.equal(requested('help on blue lane').length, 1, 'HUD-only messages independently request translation');
 assert.equal(queued('help on blue lane')[0].channel, 'hud', 'HUD bubbles carry no channel and must not mix context');
-assert(hudOnly.FindChildTraverse('DltBubbleTranslation'), 'HUD-only translation is attached');
+assert(hudLabel(hudOnly), 'HUD-only translation is attached');
 
 // all_players: enemies, the local player and unknown-side player chat are all translated.
 const beforeEnemy = events.flatMap(e => e.messages).length;
@@ -93,6 +96,13 @@ const lobby = new Panel('Panel', 'ChatLinesPanel', root), line = new Panel('Pane
 assert(line.FindChildTraverse('DltTranslation'), 'legacy lobby has its own intake');
 assert.equal(queued('lobby text')[0].channel, 'team', 'a lobby team prefix maps to the team channel');
 
+// A non-Chinese receive target must process Chinese messages and invalidate old-language views.
+const chineseDefault=row('你好队友');step(3);assert.equal(requested('你好队友').length,0);
+receiveLanguage='en';step(55);const chineseToEnglish=row('中文消息测试');step(4);
+assert.equal(requested('中文消息测试').length,1,'Chinese messages become translatable with English target');
+receiveLanguage='ja';step(55);assert.equal(requested('中文消息测试').length,2,'same visible text gets a new language-specific task');
+receiveLanguage='zh-Hans';step(55);
+
 // teammates keeps the conservative behaviour and still retries when metadata arrives.
 scope = 'teammates'; step(55); events = [];
 const filteredEnemy = row('teammates mode enemy', 'enemy', '[ALL]'); step(3);
@@ -112,7 +122,7 @@ assert(rescanned.FindChildTraverse('DltTranslation'), 'switching back to all_pla
 
 // Invalid player API results fall back to the native friend marker.
 sandbox.Players = { GetLocalPlayer: () => -1, GetTeam: () => -1 }; new Panel('Panel', 'TeamFriendly', root, 'friend team2'); const secondHud = new Panel('Panel', 'Team2Chat', root), secondMessages = new Panel('Panel', 'Messages', secondHud); const sapphire = bubble('sapphire friendly only', secondMessages); step(55);
-assert(sapphire.FindChildTraverse('DltBubbleTranslation'), 'invalid player API results fall back to the native friend marker');
+assert(hudLabel(sapphire), 'invalid player API results fall back to the native friend marker');
 const sessionBeforeClear = events.at(-1).session; messages.children.forEach(x => x.alive = false); messages.children = []; step(55);
 assert.equal(events.at(-1).session, sessionBeforeClear, 'expiring chat rows must not cancel the match session');
 
@@ -120,9 +130,17 @@ visits = 0; const start = performance.now(); step(10); const elapsed = performan
 assert(measuredVisits < 20000, 'bounded incremental scan');
 sandbox.DLTOpenSettings(); step(3);
 assert(events.some(e => e.openSettings), 'the settings bridge request is still delivered');
+
+useContext=true;receiveLanguage='zh-Hans';step(60);
+const chineseContext=row('先补装备再打', 'teammate', '[ALLIES]');step(8);
+assert.equal(queued('先补装备再打').length,1,'Chinese context captured once');
+assert.equal(queued('先补装备再打')[0].contextOnly,true,'Chinese context is not a translation request');
+assert.equal(chineseContext.FindChildTraverse('DltTranslation'),null,'context-only row has no translation label');
+console.log('PASS Chinese context-only capture, deduplication and no game translation label');
+
 const countBeforeStop = events.length; context.alive = false; step();
 assert.equal(events.length, countBeforeStop, 'a dead context stops work');
 
-const report = { passed: 27, normalTenScansMs: elapsed, treeVisits: measuredVisits, unrelatedPanels: 5000, historyRows: 1000, note: 'Node simulation; not game frame-time measurement' };
+const report = { passed: 33, normalTenScansMs: elapsed, treeVisits: measuredVisits, unrelatedPanels: 5000, historyRows: 1000, note: 'Node simulation; not game frame-time measurement' };
 fs.writeFileSync(require('node:path').join(__dirname, '../artifacts/panorama-tests.json'), JSON.stringify(report, null, 2));
 console.log(report);

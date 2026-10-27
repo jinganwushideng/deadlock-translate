@@ -1,0 +1,7 @@
+const assert=require('node:assert/strict'),world=require('./helpers/chat-world.cjs'),native=require('./helpers/native-bubble.cjs');
+let passed=0;function check(name,fn){fn();passed++;console.log('PASS '+name);}
+check('finite native label paint never changes original container height',()=>{const w=world(),b=w.bubble('native template safety'),h=b.FindChildTraverse('MessageContents');const initial=JSON.stringify(h.style);w.Panel.prototype.ApplyStyles=()=>{throw Error('native repaint forbidden');};w.step(12);assert.equal(JSON.stringify(h.style),initial);assert(native.translated(b));assert.equal(w.requests.length,1);});
+check('idle native text uses the same preallocated element',()=>{const w=world(),b=w.bubble('stable slot'),l=b.FindChildTraverse('DltBubbleTranslation');w.step(10);const created=w.created;w.step(20);assert.equal(w.created,created);assert.equal(b.__dltLabel,l);assert.equal(w.root.FindChildTraverse('DltNativeAnchors'),null);});
+check('ordinary history has no native position layer',()=>{const w=world();w.row('history');w.step(10);assert.equal(w.root.FindChildTraverse('DltNativeAnchors'),null);});
+check('disabling clears only the preallocated translation value',()=>{const w=world(),b=w.bubble('source intact');w.step(8);const l=b.__dltLabel;w.config.enabled=false;w.refresh();w.step(4);assert.equal(l.text,'');assert.equal(l.IsValid(),true);assert.equal(b.FindChildTraverse('MessageText').text,'source intact');assert.equal(l.style.opacity,'0');});
+console.log(JSON.stringify({passed,failed:0,realGame:false}));

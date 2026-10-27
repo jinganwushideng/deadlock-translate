@@ -17,6 +17,8 @@ public sealed class PriorityConcurrency(int limit, bool reserveSend) {
         using var registration=token.Register(()=>{lock(gate){waiter.TrySetCanceled(token);Drain();}});
         return await waiter.Task.ConfigureAwait(false);
     }
+    // Maintenance never queues ahead of real work, and runs only with no active requests.
+    public IDisposable? TryEnterIdle(){lock(gate){Trim(normal);Trim(urgent);if(active!=0||normal.Count!=0||urgent.Count!=0)return null;active++;incoming++;return new Lease(this,false);}}
     private static void Trim(Queue<TaskCompletionSource<IDisposable>> queue){while(queue.TryPeek(out var first)&&first.Task.IsCompleted)queue.Dequeue();}
     private void Drain(){
         while(active<maximum){

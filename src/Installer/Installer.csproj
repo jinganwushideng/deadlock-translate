@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>DeadlockTranslate-Setup</AssemblyName><Version>0.7.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest><EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Bridge/BuildInfo.Generated.cs" Link="BuildInfo.Generated.cs" />
+    <EmbeddedResource Include="../../docs/UPDATE-HISTORY.json" LogicalName="installer-update-history.json" />
+    <EmbeddedResource Include="../../docs/images/qq-feedback-923443423.png" LogicalName="community-qr.png" />
+    <EmbeddedResource Include="../../scripts/Installer-Workflow.ps1;../../scripts/Manage-Mod.ps1;../../scripts/Find-Deadlock.ps1;../../scripts/Game-SearchPaths.ps1;../../scripts/Install-Safety.ps1;../../scripts/Vpk-Recovery.ps1;../../scripts/Configure-Steam.ps1;../../scripts/Update-Mod.ps1;../../scripts/Backup-Maintenance.ps1;../../scripts/Trust-Local-Https.ps1" LogicalName="scripts/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(InstallerPayload)" LogicalName="payload.zip" Condition="Exists('$(InstallerPayload)')" />
+    <EmbeddedResource Include="$(InstallerNotices)" LogicalName="installer-notices.txt" Condition="Exists('$(InstallerNotices)')" />
+  </ItemGroup>
+</Project>

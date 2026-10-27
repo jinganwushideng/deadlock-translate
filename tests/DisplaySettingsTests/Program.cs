@@ -1,0 +1,80 @@
+using DeadlockTranslate;
+using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
+var root=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../"));
+var temp=Path.Combine(root,"artifacts","display-settings-tests",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(temp);
+int passed=0;void Check(bool condition,string name){if(!condition)throw new Exception(name);passed++;Console.WriteLine("PASS "+name);}
+var store=new ConfigStore(Path.Combine(temp,"state"));
+Check(store.Current.SettingsBackgroundMode=="static","old configurations default to static settings background");
+foreach(var background in new[]{"static","translucent","blur"}){store.Save(store.Current with{SettingsBackgroundMode=background});Check(new ConfigStore(store.DirectoryPath).Current.SettingsBackgroundMode==background,"settings background mode survives restart: "+background);}
+foreach(var background in new string?[]{"unknown","",null}){bool rejected=false;try{ConfigStore.Validate(store.Current with{SettingsBackgroundMode=background!});}catch(ArgumentException){rejected=true;}Check(rejected,"invalid background mode rejected");}
+store.Save(store.Current with{SettingsBackgroundMode="static"});
+Check(store.Current is{IncomingDisplayMode:"native",IncomingFeedSeconds:8,IncomingFeedLines:3},"existing installations keep native display and bounded defaults");
+store.Save(store.Current with{IncomingDisplayMode="independent",IncomingFeedSeconds=15,IncomingFeedLines=5,Mode="quality",LlmThinkingEnabled=true});
+var restored=new ConfigStore(store.DirectoryPath).Current;
+Check(restored is{IncomingDisplayMode:"independent",IncomingFeedSeconds:15,IncomingFeedLines:5},"independent display options persist");
+Check(restored.Mode=="quality"&&restored.LlmThinkingEnabled,"display settings never disable requested model thinking or change provider mode");
+foreach(var invalid in new[]{restored with{IncomingDisplayMode="unknown"},restored with{IncomingDisplayMode=null!},restored with{IncomingFeedSeconds=2},restored with{IncomingFeedSeconds=16},restored with{IncomingFeedLines=0},restored with{IncomingFeedLines=11}}){bool rejected=false;try{ConfigStore.Validate(invalid);}catch(ArgumentException){rejected=true;}Check(rejected,"invalid mode or display bounds rejected");}
+await using var audit=new DiagnosticLog(Path.Combine(temp,"audit"),32768,3,256);
+var collector=new GameLogCollector(audit);
+string[] reasons=["hidden","container-missing","host-missing","detached","panel-gone","native-expired","message-changed","retry-expired"];
+var events=reasons.Select((reason,index)=>new GameLogEvent(index+1,"hud-wait","PRIVATE_JOB",Reason:reason)).ToArray();collector.Accept("PRIVATE_SESSION",events);
+collector.Accept("PRIVATE_SESSION",[new(9,"hud-restored","PRIVATE_JOB"),new(10,"hud-retired","PRIVATE_JOB",Reason:"native-expired"),new(11,"feed-written","PRIVATE_JOB"),new(12,"feed-ended","PRIVATE_JOB"),new(13,"feed-displaced","PRIVATE_JOB")]);
+collector.Accept("PRIVATE_SESSION",[new(14,"hero-roster",Count:12),new(15,"hero-resolved","PRIVATE_JOB"),new(16,"hero-unavailable","PRIVATE_JOB")]);
+collector.Accept("PRIVATE_SESSION",[new(17,"hud-layout-before","PRIVATE_JOB",Layout:new(LabelWidth:0,LabelHeight:0,SourceWidth:120,SourceHeight:24,LabelX:-12)),new(18,"hud-refresh","PRIVATE_JOB",Count:4),new(19,"hud-layout-after","PRIVATE_JOB",Layout:new(LabelWidth:120,LabelHeight:24))]);
+collector.Accept("PRIVATE_SESSION",[new(20,"hud-layout-nudge","PRIVATE_JOB",Count:1),new(21,"hud-layout-stalled","PRIVATE_JOB",Layout:new(LabelWidth:0,LabelHeight:0))]);
+collector.Accept("PRIVATE_SESSION",[new(22,"hud-anchor-layout","PRIVATE_JOB",Layout:new(LabelWidth:210,LabelHeight:33,AnchorX:410,AnchorY:230)),new(23,"hud-anchor-unavailable","PRIVATE_JOB",Reason:"geometry"),new(24,"hud-anchor-displaced","PRIVATE_JOB")]);
+collector.Accept("PRIVATE_SESSION",[new(25,"hud-wait","PRIVATE_JOB",Reason:"template-missing"),new(26,"hud-template-bound","PRIVATE_JOB"),new(27,"hud-template-layout","PRIVATE_JOB",Layout:new(LabelWidth:220,LabelHeight:24)),new(28,"hud-template-api","PRIVATE_JOB")]);
+collector.Accept("PRIVATE_SESSION",[new(29,"hud-template-paint","PRIVATE_JOB",Count:135),new(30,"hud-template-render-state","PRIVATE_JOB",Count:135),new(31,"hud-template-paint-missing","PRIVATE_JOB",Count:0)]);
+collector.Accept("PRIVATE_SESSION",[new(32,"hud-context-applied","PRIVATE_JOB"),new(33,"hud-context-unavailable","PRIVATE_JOB",Count:0),new(34,"hud-context-rejected","PRIVATE_JOB",Count:4),new(35,"hud-ancestry-sample","PRIVATE_JOB",Count:2,Ancestry:[new(0,1,Width:210,Height:24,X:10,Y:40,Opacity:.9,Flags:224),new(1,2,Width:240,Height:90,Overflow:1)])]);
+collector.Accept("PRIVATE_SESSION",[new(36,"hud-direct-applied","PRIVATE_JOB",ElapsedMs:.75,Ancestry:[new(0,1,Width:210,Height:24)]),new(37,"hud-native-write-failed","PRIVATE_JOB",Count:6)]);
+collector.Accept("PRIVATE_SESSION",[new(38,"hud-local-receipt","PRIVATE_JOB",Count:1,ElapsedMs:1.25),new(39,"hud-local-receipt","PRIVATE_JOB",Count:8),new(40,"hud-local-receipt","PRIVATE_JOB",Count:9)]);
+collector.Accept("PRIVATE_SESSION",[new(41,"hud-native-born","PRIVATE_JOB"),new(42,"hud-native-write-failed","PRIVATE_JOB",Count:8)]);
+collector.Accept("PRIVATE_SESSION",[new(43,"hud-root-reflow","PRIVATE_JOB",Count:15)]);
+var metrics=new Metrics(1,1,1,1,1,0,1,HudWaits:4,HudRetryRecovered:2,HudNativeExpired:1,HudPanelGone:3,HudRetryDropped:2,FeedRendered:8,FeedExpired:4,FeedDropped:1);
+var sampler=new GameMetricCollector(audit);sampler.Accept("PRIVATE_SESSION",metrics,0);sampler.Stop();
+await audit.FlushAsync();var logs=string.Join('\n',(await audit.SnapshotAsync()).Select(Encoding.UTF8.GetString));
+foreach(var reason in new[]{"DisplayHidden","DisplayContainerMissing","DisplayHostMissing","DisplayDetached","DisplayPanelGone","DisplayNativeExpired","DisplayMessageChanged","DisplayRetryExpired"})Check(logs.Contains(reason),"specific reason survives typed collection: "+reason);
+Check(logs.Contains("feed-written")&&logs.Contains("hud-restored")&&logs.Contains("hud-retired"),"new display lifecycle stages persist");
+Check(logs.Contains("hero-roster")&&logs.Contains("hero-resolved")&&logs.Contains("hero-unavailable"),"fixed hero identity diagnostics survive collection and export without player metadata");
+Check(logs.Contains("hud-layout-before")&&logs.Contains("hud-layout-after")&&logs.Contains("hud-refresh")&&logs.Contains("\"labelWidth\":120"),"numeric HUD geometry survives typed collection and log export");
+Check(logs.Contains("hud-layout-nudge")&&logs.Contains("hud-layout-stalled"),"cross-frame recovery and stalled layout stages persist");
+Check(logs.Contains("hud-anchor-layout")&&logs.Contains("DisplayGeometryUnavailable")&&logs.Contains("hud-anchor-displaced")&&logs.Contains("\"anchorX\":410"),"native-position layer fixed geometry and unavailable states survive export");
+Check(logs.Contains("DisplayTemplateMissing")&&logs.Contains("hud-template-bound")&&logs.Contains("hud-template-layout")&&logs.Contains("hud-template-api"),"native prebuilt template diagnostics survive typed collection and export");
+Check(logs.Contains("hud-template-paint")&&logs.Contains("hud-template-render-state")&&logs.Contains("hud-template-paint-missing"),"finite paint requests and fixed render flag diagnostics survive export");
+Check(logs.Contains("hud-context-applied")&&logs.Contains("hud-context-unavailable")&&logs.Contains("hud-context-rejected")&&logs.Contains("hud-ancestry-sample")&&logs.Contains("\"ancestry\":[")&&logs.Contains("\"role\":2"),"target context receipts and numeric ancestors survive collection and export");
+Check(logs.Contains("hud-direct-applied")&&logs.Contains("hud-native-write-failed")&&logs.Contains("\"elapsedMs\":0.75"),"direct binding recovery and failed writes retain fixed diagnostics and elapsed time");
+Check(logs.Contains("hud-local-receipt")&&logs.Contains("\"elapsedMs\":1.25")&&logs.Contains("\"count\":8")&&logs.Contains("\"count\":9"),"layout-controller receipts distinguish native execution absent bootstrap and stale heartbeat");
+Check(logs.Contains("hud-native-born")&&logs.Contains("hud-native-write-failed"),"owned native births and literal-text readback failures survive export without message text");
+Check(logs.Contains("hud-root-reflow")&&logs.Contains("\"count\":15"),"bounded native-root cycle flags survive export without message text");
+var dirtyAncestors=Enumerable.Range(0,12).Select(i=>new HudAncestorEvidence(i,1,Width:double.NaN,Height:-1,X:double.PositiveInfinity,Opacity:2,Flags:999,Overflow:10)).ToArray();
+var cleanAncestors=HudAncestorEvidence.Clean(dirtyAncestors)!;
+Check(cleanAncestors.Length==8&&cleanAncestors.All(n=>n.Width==null&&n.Height==null&&n.X==null&&n.Opacity==null&&n.Flags==0&&n.Overflow==0),"ancestor probes cap size and sanitize all numeric bounds");
+Check(HudAncestorEvidence.Clean([new(-1,1),new(0,99),null!])!.Length==0,"invalid ancestor levels roles and null entries are discarded");
+var geometry=new HudLayoutEvidence(LabelWidth:double.NaN,LabelHeight:double.PositiveInfinity,HostWidth:-1,SourceWidth:17000,LabelX:-12.34,AnchorX:double.NegativeInfinity,AnchorY:17000).Clean();
+Check(geometry is{LabelWidth:null,LabelHeight:null,HostWidth:null,SourceWidth:null,LabelX:-12.3,AnchorX:null,AnchorY:null},"HUD geometry drops nonfinite and out of range values while preserving bounded offsets");
+Check(!logs.Contains("PRIVATE_JOB")&&!logs.Contains("PRIVATE_SESSION"),"display diagnosis contains no raw message or session identity");
+var clean=GameMetricSummary.From(metrics with{HudWaits=-1,FeedRendered=-3,FeedDropped=-4}).Clean();
+Check(clean.HudWaits==0&&clean.FeedRendered==0&&clean.FeedDropped==0,"new counters sanitize negative inputs");
+var archive=await DiagnosticExport.Create(temp,audit,new{phase="fixture"},restored);
+using(var zip=ZipFile.OpenRead(archive)){
+ using var reader=new StreamReader(zip.GetEntry("settings-summary.json")!.Open());using var summary=JsonDocument.Parse(reader.ReadToEnd());
+ Check(summary.RootElement.GetProperty("incomingDisplayMode").GetString()=="independent"&&summary.RootElement.GetProperty("incomingFeedSeconds").GetInt32()==15&&summary.RootElement.GetProperty("incomingFeedLines").GetInt32()==5,"one click export retains only fixed display options");
+}
+Check(restored is{IncomingShowHeroName:true,IncomingShowAccountName:true,IncomingHeroNamePosition:"before",IncomingOpacity:90,IncomingFeedWidth:340,IncomingFeedPosition:"center-left",IncomingFeedOffsetX:28,IncomingFeedOffsetY:0},"old configs get safe identity and layout defaults");
+store.Save(restored with{IncomingDisplayMode="both",IncomingShowAccountName=false,IncomingHeroNamePosition="after",IncomingOpacity=55,IncomingFeedWidth=520,IncomingFeedPosition="bottom-right",IncomingFeedOffsetX=42,IncomingFeedOffsetY=30});
+var combined=new ConfigStore(store.DirectoryPath).Current;
+Check(combined is{IncomingDisplayMode:"both",IncomingShowAccountName:false,IncomingHeroNamePosition:"after",IncomingOpacity:55,IncomingFeedWidth:520,IncomingFeedPosition:"bottom-right",IncomingFeedOffsetX:42,IncomingFeedOffsetY:30},"combined identity and appearance options roundtrip");
+ConfigStore.Validate(combined with{IncomingFeedLines=10});Check(true,"ten simultaneous lines are accepted while eleven is rejected above");
+foreach(var invalid in new[]{combined with{IncomingOpacity=19},combined with{IncomingOpacity=101},combined with{IncomingFeedWidth=239},combined with{IncomingFeedWidth=601},combined with{IncomingFeedPosition="unknown"},combined with{IncomingFeedOffsetX=-1},combined with{IncomingFeedOffsetY=121},combined with{IncomingHeroNamePosition="invalid"}}){bool rejected=false;try{ConfigStore.Validate(invalid);}catch(ArgumentException){rejected=true;}Check(rejected,"unsafe identity or layout setting rejected");}
+long clock=1000;var preview=new DisplayPreviewService(()=>clock);var first=preview.Start(DisplayPreviewOptions.From(combined));
+Check(first.Active&&first.RemainingMs==12000&&first.Options?.Mode=="both","synthetic preview receives a twelve second lease");
+clock+=4000;var polled=preview.Snapshot();Check(polled.RemainingMs==8000&&polled.Revision==first.Revision,"polling cannot extend a preview lease");
+var draft=preview.Start(DisplayPreviewOptions.From(combined) with{Width=400});Check(draft.Revision>first.Revision&&draft.Epoch==first.Epoch&&draft.Options?.Width==400,"new drafts replace the single preview and advance revision");
+bool badPreview=false;try{preview.Start(new(Opacity:0));}catch(ArgumentException){badPreview=true;}Check(badPreview&&preview.Snapshot().Revision==draft.Revision,"invalid preview leaves previous valid draft intact");
+clock+=12001;Check(!preview.Snapshot().Active&&preview.Snapshot().Options==null,"expired previews disclose no retained draft");
+preview.Start(new());var stop=preview.Stop();Check(!stop.Active&&stop.Options==null,"explicit stop closes preview");
+Check(new DisplayPreviewService(()=>clock).Snapshot().Epoch!=stop.Epoch,"a restarted backend has a separate preview epoch");
+Check(new ConfigStore(store.DirectoryPath).Current.IncomingFeedWidth==520,"preview never saves its unsaved width into configuration");
+File.WriteAllText(Path.Combine(root,"artifacts/display-settings-tests.json"),JsonSerializer.Serialize(new{passed,realGame=false,cloudUsed=false}));Console.WriteLine("TOTAL "+passed+" passed");

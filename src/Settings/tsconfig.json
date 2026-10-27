@@ -1,1 +1,1 @@
-{"compilerOptions":{"target":"ES2017","module":"none","lib":["ES2020","DOM"],"strict":true,"outFile":"../Bridge/wwwroot/app.js","noEmitOnError":true},"include":["app.ts"]}
+{"compilerOptions": {"target": "ES2017", "module": "none", "lib": ["ES2020", "DOM"], "strict": true, "outFile": "../Bridge/wwwroot/app.js", "noEmitOnError": true}, "include": ["app.ts", "persistence.ts"]}

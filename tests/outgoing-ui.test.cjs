@@ -26,11 +26,15 @@ class Panel {
     FindChildTraverse(id) { if (this.id === id) return this; for (const c of this.children) { const f = c.FindChildTraverse(id); if (f) return f; } return null; }
     FindChildrenWithClassTraverse(c) { return this.children.flatMap(x => [...(x.classes.has(c) ? [x] : []), ...x.FindChildrenWithClassTraverse(c)]); }
     SetURL(url) { return urlHandler(this, url); }
+    SetPanelEvent(name, fn) { (this.events ||= {})[name] = fn; }
+    SetMaxChars(limit) { this.maxChars = limit; }
+    GetPositionWithinWindow() { if (!this.position) throw Error('geometry unavailable'); return this.position; }
+    DeleteAsync() { this.alive = false; }
 }
 let urlHandler = () => {};
 
 function world(opts = {}) {
-    const w = { now: 100000, tick: null, trigger: 0, serverId: 'test-server-1', calls: [], msgs: [], packets: [], queueMirror: [], submitted: [], waiting: [], synthetic: [], jobs: {} };
+    const w = { now: 100000, tick: null, trigger: 0, matchId: '1', serverId: 'test-server-1', calls: [], msgs: [], packets: [], queueMirror: [], submitted: [], waiting: [], synthetic: [], jobs: {} };
     w.chat = { target: TARGET_NAME.all, readonly: !!opts.readonly, available: !opts.nativeClasses && opts.available !== false, writes: [] };
     w.closeRefusals = opts.stubbornClose || 0;   // the game ignoring the native close this many times
     w.closeIgnored = 0;
@@ -51,6 +55,11 @@ function world(opts = {}) {
     new Panel('Panel', 'ChatMessages', context);
     const bridge = new Panel('HTML', 'DltBridge', context);
     const input = new Panel('TextEntry', 'ChatInput', context);
+    let nativeInput = '';
+    Object.defineProperty(input, 'text', {
+        get() { return nativeInput; },
+        set(value) { nativeInput = Array.from(String(value)).slice(0, opts.inputLimit || 80).join(''); }
+    });
     const target = new Panel('Label', 'ChatTargetLabel', context);
     const sub = new Panel('Panel', 'SubOptions', root);
     new Panel('Panel', 'DltMenuMount', sub);
@@ -67,7 +76,24 @@ function world(opts = {}) {
             target.text = TARGET_LABEL[name];
         }
     });
-    w.context = context; w.input = input; w.target = target; w.bridge = bridge;
+    w.root = root; w.context = context; w.input = input; w.target = target; w.bridge = bridge;
+    if (opts.draftOverlay) {
+        root.position = { x: 0, y: 0 }; root.actualuiscale_x = root.actualuiscale_y = opts.uiScale || 1;
+        input.position = { x: 40, y: 900 }; input.actuallayoutwidth = 600;
+        Panel.prototype.SetFocus = function () {
+            if (opts.rejectDraftFocus && this.id === 'DltOutgoingDraftInput') return false;
+            const nativeHadFocus=input.focused;
+            const visit = panel => { panel.focused = false; panel.children.forEach(visit); }; visit(root);
+            this.focused = true;
+            if(nativeHadFocus && this!==input) sandbox.$.DispatchEvent('CitadelChatInputBlur',input);
+            return true;
+        };
+    }
+    w.draft = () => root.FindChildTraverse('DltOutgoingDraftInput');
+    w.setSettingsOpen = open => { root.__dltActiveSettingsWindow = open ? {IsValid:()=>true,__dltClosing:false} : null; };
+    w.draftHost = () => root.FindChildTraverse('DltOutgoingDraftHost');
+    w.draftHint = () => root.FindChildTraverse('DltOutgoingDraftHint')?.text;
+    w.pressDraft = event => w.draft()?.events?.[event]?.();
     const hud = new Panel('Panel', 'Team1Chat', root);
     const hudRows = new Panel('Panel', 'Messages', hud);
     w.addEcho = (kind, channel = 'team', own = true, value = 'Wait for my ult') => {
@@ -89,7 +115,8 @@ function world(opts = {}) {
         const batch = data.outgoing || [];
         if (batch.length) w.queueMirror = batch.slice();
         if (data.outgoingWaiting && data.outgoingWaiting.length) w.waiting.push(...data.outgoingWaiting);
-        for (const item of batch) if (!w.jobs[item.id]) w.jobs[item.id] = { item, state: 'queued' };
+        for (const item of batch) if (!w.jobs[item.id]) w.jobs[item.id] = { item, state: item.holdForInput ? 'waiting_input' : 'queued', holding: !!item.holdForInput };
+        for (const status of data.outgoingStatus || []) if (status.state === 'capture_ready' && w.jobs[status.id]) { w.jobs[status.id].holding = false; w.jobs[status.id].state = 'queued'; }
         for (const ack of data.outgoingSent || []) if (w.jobs[ack]) w.jobs[ack].state = 'submitted';
         for (const refusal of data.outgoingRefused || []) if (w.jobs[refusal.id] && w.jobs[refusal.id].state !== 'submitted') w.jobs[refusal.id].state = 'failed';
         for (const held of data.outgoingWaiting || []) if (w.jobs[held] && w.jobs[held].state !== 'submitted') w.jobs[held].state = 'waiting_channel';
@@ -97,14 +124,16 @@ function world(opts = {}) {
         // A real backend keeps returning a ready job until the client acknowledges the send.
         if (!w.deferResult) for (const job of Object.values(w.jobs)) if (job.state !== 'submitted') outgoing.push(w.resultFor(job.item));
         outgoing.push(...w.synthetic.splice(0, w.synthetic.length));
+        if (w.dropReleaseOnce && (data.outgoingStatus||[]).some(s=>s.state==='capture_ready')) { w.dropReleaseOnce=false; return; }
         panel.title = 'DLT:' + JSON.stringify({
-            seq: data.seq, serverId: w.serverId, results: [], hotkey: w.trigger > data.hotkeySeen ? w.trigger : 0,
+            seq: data.seq, serverId: w.serverId, results: [], hotkey: w.trigger > data.hotkeySeen ? w.trigger : 0,logAck:data.logs?.at(-1)?.seq||0,
             outgoing, config: w.config, configuredLlm: false
-            ,capabilities: opts.noPartyCapability ? ['outgoing-display-mode'] : ['outgoing-display-mode','outgoing-party-channel']
+            ,capabilities: [...(opts.noPartyCapability ? ['outgoing-display-mode'] : opts.noLanguageCapability ? ['outgoing-display-mode','outgoing-party-channel'] : ['outgoing-display-mode','outgoing-party-channel','multilingual-targets']),...(opts.diagnostics?['diagnostic-logs']:[]),...(opts.statusCapability?['outgoing-status-v1']:[])]
         });
     };
     urlHandler = w.onSetURL;
     w.resultFor = (item) => {
+        if (w.jobs[item.id]?.holding) return {id:item.id,channel:item.channel,displayMode:item.displayMode,state:'waiting_input',sendText:'',english:''};
         const spec = w.spec[item.id] || {};
         const mode = item.displayMode === 'bilingual' ? 'bilingual' : 'translation';
         const english = spec.english !== undefined ? spec.english : 'Wait for my ult';
@@ -114,25 +143,28 @@ function world(opts = {}) {
     };
 
     const sandbox = {
+        Game: { GetMatchID: () => w.matchId },
+        Object: opts.observeKeys ? {create:Object.create,keys(value){const keys=Object.keys(value);opts.observeKeys(value,keys);return keys;}} : Object,
         Date: { now: () => w.now }, Math, JSON, String, encodeURIComponent,
         $: {
             GetContextPanel: () => context,
-            Schedule: (s, fn) => { w.tick = fn; },
+            Schedule: (s, fn) => { w.nextDelay=s; w.tick = fn; },
             Msg: (m) => { w.msgs.push(String(m)); },
             DispatchEvent: (name, ...args) => {
-                w.calls.push({ name, args });
+                w.calls.push({ name, args, at: w.now });
                 // An ignored close means neither the empty submit nor its blur collapsed the box.
                 const closeIgnored = () => { if (w.closeRefusals > 0) { w.closeRefusals--; w.closeIgnored++; w.ignoreClose = true; return true; } return false; };
                 if (name === 'CitadelChatInputSubmitted') {
                     if (args[0] !== input) return false;
                     const value = input.text;
+                    if (value && opts.ignoreSubmitOnce && !w.ignoredSubmit) { w.ignoredSubmit = true; return true; }
                     if(value && opts.rejectSubmit)return false;
-                    input.text = '';
-                    if (closeIgnored()) return true;                     // this game build ignored the close
-                    context.classes.delete('ChatExpanded'); input.focused = false;
+                    if (!value || !opts.keepSubmittedText) input.text = '';
+                    if (!value && closeIgnored()) return true;           // ignored empty close, not a payload receipt
+                    if (!value || !opts.keepNativeExpanded) context.classes.delete('ChatExpanded'); input.focused = false;
                     if (!value) { w.resetTarget(); return true; }        // native close resets the target
-                    w.submitted.push({ text: value, channel: w.chat.target });
-                    return true;
+                    w.submitted.push({ text: value, channel: w.chat.target, at: w.now });
+                    return opts.undefinedDispatch ? undefined : true;
                 }
                 if (name === 'CitadelChatInputBlur') {
                     if (w.ignoreClose) { w.ignoreClose = false; return true; }
@@ -146,9 +178,12 @@ function world(opts = {}) {
     };
     vm.runInNewContext(CHAT_SCRIPT, sandbox);
     w.step = (n = 1) => { for (let i = 0; i < n; i++) { w.now += 100; if (w.tick) w.tick(); } };
-    w.openChat = (channel) => { if (channel) w.setTarget(channel); context.classes.add('ChatExpanded'); input.focused = true; return input; };
+    w.openChat = (channel) => { if (channel) w.setTarget(channel); context.classes.add('ChatExpanded'); input.focused = true; if(!opts.noFocusEvent&&sandbox.DLTChatInputFocused)sandbox.DLTChatInputFocused(); return input; };
     w.closeChat = () => { context.classes.delete('ChatExpanded'); input.focused = false; };
-    w.capture = (text) => { input.text = text; w.trigger++; w.step(4); };
+    w.blurNative = () => sandbox.$.DispatchEvent('CitadelChatInputBlur',input);
+    w.shortcut = text => { input.text = text; w.trigger++; };
+    w.enterNative = () => sandbox.$.DispatchEvent('CitadelChatInputSubmitted',input);
+    w.capture = (text) => { w.shortcut(text); w.step(9); };
     return w;
 }
 const channelOfTarget = (name) => Object.keys(TARGET_NAME).find(k => TARGET_NAME[k] === name) || name;
@@ -163,6 +198,35 @@ for(const channel of ['team','all','party']){
         assert.equal(w.submitted.length,1);assert.equal(channelOfTarget(w.submitted[0].channel),channel);
         assert.equal(w.submitted[0].text,'等我大招 | Wait for my ult');assert.equal(w.chat.writes.length,0);
     });
+}
+for(const channel of ['team','all','party']){
+    const w=world({nativeClasses:true,diagnostics:true});w.step(60);w.openChat(channel);w.capture('关闭后样式消失');
+    w.context.classes.delete(TARGET_NAME[channel]);w.deferResult=false;w.step(25);
+    check('captured engine evidence survives presentation-class loss for '+channel,()=>{
+        assert.equal(w.submitted.length,1);assert.equal(channelOfTarget(w.submitted[0].channel),channel);assert.equal(w.chat.writes.length,0);
+        const events=w.packets.flatMap(p=>p.logs||[]);assert(events.some(e=>e.code==='channel-cached'));
+    });
+}
+{
+    const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('old draft');
+    w.openChat('all');w.closeChat();w.context.classes.delete(TARGET_NAME.all);w.deferResult=false;w.step(25);
+    check('even a rapid reopen-and-close invalidates the captured native proof',()=>{assert.equal(w.submitted.length,0);assert(w.waiting.includes('out-1'));});
+}
+{
+    const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('private');
+    w.context.classes.add(TARGET_NAME.all);w.deferResult=false;w.step(20);
+    check('contradictory engine classes invalidate proof instead of authorizing a cached send',()=>{assert.equal(w.submitted.length,0);assert(w.waiting.length);});
+    w.context.classes.delete(TARGET_NAME.all);w.context.classes.delete(TARGET_NAME.team);w.step(20);
+    check('removing contradictory classes cannot resurrect an invalidated channel proof',()=>assert.equal(w.submitted.length,0));
+}
+{
+    const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('saved');
+    w.context.classes.delete(TARGET_NAME.team);w.input.alive=false;w.deferResult=false;w.step(20);
+    check('an invalidated input control cannot reuse captured channel evidence',()=>assert.equal(w.submitted.length,0));
+}
+{
+    const w=world({nativeClasses:true,noFocusEvent:true});w.step(60);w.openChat('team');w.capture('missing hook');w.context.classes.delete(TARGET_NAME.team);w.deferResult=false;w.step(25);
+    check('a missing native focus hook cannot authorize cached-channel fallback',()=>{assert.equal(w.submitted.length,0);assert(w.waiting.length);});
 }
 {
     const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('等我大招');
@@ -363,15 +427,41 @@ for (const mode of ['translation', 'bilingual']) {
 
 // ---------------------------------------------------------------- length and content guards
 {
-    const w = world({ spec: { 'out-1': { sendText: 'x'.repeat(500) } } });
+    const value = '😀'.repeat(80), w = world({ spec: { 'out-1': { sendText: value } } });
+    w.step(60); w.openChat('all'); w.capture('unicode'); w.deferResult = false; w.step(20);
+    check('80 supplementary Unicode characters fit the native entry without UTF-16 miscount', () => {
+        assert.equal(w.submitted.length, 1); assert.equal(w.submitted[0].text, value);
+    });
+}
+{
+    const w = world({ inputLimit: 60, spec: { 'out-1': { sendText: 'x'.repeat(80) } } });
+    w.step(60); w.openChat('party'); w.capture('future smaller limit'); w.deferResult = false; w.step(20);
+    check('native readback rejects an unexpectedly truncated value before dispatch', () => {
+        assert.equal(w.submitted.length, 0);
+        assert(w.packets.flatMap(p => p.outgoingRefused || []).some(r => r.id === 'out-1' && r.reason === 'input-truncated'));
+        assert.equal(w.input.text, ''); assert.equal(channelOfTarget(w.chat.target), 'all');
+    });
+    w.step(30);
+    check('readback failure never retries or sends the shortened prefix', () => assert.equal(w.submitted.length, 0));
+}
+{
+    const w = world({ spec: { 'out-1': { sendText: 'broken\ud800' } } });
+    w.step(60); w.openChat('all'); w.capture('invalid unicode'); w.deferResult = false; w.step(20);
+    check('malformed Unicode is refused without passing a surrogate to the game', () => {
+        assert.equal(w.submitted.length, 0);
+        assert(w.packets.flatMap(p => p.outgoingRefused || []).some(r => r.reason === 'invalid-send-text'));
+    });
+}
+{
+    const w = world({ spec: { 'out-1': { sendText: 'x'.repeat(80) } } });
     w.step(60);
     w.openChat('all');
     w.capture('long but legal');
     w.deferResult = false; w.step(20);
-    check('a 500 unit final message is still submitted', () => { assert.equal(w.submitted.length, 1); });
+    check('an 80 character final message is submitted intact through the native cap', () => { assert.equal(w.submitted.length, 1); assert.equal(w.submitted[0].text, 'x'.repeat(80)); });
 }
 {
-    const w = world({ spec: { 'out-1': { sendText: 'x'.repeat(501) } } });
+    const w = world({ spec: { 'out-1': { sendText: 'x'.repeat(81) } } });
     w.step(60);
     w.openChat('all');
     w.capture('too long');
@@ -449,6 +539,7 @@ for (const mode of ['translation', 'bilingual']) {
     w.step(60);
     w.openChat('team');
     w.capture('等我大招');
+    w.step(2);                             // close retry is a separate settled callback
     check('the box is closed even when the native empty submit is ignored once', () => {
         assert(!w.context.classes.has('ChatExpanded'), 'the close must be retried until the box collapses');
         assert.equal(w.closeIgnored, 1, 'exactly one ignored close is expected, got ' + w.closeIgnored);
@@ -468,7 +559,7 @@ for (const mode of ['translation', 'bilingual']) {
     w.capture('等我大招');
     check('a box that stays open gets only bounded close retries', () => {
         assert(w.closeIgnored >= 1 && w.closeIgnored <= 3, 'bounded retries only, got ' + w.closeIgnored);
-        assert.equal(w.queueMirror.length, 1, 'the task is still queued for later');
+        assert.equal(w.queueMirror.length, 0, 'snapshot must wait for stable close confirmation');
     });
     w.input.text = 'a new draft';             // the player keeps the box and types again
     w.step(10);
@@ -580,6 +671,52 @@ check('own English-only echo reuses original without another cloud request',()=>
  assert(!w.packets.flatMap(p=>p.messages||[]).some(m=>m.text==='Wait for my ult'));
 });
 
+check('send target language is captured with the hotkey and survives later settings changes',()=>{
+ const w=world({nativeClasses:true,config:{outgoingTargetLanguage:'ru',outgoingCustomLanguage:'',outgoingCustomLanguageCode:''}});w.step(60);w.openChat('team');w.capture('等我大招');
+ assert.equal(w.queueMirror[0].targetLanguage,'ru');w.config.outgoingTargetLanguage='ko';w.step(8);assert.equal(w.queueMirror[0].targetLanguage,'ru');
+});
+check('custom send name and service code reach the outgoing job',()=>{
+ const w=world({nativeClasses:true,config:{outgoingTargetLanguage:'custom',outgoingCustomLanguage:'荷兰语',outgoingCustomLanguageCode:'nl'}});w.step(60);w.openChat('team');w.capture('等我大招');
+ assert.equal(w.queueMirror[0].customLanguage,'荷兰语');assert.equal(w.queueMirror[0].customLanguageCode,'nl');
+});
+check('self echo does not reuse Chinese source when reception target is a different language',()=>{
+ const w=world({nativeClasses:true,config:{incomingTargetLanguage:'ja'}});w.step(60);w.openChat('team');w.capture('等我大招');w.deferResult=false;w.step(20);
+ w.addEcho('regular','team',true,'Wait for my ult');w.step(8);assert(w.packets.flatMap(p=>p.messages||[]).some(m=>m.text==='Wait for my ult'));
+});
+check('new language sending preserves the draft when an old backend lacks language support',()=>{
+ const w=world({nativeClasses:true,noLanguageCapability:true,config:{outgoingTargetLanguage:'ru'}});w.step(60);w.openChat('team');w.capture('保留原文');assert.equal(w.queueMirror.length,0);assert.equal(w.input.text,'保留原文');assert(w.context.classes.has('ChatExpanded'));
+});
+
+check('multipart sends original then translation once with per-part acknowledgement',()=>{
+ const w=world({nativeClasses:true,displayMode:'bilingual',config:{outgoingSeparateBilingual:true,outgoingSplitLong:true}});w.step(60);w.openChat('team');w.capture('原文');
+ const item=w.queueMirror[0];assert.equal(item.separateBilingual,true);assert.equal(item.splitLong,true);
+ const part=(index,text)=>({...w.resultFor(item),sendText:text,partIndex:index,partCount:2});
+ w.pushResults([part(0,'原文')]);w.step(6);assert.deepEqual(w.submitted.map(x=>x.text),['原文']);
+ w.pushResults([part(0,'原文')]);w.step(6);assert.equal(w.submitted.length,1);
+ w.pushResults([part(1,'translation')]);w.step(8);assert.deepEqual(w.submitted.map(x=>x.text),['原文','translation']);
+ assert(w.submitted.every(x=>channelOfTarget(x.channel)==='team'));
+ const acks=w.packets.flatMap(x=>x.outgoingPartAcks||[]);assert(acks.some(x=>x.part===0)&&acks.some(x=>x.part===1));
+ w.pushResults([part(1,'translation')]);w.step(8);assert.equal(w.submitted.length,2);
+});
+check('multipart defers while player edits a new message and preserves that draft',()=>{
+ const w=world({nativeClasses:true,displayMode:'bilingual'});w.step(60);w.openChat('team');w.capture('原文');const item=w.queueMirror[0];
+ w.pushResults([{...w.resultFor(item),sendText:'原文',partIndex:0,partCount:2}]);w.step(6);
+ w.openChat('team');w.input.text='player is typing';
+ w.pushResults([{...w.resultFor(item),sendText:'translation',partIndex:1,partCount:2}]);w.step(15);
+ assert.equal(w.submitted.length,1);assert.equal(w.input.text,'player is typing');
+ w.closeChat();w.pushResults([{...w.resultFor(item),sendText:'translation',partIndex:1,partCount:2}]);w.step(10);
+ assert.equal(w.submitted.length,2);assert.equal(w.input.text,'player is typing');
+});
+check('preset delivered from backend needs no captured editor text and never duplicates',()=>{
+ const w=world({nativeClasses:true});w.step(60);w.setTarget('team');
+ const result={id:'preset-123',original:'group up',english:'group up',sendText:'group up',displayMode:'translation',channel:'team',state:'ready',isPreset:true,partIndex:0,partCount:1};
+ w.pushResults([result]);w.step(10);assert.equal(w.submitted.length,1);assert.equal(w.submitted[0].text,'group up');
+ w.pushResults([result]);w.step(15);assert.equal(w.submitted.length,1);assert.equal(w.queueMirror.length,0);
+});
+check('multipart does not accept a future part before the first part',()=>{
+ const w=world({nativeClasses:true});w.step(60);w.openChat('team');w.capture('原文');const item=w.queueMirror[0];
+ w.pushResults([{...w.resultFor(item),sendText:'future',partIndex:1,partCount:2}]);w.step(10);assert.equal(w.submitted.length,0);
+});
 const failed = results.filter(r => !r.ok);
 const result = {
     passed: results.length - failed.length, total: results.length,

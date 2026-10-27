@@ -1,1 +1,1 @@
-{"name":"deadlock-translate-tests","private":true,"scripts":{"test":"node panorama.test.cjs && node browser.test.cjs"},"devDependencies":{"playwright":"1.55.1"}}
+{"name":"deadlock-translate-tests","private":true,"scripts":{"test":"node panorama.test.cjs && node browser.test.cjs"},"devDependencies":{"playwright":"1.55.1","pngjs":"^7.0.0"}}

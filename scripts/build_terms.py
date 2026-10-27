@@ -1,6 +1,6 @@
 """Generate bilingual names from the user's installed Valve localization resources."""
 import json, pathlib, re, hashlib, os
-from term_extensions import ALIASES, AMBIGUOUS_ALIASES, PHRASES, AMBIGUOUS_PHRASES, AMBIGUOUS_HINTS
+from term_extensions import ALIASES, AMBIGUOUS_ALIASES, PHRASES, AMBIGUOUS_PHRASES, AMBIGUOUS_HINTS, LEGACY_NAMES, AMBIGUOUS_LEGACY_NAMES, LEGACY_ENGLISH_NAMES
 root=pathlib.Path(__file__).resolve().parents[1]
 localization=pathlib.Path(os.environ['DEADLOCK_TRANSLATE_GAME'])/'game/citadel/resource/localization'
 (root/'artifacts').mkdir(parents=True,exist_ok=True)
@@ -9,7 +9,7 @@ def read_tokens(file):
     text=raw.decode('utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-8-sig')
     return dict(re.findall(r'^\s*"([^"\n]+)"\s+"((?:\\.|[^"\\])*)"',text,re.M))
 
-ambiguous={'seven','pocket','haze','ivy','warden','wraith','dynamo','mirage','paradox','viscous','lash','vindicta','infernus','abrams','silencer','ricochet','knockdown','curse','echo shard','vampire','sapper','glider','gunner','cowboy','phoenix','assassin','magician','doorman','mina','victor'}
+ambiguous={'seven','pocket','haze','ivy','warden','wraith','dynamo','mirage','paradox','viscous','lash','vindicta','infernus','abrams','silver','silencer','ricochet','knockdown','curse','echo shard','vampire','sapper','glider','gunner','cowboy','phoenix','assassin','magician','doorman','mina','victor'}
 ambiguous -= {'infernus','abrams','vindicta','viscous','echo shard'}
 terms={}; provenance=[]; categories={}; skipped_aliases=[]
 def add(source,target,english='',kind='phrase',ambiguous=False,category='curated',replace=False):
@@ -82,6 +82,25 @@ for token in ('guardian_unit','walker_unit','titan_unit','Citadel_Hud_KillFeedBa
 for source,target in {'urn':'灵瓮','урна':'灵瓮','guardians':'卫士','shrines':'圣坛','rejuv':'复生石','несу урну':'我在运灵瓮'}.items():
     add(source,target,ambiguous=source in {'urn','урна'},category='objectives',replace=True)
 provenance.extend({'file':str(f),'sha256':hashlib.sha256(f.read_bytes()).hexdigest()} for f in files)
+
+# Historical spellings resolve to a current canonical resource name at build time.
+# Do not guess that removed items or reworked mechanics are still equivalent.
+legacy_by_english={}
+for canonical,spellings in LEGACY_NAMES.items():
+    original=terms.get(canonical.casefold())
+    if not original:skipped_aliases.append('legacy:'+canonical);continue
+    english=original['english'] or canonical
+    legacy_by_english[english.casefold()]=spellings[0]
+    for source in [original['target'],*spellings]:
+        add(source,original['target'],english,'name',source in AMBIGUOUS_LEGACY_NAMES,'legacy_names')
+for canonical,spellings in LEGACY_ENGLISH_NAMES.items():
+    original=terms.get(canonical.casefold())
+    if not original:skipped_aliases.append('legacy-english:'+canonical);continue
+    for source in spellings:add(source,original['target'],original['english'],'name',False,'legacy_english_names')
+for term in terms.values():
+    # Emit the optional field even when blank. API saves serialize blank defaults
+    # too, so future three-way updates must not mistake that for a player edit.
+    term['legacyTarget']=legacy_by_english.get(term['english'].casefold(),'') if term['kind']=='name' else ''
 provenance.append({'file':str(root/'scripts/term_extensions.py'),'sha256':hashlib.sha256((root/'scripts/term_extensions.py').read_bytes()).hexdigest()})
 output=root/'src/Bridge/data/terms.json';output.parent.mkdir(parents=True,exist_ok=True)
 output.write_text(json.dumps(list(terms.values()),ensure_ascii=False,indent=2),encoding='utf-8')

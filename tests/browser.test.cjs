@@ -11,7 +11,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  assert.equal(await page.locator('#mode').inputValue(),'hybrid');
  assert.equal(await page.locator('#incomingScope').inputValue(),'all_players');
  assert.equal(await page.locator('#translateOwn').count(),0,'the self-test toggle is replaced by the scope setting');
- await page.locator('#incomingScope').selectOption('teammates');await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('设置已保存'));
+ await page.locator('nav button[data-page="incoming"]').click();await page.locator('#incomingScope').selectOption('teammates');await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('设置已保存'));
  await page.screenshot({path:path.join(__dirname,'../artifacts/settings-overview.png'),fullPage:true});
  await page.locator('nav button[data-page="outgoing"]').click();
  assert.equal(await page.locator('#outgoingDisplayMode').inputValue(),'translation');
@@ -20,7 +20,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.reload();await page.waitForFunction(()=>document.querySelector('#model').value==='test-model');
  assert.equal(await page.locator('#incomingScope').inputValue(),'teammates');
  assert.equal(await page.locator('#outgoingDisplayMode').inputValue(),'bilingual');
- await page.locator('nav button[data-page="appearance"]').click();await page.locator('#burstPreset').click();
+  await page.locator('nav button[data-page="performance"]').click();await page.locator('#burstPreset').click();
  assert.equal(await page.locator('#fastConcurrency').inputValue(),'4');assert.equal(await page.locator('#llmConcurrency').inputValue(),'4');
  await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('设置已保存'));
  await page.reload();await page.waitForFunction(()=>document.querySelector('#fastConcurrency').value==='4');
@@ -28,8 +28,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.route('**/api/outgoing',route=>route.fulfill({json:{hotkeyAvailable:true,items:[{id:'failed-fixture',original:'你好',english:'Hello',sendText:'你好 | Hello',channel:'team',displayMode:'bilingual',state:'failed',error:'未能确认发送频道，未发送；原文已保留'}]}}));
  await page.locator('nav button[data-page="outgoing"]').click();
  await page.waitForFunction(()=>document.querySelector('#outgoingItems').textContent.includes('原因：未能确认发送频道'));
- assert((await page.locator('#outgoingItems').innerText()).includes('英文：Hello'));
- assert((await page.locator('#outgoingItems').innerText()).includes('保留内容（未发送）：你好 | Hello'));
+ assert((await page.locator('#outgoingItems').innerText()).includes('译文（英语）：Hello'));
+ assert((await page.locator('#outgoingItems').innerText()).includes('当前段保留内容：你好 | Hello'));
  assert((await page.locator('#outgoingItems').innerText()).includes('友军'));
  await page.unroute('**/api/outgoing');
  await page.route('**/api/outgoing',route=>route.fulfill({json:{hotkeyAvailable:true,items:[{id:'party-fixture',original:'你好',english:'Hello',sendText:'你好 | Hello',channel:'party',displayMode:'bilingual',state:'submitted',error:null}]}}));

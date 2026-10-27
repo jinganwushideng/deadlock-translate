@@ -9,16 +9,17 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_FILES = ('README.md', 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md',
-              'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', '.gitignore', '.gitattributes', 'version.json')
-DOCS = ('USER-GUIDE.md', 'BUILDING.md', 'PUBLISHING.md', 'SOURCE-AUDIT.md', 'VALIDATION.md')
-SCRIPTS = ('build.ps1', 'prepare_mod.py', 'build_terms.py', 'term_extensions.py', 'vpk.py',
-           'package_docs.py', 'collect_licenses.py', 'export_source.py', 'merge_term_defaults.py',
-           'steam_launch_options.py', 'Manage-Mod.ps1', 'Install.cmd', 'Uninstall.cmd',
-           'Launch.cmd', 'Settings.cmd', 'Trust-Local-Https.ps1', 'Trust-Local-Https.cmd', 'Renew-Local-Https.cmd')
-SCREENSHOTS = ('docs/images/chat-bilingual.png', 'docs/images/chat-bubbles.png')
-GENERATED = {'mod/panorama/layout/chat.xml', 'src/Bridge/data/terms.json', 'src/Bridge/wwwroot/app.js'}
+              'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', '.gitignore', '.gitattributes', 'version.json', 'build-info.json')
+DOCS = ('README.md', 'TEST-REPORT.md', 'UPDATE-0.7.0.md', 'BACKUP-MAINTENANCE.md', 'UPDATE-0.6.25.md', 'UPDATE-0.6.24.md', 'UPDATE-0.6.23.1.md', 'UPDATE-0.6.23.md', 'NATIVE-BUBBLE-ANALYSIS-0.6.20.md', 'UPDATE-HISTORY.json', 'GUI-INSTALLER.md', 'USER-GUIDE.md', 'AI-INSTALL-GUIDE.md', 'BUILDING.md', 'PUBLISHING.md', 'SOURCE-AUDIT.md', 'VALIDATION.md', 'CHAT-PIPELINE-AUDIT-0.6.18.md', 'BRIDGE-RECOVERY-0.6.18.md', 'DISPLAY-RELIABILITY-0.6.20.md', 'DISPLAY-OPTIONS-0.6.20.md')
+SCRIPTS = ('build_identity.py', 'native_bubble_layout.py', 'build.ps1', 'release_history.py', 'build_installer.py', 'Installer-Workflow.ps1', 'prepare_mod.py', 'build_terms.py', 'build_hero_labels.py', 'term_extensions.py', 'vpk.py',
+           'package_docs.py', 'package_share.py', 'collect_licenses.py', 'export_source.py', 'merge_term_defaults.py',
+           'steam_launch_options.py', 'Configure-Steam.ps1', 'Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Vpk-Recovery.ps1','Repair-GameConfig.cmd', 'Export-Diagnostics.cmd', 'Manage-Mod.ps1', 'Install.cmd', 'Uninstall.cmd',
+           'Launch.cmd', 'Launch-Admin.cmd', 'Settings.cmd', 'Trust-Local-Https.ps1', 'Trust-Local-Https.cmd', 'Renew-Local-Https.cmd',
+           'Backup-Maintenance.ps1', 'Update-Mod.ps1', 'Update-Archive.ps1', 'build_external_updater.py')
+SCREENSHOTS = ('src/Bridge/wwwroot/settings-background-v3-flat.png', 'src/Bridge/wwwroot/community-qq.png', 'docs/images/qq-feedback-923443423.png', 'docs/images/chat-bilingual.png', 'docs/images/chat-bubbles.png')
+GENERATED = {'mod/panorama/layout/citadel_hud_top_bar_chat.xml', 'mod/panorama/layout/chat.xml', 'src/Bridge/data/terms.json', 'src/Bridge/wwwroot/app.js'}
 EXTENSIONS = {'.cs', '.csproj', '.ts', '.js', '.cjs', '.json', '.xml', '.css', '.html',
-              '.py', '.ps1', '.tsv', '.md', '.yml', '.yaml', '.txt'}
+              '.manifest', '.py', '.ps1', '.tsv', '.md', '.yml', '.yaml', '.txt'}
 SKIP_DIRS = {'bin', 'obj', 'node_modules', '__pycache__', '.git'}
 PRIVATE_NAMES = {'settings.json', 'secrets.dpapi', 'pairing.key', 'install-manifest.json',
                  'credentials.json', 'appsettings.development.json'}

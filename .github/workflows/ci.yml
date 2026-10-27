@@ -19,7 +19,28 @@ jobs:
       - name: Scan public source and validate export boundary
         run: |
           python tests/source-export.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/build_identity.py --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/native-bubble-layout.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/export_source.py
+      - name: Installer safety, resume and offline workflow fixtures
+        run: |
+          python tests/release-history.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/InstallerTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install-safety.test.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/native-vpk-identity.test.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/qol-compatibility.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/installer-workflow.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/vpk-recovery.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compile settings
         working-directory: src/Settings
         run: |
@@ -28,19 +49,87 @@ jobs:
           npm run build
       - name: Build backend
         run: dotnet build src/Bridge -c Release
+      - name: Settings navigation, native input, scene composition and isolated sending
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --prefix tests
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($test in @('settings-reload.test.cjs', 'game-window.test.cjs', 'native-editor-window.test.cjs', 'native-scene-background.test.cjs', 'send-isolation.test.cjs', 'settings-reload-ui.test.cjs', 'native-editor-ui.test.cjs', 'settings-surface-alpha.test.cjs')) {
+            node (Join-Path tests $test)
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          dotnet run --project tests/NativeSendTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/NativeEditorTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/SendRecoveryTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build GUI and validate archive extraction
+        run: dotnet run --project tests/InstallerTests -c Release
+      - name: Retired chat sessions and delayed provider completion
+        run: dotnet run --project tests/ChatPipelineTests -c Release
+      - name: Two-message receive concurrency threshold
+        run: dotnet run --project tests/ReceiveBurstTests -c Release
+      - name: Display configuration and lifecycle diagnostic privacy
+        run: dotnet run --project tests/DisplaySettingsTests -c Release
+      - name: Independent incoming display settings UI
+        run: node tests/display-settings-ui.test.cjs
+      - name: Combined display, identities and temporary preview UI
+        run: node tests/display-customization-ui.test.cjs
+      - name: Receive threshold status UI
+        run: node tests/receive-burst-ui.test.cjs
       - name: Concurrency tests (mock HTTP only)
         run: dotnet run --project tests/ConcurrencyTests
       - name: Scheduling, cache and certificate diagnostics tests
         run: dotnet run --project tests/OptimizationTests
+      - name: Incoming style, cache, snapshots and diagnostic privacy
+        run: dotnet run --project tests/IncomingStyleTests -c Release
+      - name: Incoming style and own-translation settings UI
+        run: node tests/incoming-style-ui.test.cjs
+      - name: Send tone, case postprocessing and privacy-safe metric summaries
+        run: dotnet run --project tests/StyleMetricsTests -c Release
+      - name: Outgoing settings tone/case grouping UI
+        run: node tests/outgoing-style-ui.test.cjs
+      - name: Streaming phases, usage privacy and optional channel context
+        run: dotnet run --project tests/StreamingTests -c Release
+      - name: Thinking budget and tactical equipment shorthand (mock HTTP)
+        run: dotnet run --project tests/SendTermTests -c Release
+      - name: Dense proper names, compact prompts and provider timings
+        run: dotnet run --project tests/NamePerformanceTests -c Release
+      - name: Alias and legacy name preservation
+        run: |
+          dotnet run --project tests/GlossaryTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/LegacyNameTests -c Release
+      - name: Multilingual target and queue snapshot tests
+        run: dotnet run --project tests/LanguageTests
+      - name: Diagnostic privacy, log rotation and hotkey state tests
+        run: dotnet run --project tests/DiagnosticsTests
+      - name: Scoped native hotkey recording and release ownership
+        run: dotnet run --project tests/RecordingTests
+      - name: Cached game permissions and sending diagnosis tests
+        run: dotnet run --project tests/RuntimeAlertTests
+      - name: Bing official redirects and provider diagnostic privacy
+        run: dotnet run --project tests/BingRedirectTests
+      - name: API field checks, error classification and private draft probes
+        run: dotnet run --project tests/ApiConfigurationTests
       - name: Panorama and local data tests
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          foreach ($test in @('panorama.test.cjs', 'outgoing-ui.test.cjs', 'game-window.test.cjs')) {
+          foreach ($test in @('incoming-feed.test.cjs', 'native-root-reflow.test.cjs', 'native-plain-birth.test.cjs', 'native-layout-controller.test.cjs', 'native-context.test.cjs', 'native-paint.test.cjs', 'native-template.test.cjs', 'hud-refresh.test.cjs', 'native-label-rendering.test.cjs', 'native-hero-identity.test.cjs', 'feed-width.test.cjs', 'display-customization.test.cjs', 'display-reliability.test.cjs', 'bridge-recovery.test.cjs', 'chat-pipeline-audit.test.cjs', 'scene-lifecycle.test.cjs', 'bubble-lifecycle.test.cjs', 'panorama.test.cjs', 'outgoing-ui.test.cjs', 'game-window.test.cjs', 'menu-layout.test.cjs')) {
             node (Join-Path tests $test)
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
           python tests/terms-merge.test.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/steam-options.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/configure-steam.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/update.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/update-archive.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/game-location.test.ps1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

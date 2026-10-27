@@ -1,1 +1,5 @@
-{"version":"0.5.0","chatPipelineFix":"priority-context-cache-and-diagnostics"}
+{
+  "version": "0.7.0",
+  "chatPipelineFix": "native-parent-size-nudge",
+  "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send"
+}

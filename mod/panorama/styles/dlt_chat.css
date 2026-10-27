@@ -3,3 +3,5 @@
 .DltBubbleLayout { flow-children: down; height: fit-children; }
 .DltBubbleLayout .bubble_bg { ignore-parent-flow: true; width: 100%; height: 100%; }
 .DltBubbleTranslation { margin: 3px 12px 8px 12px; }
+.DltLobbyTranslationRow { flow-children: right-wrap; height: fit-children; }
+.DltLobbyTranslationRow > .DltTranslation { width: 100%; max-width: 100%; }

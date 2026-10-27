@@ -4,8 +4,8 @@
         <include src="s2r://panorama/styles/dlt_settings_window.vcss_c" />
     </styles>
     <scripts><include src="s2r://panorama/scripts/dlt_settings_window.vjs_c" /></scripts>
-    <Panel class="DltWindowOverlay" hittest="true" hittestchildren="true" onactivate="DLTSettingsKeepOpen();" oncancel="DLTSettingsClose('escape');">
-        <Panel class="DltWindowBackdrop" hittest="false" hittestchildren="false" />
+    <Panel class="DltWindowOverlay" hittest="true" hittestchildren="true" defaultfocus="DltSettingsPage" onactivate="DLTSettingsKeepOpen();" oncancel="DLTSettingsClose('escape');">
+        <Panel id="DltWindowBackdrop" class="DltWindowBackdrop" hittest="false" hittestchildren="false" />
         <Panel class="DltSettingsWindow" hittest="true" hittestchildren="true" acceptsinput="true" onactivate="DLTSettingsKeepOpen();">
             <Panel class="DltWindowTitleBar">
                 <Label class="DltWindowTitle" text="翻译设置" />
@@ -15,7 +15,25 @@
                     <Button class="DltWindowButton" onactivate="DLTSettingsClose();"><Label text="关闭  ×" /></Button>
                 </Panel>
             </Panel>
-            <HTML id="DltSettingsPage" class="DltSettingsPage" hittest="true" hittestchildren="true" acceptsinput="true" acceptsfocus="true" />
+            <Panel id="DltConnectionHelp" class="DltConnectionHelp" hittest="false" hittestchildren="false">
+                <Label id="DltConnectionHelpTitle" class="DltConnectionHelpTitle" text="设置页连接未完成" />
+                <Label id="DltConnectionHelpText" text="若下方页面空白：先确认翻译后台已启动，再点击重新加载。游戏需要管理员权限时，使用原 Windows 用户的管理员兼容启动。" />
+            </Panel>
+            <HTML id="DltSettingsPage" class="DltSettingsPage" hittest="true" hittestchildren="true" acceptsinput="true" acceptsfocus="true" onactivate="DLTSettingsFocus();" />
+        </Panel>
+            <Panel id="DltNativeEditor" class="DltNativeEditor" hittest="false" hittestchildren="true">
+                    <TextEntry id="DltNativeEditSingle" class="DltNativeEditEntry DltNativeEditSingle" maxchars="4096" oninputsubmit="DLTEditorApply();" onblur="DLTEditorBlur();" />
+                    <TextEntry id="DltNativeEditMulti" class="DltNativeEditEntry DltNativeEditMulti" maxchars="4096" multiline="true" onblur="DLTEditorBlur();" />
+                    <Panel id="DltNativeEditError" class="DltNativeEditError" hittest="true" hittestchildren="true">
+                        <Label id="DltNativeEditStatus" class="DltNativeEditHint" text="" />
+                        <Panel class="DltNativeEditActions">
+                        <Button id="DltNativeEditCancel" class="DltWindowButton" onactivate="DLTEditorCancel();"><Label text="取消" /></Button>
+                        <Button id="DltNativeEditApply" class="DltWindowButton" onactivate="DLTEditorApply();"><Label id="DltNativeEditApplyLabel" text="重试" /></Button>
+                        </Panel>
+                    </Panel>
+            </Panel>
+        <Panel id="DltSurfaceProbeInfo" class="DltSurfaceProbeInfo" hittest="false" hittestchildren="false">
+            <Label id="DltSurfaceProbeText" text="透景分层检查" />
         </Panel>
     </Panel>
 </root>

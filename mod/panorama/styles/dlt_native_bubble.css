@@ -1,0 +1,52 @@
+/* The translator label exists in the native bubble snippet, so it is part of the
+   engine's first layout of a chat row. It must therefore never start collapsed:
+   a panel that is not laid out keeps reading 0x0 after it is shown, because the
+   game arranges these rows itself and does not re-run that arrangement for a
+   late child. The idle state below is visible but reserves no space, so the row
+   looks exactly like the untouched game. Only the size/content change that
+   happens when a translation arrives has to be relaid out. */
+.DltNativeBubbleTemplate
+{
+    visibility: visible;
+    opacity: 0;
+    width: fit-children;
+    max-width: 220px;
+    height: 0px;
+    max-height: 0px;
+    margin: 0px;
+    padding: 0px;
+    color: #28241e;
+    background-color: #e9dec8f2;
+    border-left: 2px solid #b99860;
+    border-radius: 2px;
+    font-size: 17px;
+    font-weight: normal;
+    white-space: normal;
+    text-overflow: shrink;
+}
+
+.DltNativeBubbleTemplate.DltNativeReady
+{
+    visibility: visible;
+    height: fit-children;
+    max-height: 100px;
+    margin: 3px 12px 8px 12px;
+    padding: 3px 7px;
+}
+
+/* Last-resort relayout fallback: the whole chat root is collapsed and restored
+   only if the non-visual root resize did not help. Native visibility properties
+   and the user's scoreboard/detail classes are never touched. */
+CitadelHudTopBarChat.DltNativeRelayoutGate
+{
+    visibility: collapse;
+}
+
+.ChatMessage.MessageType_AbilityPing .DltNativeBubbleTemplate,
+.ChatMessage.MessageType_MapPing .DltNativeBubbleTemplate,
+.ChatMessage.MessageType_PingWheel .DltNativeBubbleTemplate,
+.ChatMessage.MessageType_ItemDraftReaction .DltNativeBubbleTemplate,
+.ChatMessage.MessageType_PlayerTyping .DltNativeBubbleTemplate
+{
+    visibility: collapse;
+}

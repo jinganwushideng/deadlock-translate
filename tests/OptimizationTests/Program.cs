@@ -49,7 +49,7 @@ config.Save(config.Current with{Model="fixture-2"});await provider.Quality("same
 var old=config.Current;config.Save(config.Current with{LlmBaseUrl="https://different.invalid/v1",LlmKey="new-fake-key"});
 try{await provider.Quality("same phrase",["context a"],old,CancellationToken.None);throw new Exception("old endpoint allowed");}catch(InvalidOperationException){}
 Check(network.Calls==4,"cached results do not bypass stale-endpoint credential guard");
-await provider.ToEnglish("发送测试",config.Current,false,CancellationToken.None);await provider.ToEnglish("发送测试",config.Current,false,CancellationToken.None);Check(network.Calls==5,"outgoing translations also reuse identical results");
+await provider.TranslateOutgoing("发送测试",config.Current,false,CancellationToken.None);await provider.TranslateOutgoing("发送测试",config.Current,false,CancellationToken.None);Check(network.Calls==5,"outgoing translations also reuse identical results");
 
 using var rsa=RSA.Create(2048);var request=new CertificateRequest("CN=DeadlockTranslate localhost",rsa,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
 using var expired=request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-3),DateTimeOffset.UtcNow.AddDays(-1));

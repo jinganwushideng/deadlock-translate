@@ -1,0 +1,73 @@
+const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..');let passed=0,saves=0,calls=0,delay=0,saveDelay=0,failSave=false,lastDraft;
+const settings={mode:'quality',fastProvider:'bing',model:'common-model',llmBaseUrl:'https://fixture.invalid/v1',llmThinkingEnabled:true,llmThinkingApi:'deepseek',llmStreaming:false,llmMaxTokens:4096,llmIndependentProfiles:false,incomingModel:'receive-model',incomingThinking:false,outgoingModel:'send-model',outgoingThinking:true,outgoingHotkey:'LAlt+Space',outgoingEnabled:true,incomingTargetLanguage:'zh-Hans',outgoingTargetLanguage:'en',incomingScope:'all_players',fontSize:17,scanIntervalMs:200};
+const check=(v,name)=>{assert(v,name);passed++;console.log('PASS '+name);};
+const server=http.createServer(async(req,res)=>{
+ res.setHeader('Content-Type','application/json');let input='';for await(const chunk of req)input+=chunk;const url=req.url.split('?')[0];
+ if(url==='/api/config'){if(req.method==='PUT'){if(failSave){res.statusCode=400;res.end(JSON.stringify({error:'fixture save rejected'}));return;}Object.assign(settings,JSON.parse(input));saves++;if(saveDelay)await new Promise(r=>setTimeout(r,saveDelay));}res.end(JSON.stringify({settings,hasLlmKey:true,hasAzureKey:false}));}
+ else if(url.startsWith('/api/provider-config/')){lastDraft=JSON.parse(input);calls++;const response={provider:'llm',ready:true,modelId:lastDraft.model,checks:[]};if(delay)await new Promise(r=>setTimeout(r,delay));res.end(JSON.stringify(response));}
+ else if(url==='/api/terms')res.end('[]');
+ else if(url==='/api/outgoing')res.end('{"items":[]}');
+ else if(url==='/api/status')res.end('{"engine":{"messages":0,"pending":0,"connected":true},"terms":0}');
+ else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
+});
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({channel:'msedge',headless:true});try{
+ const page=await browser.newPage({viewport:{width:1280,height:1080}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:'+server.address().port+'/in-game/fixture');await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
+ check(await page.locator('#overview > article').count()===3&&await page.locator('#overview input,#overview select,#overview textarea').count()===0,'overview contains status, community and navigation without hidden configuration forms');
+ check(await page.locator('nav [data-page]').count()===9,'settings expose nine clear categories');
+ const expected={mode:'incoming',incomingTone:'incoming',incomingTargetLanguage:'incoming',outgoingTone:'outgoing',outgoingTargetLanguage:'outgoing',outgoingSeparateBilingual:'outgoing',outgoingHotkey:'shortcuts',quickMessageRows:'shortcuts',llmBaseUrl:'providers',incomingModel:'providers',outgoingModel:'providers',testText:'providers',chineseNameStyle:'glossary',termSearch:'glossary',incomingFeedPosition:'appearance',fontSize:'appearance',scanIntervalMs:'performance',llmConcurrency:'performance',outgoingConcurrency:'performance',performanceStatus:'performance',transport:'diagnostics',exportDiagnostics:'diagnostics',adminRestart:'diagnostics',stop:'diagnostics',llmRequests:'diagnostics',buildStatus:'diagnostics'};
+ check(await page.evaluate(mapping=>Object.entries(mapping).every(([id,page])=>document.getElementById(id)?.closest('section.page')?.id===page),expected),'settings live in their intended category');
+ check(await page.evaluate(()=>{const ids=[...document.querySelectorAll('[id]')].map(e=>e.id);return ids.length===new Set(ids).size;}),'moving controls introduces no duplicate IDs');
+ await page.screenshot({path:path.join(root,'artifacts/settings-overview-organized.png'),fullPage:true});
+ await page.locator('#overview [data-go-page="shortcuts"]').click();check(await page.locator('#shortcuts').isVisible()&&await page.locator('#outgoingHotkey').isVisible(),'overview shortcut opens the correct page');
+ await page.locator('[data-page="providers"]').click();
+ check(await page.locator('#apiProfile').count()===0,'separate test-profile dropdown removed');
+ check(await page.locator('[role="tab"]').count()===3,'three model profile tabs available');
+ check(await page.locator('#modelTab-incoming').isDisabled()&&await page.locator('#modelTab-outgoing').isDisabled(),'independent tabs inactive while switch is off');
+ check(await page.locator('#modelPanel-common').isVisible()&&!await page.locator('#modelPanel-incoming').isVisible(),'common editor is the only active panel by default');
+ check(await page.locator('#llmIndependentProfiles').evaluate(el=>!!el.closest('.model-profile-toolbar')),'independent switch sits next to tabs');
+ await page.locator('#checkLlmConfig').click();await page.waitForFunction(()=>document.querySelector('#llmApiReport').textContent.includes('本地格式检查通过'));
+ check(lastDraft.model==='common-model'&&lastDraft.thinkingEnabled===true,'off switch uses common model for connection test');
+ await page.locator('#llmIndependentProfiles').check();await page.locator('#modelTab-incoming').click();
+ check(await page.locator('#incomingModel').isVisible()&&!await page.locator('#model').isVisible(),'receive tab directly edits its independent model');
+ check((await page.locator('#testLlmConfig').innerText()).includes('接收'),'test action names the active receive profile');
+ await page.locator('#incomingModel').fill('new-receive-model');await page.locator('#checkLlmConfig').click();await page.waitForFunction(()=>document.querySelector('#llmApiReport').textContent.includes('本地格式检查通过'));
+ check(lastDraft.model==='new-receive-model'&&lastDraft.thinkingEnabled===false,'receive test uses receive draft model and thinking');
+ await page.locator('#modelTab-outgoing').click();check(await page.locator('#outgoingModel').isVisible()&&!await page.locator('#incomingModel').isVisible(),'send editor and receive editor are mutually exclusive');
+ await page.locator('#outgoingModel').fill('');await page.locator('#outgoingThinking').selectOption('');await page.locator('#checkLlmConfig').click();await page.waitForFunction(()=>document.querySelector('#llmApiReport').textContent.includes('本地格式检查通过'));
+ check(lastDraft.model==='common-model'&&lastDraft.thinkingEnabled===true,'empty independent settings inherit the common profile');
+ check((await page.locator('#modelProfileSummary').innerText()).includes('继承通用'),'inheritance is explained next to the test');
+ await page.locator('#modelTab-incoming').click();delay=300;await page.locator('#checkLlmConfig').click();await page.locator('#modelTab-outgoing').click();await page.waitForTimeout(400);
+ check((await page.locator('#llmApiReport').innerText()).includes('已失效'),'late receive result cannot validate the send tab');delay=0;
+ await page.locator('#llmIndependentProfiles').uncheck();
+ check(await page.locator('#modelTab-common').getAttribute('aria-selected')==='true'&&await page.locator('#modelTab-incoming').isDisabled(),'turning off switches back to common');
+ check(await page.locator('#incomingModel').inputValue()==='new-receive-model','turning off retains independent drafts');
+ await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#saveState').textContent.includes('已保存'));
+ check(settings.llmIndependentProfiles===false&&settings.incomingModel==='new-receive-model','saving disabled switch retains independent values');
+ check(settings.outgoingHotkey==='LAlt+Space'&&settings.incomingTargetLanguage==='zh-Hans'&&settings.outgoingTargetLanguage==='en','saving one category preserves values in other categories');
+ await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));await page.locator('[data-page="providers"]').click();
+ check(!await page.locator('#llmIndependentProfiles').isChecked()&&await page.locator('#incomingModel').inputValue()==='new-receive-model','disabled choice and retained draft survive reload');
+ await page.locator('#llmIndependentProfiles').check();await page.locator('#modelTab-common').focus();await page.keyboard.press('ArrowRight');
+ check(await page.locator('#modelTab-incoming').getAttribute('aria-selected')==='true','arrow navigation changes active profile');
+ await page.keyboard.press('End');check(await page.locator('#modelTab-outgoing').getAttribute('aria-selected')==='true','End key reaches last enabled tab');
+ await page.locator('#modelTab-incoming').click();await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#saveState').textContent.includes('已保存'));
+ check(settings.llmIndependentProfiles===true&&saves===2,'enable switch persists without changing other profiles');
+ const shot=async name=>{await page.locator('.model-profile-toolbar').scrollIntoViewIfNeeded();const top=await page.locator('.model-profile-toolbar').boundingBox(),bottom=await page.locator('#llmApiReport').boundingBox(),buttons=await page.locator('#testLlmConfig').boundingBox();await page.screenshot({path:path.join(root,'artifacts',name),clip:{x:Math.max(0,top.x-10),y:top.y-8,width:Math.min(top.width+20,1280-top.x),height:(bottom?.y+bottom?.height||buttons.y+buttons.height)-top.y+18}});};
+ await shot('model-profile-tabs-wide.png');
+ await page.setViewportSize({width:510,height:1100});await page.locator('.model-profile-toolbar').scrollIntoViewIfNeeded();check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'tabs and adjacent switch fit narrow settings');await page.locator('#llmServiceCard').screenshot({path:path.join(root,'artifacts/model-profile-tabs-narrow.png')});
+ await page.setViewportSize({width:1040,height:700});await page.locator('nav [data-page="diagnostics"]').click();check(await page.locator('#diagnostics').isVisible()&&await page.locator('nav [data-page="diagnostics"]').evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'last sidebar category remains reachable on short desktop windows');
+ await page.locator('nav [data-page="overview"]').click();await page.setViewportSize({width:510,height:900});await page.screenshot({path:path.join(root,'artifacts/settings-overview-organized-narrow.png'),fullPage:true});
+ await page.setViewportSize({width:1040,height:700});await page.locator('[data-page="incoming"]').click();await page.locator('#incomingTone').selectOption('concise');
+ check((await page.locator('#sidebarSaveState').innerText()).includes('未保存'),'editing any category marks sidebar save state dirty');
+ saveDelay=300;const count=saves;await page.locator('#saveSidebar').click();await page.waitForFunction(()=>document.querySelector('#saveSidebar').disabled&&document.querySelector('#save').disabled);
+ await page.evaluate(()=>document.querySelector('#save').click());await page.waitForFunction(()=>document.querySelector('#sidebarSaveState').textContent.includes('已保存'));
+ check(saves===count+1&&settings.incomingTone==='concise','sidebar and footer share one save operation across categories');
+ check(!await page.locator('#saveSidebar').isDisabled()&&!await page.locator('#save').isDisabled(),'both save controls recover after success');saveDelay=0;
+ failSave=true;await page.locator('#incomingTone').selectOption('literal');await page.locator('#saveSidebar').click();await page.waitForFunction(()=>document.querySelector('#sidebarSaveState').textContent.includes('保存失败'));
+ check(await page.locator('#incomingTone').inputValue()==='literal'&&settings.incomingTone==='concise','failed save preserves draft and keeps saved data unchanged');
+ check(!await page.locator('#saveSidebar').isDisabled()&&!await page.locator('#save').isDisabled(),'both save controls recover after failure');failSave=false;
+ check(errors.length===0,'no page errors from profile tab controls');
+ fs.writeFileSync(path.join(root,'artifacts/model-profile-tabs-tests.json'),JSON.stringify({passed,realBackend:false,cloudCalls:false,uiSaves:saves,fixtureChecks:calls},null,2));
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

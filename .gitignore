@@ -1,6 +1,7 @@
 tools/
 artifacts/
 dist/
+release/
 **/bin/
 **/obj/
 **/node_modules/
@@ -21,3 +22,5 @@ install-manifest.json
 /mod/panorama/layout/chat.xml
 /src/Bridge/data/terms.json
 /src/Bridge/wwwroot/app.js
+
+/mod/panorama/layout/citadel_hud_top_bar_chat.xml

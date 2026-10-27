@@ -1,0 +1,40 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),https=require('node:https'),assert=require('node:assert/strict'),{spawn,spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'..'),version=JSON.parse(fs.readFileSync(path.join(root,'version.json'))).version;
+const runtime=path.join(root,'dist','DeadlockTranslate-'+version),exe=path.join(runtime,'DeadlockTranslate.exe'),key=fs.readFileSync(path.join(runtime,'pairing.key'),'utf8').trim();
+const state=path.join(root,'artifacts','compat-http-'+Date.now()),base='http://localhost:17875',tls='https://127.0.0.1:17876';let child,passed=0;
+const check=(v,n)=>{assert(v,n);passed++;console.log('PASS '+n);};const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function ready(){for(let i=0;i<80;i++){try{const r=await fetch(base+'/health',{signal:AbortSignal.timeout(500)});if(r.ok)return await r.json();}catch{}await sleep(100);}throw Error('Backend did not become ready');}
+function invoke(args){return spawnSync(exe,args,{windowsHide:true,timeout:20000,stdio:'ignore'});}
+(async()=>{
+ fs.mkdirSync(state,{recursive:true});
+ const missing=path.join(state,'missing'),other=path.join(state,'other-user');
+ const noOwner=invoke(['--no-shell','--data-dir',other,'--elevation-owner','0'.repeat(64),'--port','17875']);check(noOwner.status===1&&!fs.existsSync(other),'owner mismatch rejects before any state or certificate writes');
+ const absent=invoke(['--no-shell','--data-dir',missing,'--pairing-file',path.join(missing,'pairing.key'),'--port','17875']);check(absent.status===1&&!fs.existsSync(path.join(missing,'pairing.key'))&&!fs.existsSync(path.join(missing,'localhost-certificate.cer')),'missing pairing never creates a new mismatched key or certificate');
+ check(fs.readFileSync(path.join(missing,'logs/runtime-current.jsonl'),'utf8').includes('PairingMissing'),'startup failure has a precise sanitized reason');
+ const args=['--no-shell','--no-hotkey','--port','17875','--data-dir',state];child=spawn(exe,args,{windowsHide:true,stdio:'ignore'});await ready();
+ const before=fs.readFileSync(path.join(state,'localhost-certificate.cer'));
+ const duplicate=invoke(args);check(duplicate.status===0&&child.exitCode===null,'matching second launcher reuses existing backend and exits');
+ const wrongState=path.join(state,'wrong-directory');const wrong=invoke(['--no-shell','--no-hotkey','--port','17875','--data-dir',wrongState]);check(wrong.status===1&&!fs.existsSync(path.join(wrongState,'localhost-certificate.cer')),'another data directory cannot adopt an existing backend or create a certificate');
+ check(before.equals(fs.readFileSync(path.join(state,'localhost-certificate.cer'))),'preflight preserves existing certificate bytes');
+ const session=await(await fetch(base+'/control/'+key+'/session',{method:'POST'})).json();const login=await fetch(session.url,{redirect:'manual'});const cookie=login.headers.get('set-cookie').split(';')[0];const headers={Cookie:cookie,Origin:base,'X-DLT-Request':'1','Content-Type':'application/json'};
+ check((await fetch(base+'/api/admin-restart',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:'{}'})).status===401,'elevation restart requires settings session');
+ check((await fetch(base+'/api/admin-restart',{method:'POST',headers:{...headers,Origin:'https://evil.example'},body:'{}'})).status===403,'elevation restart rejects foreign origins');
+ check((await fetch(base+'/api/admin-restart',{method:'POST',headers,body:'{}'})).status===409,'noninteractive test never displays UAC or elevates');
+ const options=await(await fetch(base+'/api/launch-options',{headers})).json();check(options.admin===options.normal.replace(' --steam-game',' --admin-compatible --steam-game'),'settings generate exact current EXE launch prefix without credentials');
+ check((await fetch(base+'/control/'+key+'/admin-handoff',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({owner:'wrong',data:'wrong',runtime:'wrong'})})).status===409,'wrong-scope handoff cannot stop backend');
+ check((await fetch(base+'/control/'+key+'/instance',{method:'POST',headers:{Origin:'https://evil.example','Content-Type':'application/json'},body:'{}'})).status===404,'native control endpoints reject forged web origins');
+ const stale=await fetch(base+'/game/'+key,{method:'POST',headers,body:JSON.stringify({session:'stale-fixture',seq:1,serverId:'previous-backend',messages:[],poll:[],outgoing:[{id:'old-send',text:'must not be translated or sent',channel:'all'}]})});
+ check(stale.status===200&&(await stale.json()).outgoing.length===0,'previous backend queue is rejected before translating during handoff');
+ check((await(await fetch(base+'/api/outgoing',{headers})).json()).items.length===0,'old outgoing task does not survive into the new backend queue');
+ const pem='-----BEGIN CERTIFICATE-----\n'+before.toString('base64').match(/.{1,64}/g).join('\n')+'\n-----END CERTIFICATE-----\n';
+ const request=(route,options={})=>new Promise((resolve,reject)=>{const r=https.request(tls+route,{ca:pem,...options},res=>{let body='';res.on('data',d=>body+=d);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body}));});r.on('error',reject);if(options.body)r.write(options.body);r.end();});
+ check((await request('/health')).status===200,'IPv4 TLS validates actual SAN and certificate using isolated explicit CA');
+ const tlsLogin=await request('/in-game/'+key);const secureCookie=tlsLogin.headers['set-cookie'][0].split(';')[0];check(tlsLogin.status===200&&secureCookie.startsWith('dlt-session-tls='),'IPv4 settings use secure session cookie');
+ const settings=JSON.parse((await request('/api/config',{headers:{Cookie:secureCookie}})).body).settings;
+ check((await request('/api/config',{method:'PUT',headers:{Cookie:secureCookie,Origin:tls,'X-DLT-Request':'1','Content-Type':'application/json'},body:JSON.stringify(settings)})).status===200,'IPv4 settings same-origin save works');
+ check((await request('/game/'+key,{method:'POST',headers:{Origin:tls,'Content-Type':'application/json'},body:JSON.stringify({session:'ipv4-fixture',seq:1,messages:[],poll:[]})})).status===200,'IPv4 game bridge same-origin handshake works');
+ check((await request('/game/'+key,{method:'POST',headers:{Origin:'https://localhost:17876','Content-Type':'application/json'},body:JSON.stringify({session:'ipv4-fixture',seq:2,messages:[],poll:[]})})).status===401,'cross-host game origin still fails');
+ check((await request('/api/config',{method:'PUT',headers:{Cookie:secureCookie,Origin:'https://evil.example','X-DLT-Request':'1','Content-Type':'application/json'},body:JSON.stringify(settings)})).status===403,'foreign IPv4 settings origins still fail');
+ await fetch(base+'/api/stop',{method:'POST',headers,body:'{}'});for(let i=0;i<50&&child.exitCode===null;i++)await sleep(100);check(child.exitCode===0,'normal API stop exits cleanly');
+ fs.writeFileSync(path.join(root,'artifacts/compatibility-http-tests.json'),JSON.stringify({version,passed,realUacUsed:false,realApiUsed:false,osTrustChanged:false,state},null,2));
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{if(child&&child.exitCode===null)child.kill();});

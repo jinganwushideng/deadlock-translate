@@ -9,3 +9,36 @@
 .DltWindowButton Label { color: #e9dec8; font-size: 14px; }
 .DltWindowButton:hover { background-color: #655137; }
 .DltSettingsPage { width: 100%; height: fill-parent-flow(1); }
+.DltConnectionHelp { width: 100%; flow-children: down; visibility: collapse; padding: 12px 18px; background-color: #38271c; border-bottom: 1px solid #a87a50; }
+.DltConnectionHelp.ShowHelp { visibility: visible; }
+.DltConnectionHelp Label { width: 100%; color: #ead4b5; font-size: 14px; white-space: normal; }
+.DltConnectionHelp .DltConnectionHelpTitle { color: #ffd59b; font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+.DltNativeEditor { horizontal-align: left; vertical-align: top; ignore-parent-flow: true; flow-children: none; overflow: clip; z-index: 50; visibility: collapse; }
+.DltNativeEditor.ShowEditor { visibility: visible; }
+.DltNativeEditEntry { horizontal-align: left; vertical-align: top; ignore-parent-flow: true; margin: 0px; min-width: 0px; min-height: 0px; font-family: "Microsoft YaHei"; color: #eee5d2; background-color: #15130f; border: 1px solid #c5a96c; border-radius: 2px; }
+.DltNativeEditMulti { white-space: normal; }
+.DltNativeEditor.InlineClipped .DltNativeEditEntry { opacity: 0; }
+.DltNativeEditError { width: 390px; max-width: 100%; height: fit-children; flow-children: down; padding: 8px; background-color: #38271c; border: 1px solid #a87a50; }
+.DltNativeEditHint { width: 100%; color: #ead4b5; font-size: 13px; white-space: normal; margin-bottom: 5px; }
+.DltNativeEditActions { flow-children: right; horizontal-align: right; }
+
+/* One world-blur surface, only in the owned settings window. No per-frame script or screenshot. */
+.DltWindowBackdrop { world-blur: none; }
+.DltBackgroundTranslucent .DltWindowBackdrop { background-color: none; world-blur: none; }
+.DltBackgroundBlur .DltWindowBackdrop { background-color: none; world-blur: ingameHudBlur; }
+.DltBackgroundTranslucent .DltSettingsWindow, .DltBackgroundBlur .DltSettingsWindow { background-color: none; }
+
+.DltSettingsWindow { width: 100%; max-width: 100%; height: 100%; max-height: 100%; background-color: none; border: 0px; }
+.DltWindowBackdrop { background-color: #141414; }
+.DltWindowTitleBar { visibility: collapse; background-color: #242424; }
+.DltShowNativeHelp .DltWindowTitleBar { visibility: visible; }
+.DltWindowTitle, .DltWindowButton Label { color: #eee7d5; }
+.DltWindowButton { background-color: #49483e; border: 1px solid #999384; }
+.DltNativeEditEntry { color: #f0e9d8; background-color: #49483e; border: 2px solid #999384; border-radius: 8px; }
+.DltSurfaceProbeInfo { visibility: collapse; horizontal-align: center; vertical-align: top; margin-top: 160px; width: 740px; padding: 18px; z-index: 500; background-color: #141414ee; }
+.DltSurfaceProbeInfo.DltProbeActive { visibility: visible; }
+.DltSurfaceProbeInfo Label { width: 100%; color: #f0e9d8; font-size: 22px; white-space: normal; }
+/* The Steam HTML image remains opaque in the tested client. Compose the owned
+   window over one darkened native scene instead of fading text with the page.
+   This is compatible scene blending, not recovered per-pixel HTML alpha. */
+.DltBackgroundTranslucent .DltSettingsWindow, .DltBackgroundBlur .DltSettingsWindow { -s2-mix-blend-mode: screen; }
