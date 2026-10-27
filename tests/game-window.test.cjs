@@ -74,9 +74,13 @@ check('HTML descendant focus also preserves an open field selection',()=>{
 check('settings clicks request input but the hidden bridge cannot accept focus',()=>{
  const settings=fs.readFileSync(path.join(__dirname,'../mod/panorama/layout/dlt_settings_window.xml'),'utf8');
  assert(settings.match(/<HTML[^>]*id="DltSettingsPage"[^>]*>/)[0].includes('onactivate="DLTSettingsFocus();"'));
- const chat=fs.readFileSync(path.join(__dirname,'../mod/panorama/layout/chat.xml'),'utf8');
- const bridge=chat.match(/<HTML[^>]*id="DltBridge"[^>]*>/)[0];assert(bridge.includes('acceptsinput="false"'));assert(bridge.includes('acceptsfocus="false"'));
  const generator=fs.readFileSync(path.join(__dirname,'../scripts/prepare_mod.py'),'utf8');assert(generator.includes('acceptsinput="false" acceptsfocus="false"'),'resource regeneration must retain the bridge input policy');
+ const generated=path.join(__dirname,'../mod/panorama/layout/chat.xml');
+ // Public CI has no Valve layout; validate the actual generator's inserted HTML.
+ // Local builds additionally verify that the generated resource kept the policy.
+ for(const xml of [generator,...fs.existsSync(generated)?[fs.readFileSync(generated,'utf8')]:[]]){
+  const bridge=xml.match(/<HTML[^>]*id="DltBridge"[^>]*>/)[0];assert(bridge.includes('acceptsinput="false"'));assert(bridge.includes('acceptsfocus="false"'));
+ }
 });
 check('unsupported automatic focus does not stop page loading or close polling',()=>{const w=world();w.page.SetFocus=()=>{throw new Error('not supported')};w.tick();w.page.title='DLTSETTINGS:close';w.tick();assert(!w.visible);});
 check('Escape deletes the owned window without starting a new browser navigation',()=>{const w=world();w.tick();w.page.title='DLTSETTINGS:close';w.tick();assert(!w.visible);assert.equal(w.urls.length,1);assert.equal(w.events[0].name,'DropInputFocus');});
@@ -110,4 +114,4 @@ check('closing settings arms the original chat owners single delayed guard',()=>
 check('unverified fallback context is never deleted or hidden as a settings window',()=>{const w=world({ownership:false});w.tick();w.sandbox.DLTSettingsClose();assert(w.visible);assert(!w.nativeDeleted);assert.equal(w.owner.__dltActiveSettingsWindow,undefined);});
 check('ancestor script context closes only the explicitly created settings host',()=>{const w=world({contextIsNative:true});w.tick();w.sandbox.DLTSettingsClose();assert.equal(!!w.nativeDeleted,false,'native chat must not be deleted');assert(!w.visible);});
 check('a marked host from another UI root cannot authorize deletion',()=>{const w=world({contextIsNative:true,foreignHost:true});w.tick();w.sandbox.DLTSettingsClose();assert(w.visible);assert(!w.nativeDeleted);});
-fs.writeFileSync(path.join(__dirname,'../artifacts/game-window-tests.json'),JSON.stringify({passed,at:new Date().toISOString(),scope:'mock Panorama lifecycle; real game input focus/HTML rendering remains unverified'},null,2));
+const report=path.join(__dirname,'../artifacts/game-window-tests.json');fs.mkdirSync(path.dirname(report),{recursive:true});fs.writeFileSync(report,JSON.stringify({passed,at:new Date().toISOString(),scope:'mock Panorama lifecycle; real game input focus/HTML rendering remains unverified'},null,2));

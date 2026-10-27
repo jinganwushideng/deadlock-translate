@@ -841,7 +841,7 @@
     },
     {
       "file": "tests/game-window.test.cjs",
-      "sha256": "eb630f67bb297da277832964947b8fb88181d3e150aa0b0e9f829bc0fbb05df2"
+      "sha256": "6f866d8b7f1f176e8d7bb375feb1b64881859d22348352627a9e9ac8522f1469"
     },
     {
       "file": "tests/GlossaryTests/GlossaryTests.csproj",
