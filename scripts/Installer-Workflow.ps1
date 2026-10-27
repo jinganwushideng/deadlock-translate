@@ -328,7 +328,7 @@ try{
                     if($q.removeCertificate){Emit '等待 Windows 确认移除本程序证书信任…';$output=& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Trust-Local-Https.ps1') -RuntimeFolder $runtime -StateDirectory $state -RemoveTrust -ConfirmTrust 2>&1;if($LASTEXITCODE){$warnings+='证书信任未移除；可稍后使用原程序的证书脚本重试。'}}
                     # Runtime files are retained intentionally so repair, diagnostics and rollback remain available.
                     if($q.removeRuntime){try{$warnings+=RemoveOwnedRuntime $runtime $backup}catch{$warnings+='程序清理未全部完成；已移除文件有备份，剩余文件保留。'}}else{$warnings+='程序文件和个人设置已保留；游戏 Mod 已卸载。可从完成页打开原目录。'}
-                    
+
                 }else{throw '未知操作。'}
                 if($q.configureSteam -and $q.mode -ne 'uninstall'){
                     try{Emit '正在正常退出 Steam、备份并配置所选账号…';Run 'Configure-Steam.ps1' (SteamArgs $runtime -Apply);$steamDone=$true}catch{$optionalFailures+=Get-DltFault $_ 'steam-configuration';$warnings+='程序操作已完成，但 Steam 启动项未配置。请复制界面给出的启动项手动设置，或重试。'}

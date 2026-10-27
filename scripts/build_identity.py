@@ -16,12 +16,12 @@ def identity(root=ROOT):
         relative = path.relative_to(root).as_posix()
         if relative in GENERATED or relative.startswith(('tests/', 'docs/', 'LICENSES/')) or path.suffix in ('.md', '.png'):
             continue
-        data = path.read_bytes()
-        if path.suffix in ('.js', '.cs', '.json', '.html', '.css', '.ts', '.ps1', '.py', '.csproj', '.xml', '.manifest', '.cmd', '.tsv', '.yml', '.yaml', '.txt'):
-            text = data.decode('utf-8-sig').replace('\r\n', '\n')
-            if relative == 'mod/panorama/scripts/dlt_chat.js':
-                text = re.sub(r"var BUILD_ID = '[^']*';", "var BUILD_ID = '__BUILD_ID__';", text)
-            data = text.encode('utf-8')
+        # Every remaining allowlisted input is UTF-8 text. Include extensionless
+        # LICENSE/NOTICE and dotfiles so a Git checkout cannot change identity.
+        text = path.read_bytes().decode('utf-8-sig').replace('\r\n', '\n')
+        if relative == 'mod/panorama/scripts/dlt_chat.js':
+            text = re.sub(r"var BUILD_ID = '[^']*';", "var BUILD_ID = '__BUILD_ID__';", text)
+        data = text.encode('utf-8')
         digest.update(relative.encode() + b'\0' + data + b'\0')
     version = json.loads((root/'version.json').read_text(encoding='utf-8-sig'))['version']
     return {'version': version, 'buildId': version+'-'+digest.hexdigest()[:12], 'sourceSha256': digest.hexdigest()}

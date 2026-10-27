@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as tmp:
         before=build_identity.identity(fixture)
         (fixture/'source.cs').write_bytes(b'class Example {}\n')
         check(before==build_identity.identity(fixture),'Windows line endings do not invent another revision')
-        for name in ('layout.xml','launch.cmd','app.manifest','ci.yml','terms.tsv'):
+        for name in ('layout.xml','launch.cmd','app.manifest','ci.yml','terms.tsv','.gitignore','.gitattributes','LICENSE','NOTICE'):
             file=fixture/name;file.write_bytes(b'fixture\r\nsecond line\r\n');with_windows=build_identity.identity(fixture)
             file.write_bytes(b'fixture\nsecond line\n')
             check(with_windows==build_identity.identity(fixture),'Git line-ending normalization preserves identity for '+name)

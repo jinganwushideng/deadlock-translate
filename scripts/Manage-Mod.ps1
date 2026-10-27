@@ -83,7 +83,7 @@ if($Action -eq 'Repair'){
     $taskTemporary=$taskGameinfo+'.dlt-repair-'+[Guid]::NewGuid().ToString('N')+'.tmp'
     try{
         Assert-DltWritableDirectory $taskCitadel 'repair-preflight'
-        Write-DltAtomic $taskGameinfo $taskPathPlan.Bytes -ExpectedHash $taskBeforeHash -Backup $taskBackup -AllowReadOnly:$AllowReadOnlyGameinfo -Stage 'repair-gameinfo' 
+        Write-DltAtomic $taskGameinfo $taskPathPlan.Bytes -ExpectedHash $taskBeforeHash -Backup $taskBackup -AllowReadOnly:$AllowReadOnlyGameinfo -Stage 'repair-gameinfo'
         if(Test-Path -LiteralPath $taskManifest){
             try{$taskState=Get-Content -LiteralPath $taskManifest -Raw -Encoding UTF8|ConvertFrom-Json
                 if([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($taskState.target)) -ieq $taskAddons){

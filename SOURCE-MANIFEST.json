@@ -1,6 +1,6 @@
 {
   "version": "0.7.0",
-  "buildId": "0.7.0-0928eb93a8f5",
+  "buildId": "0.7.0-a90c6b36fd68",
   "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "470192bd61af541bf6b39877f5e8c68b3204ecb44258722383dd4a989c9c6cec"
+      "sha256": "c7bd8d767666e5adb5077484a9d9bae16db9af29a31b2e450ad2c6748b22cb71"
     },
     {
       "file": "CHANGELOG.md",
@@ -173,7 +173,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "836ab438b44c9a72673abd117142efcfd9a7bea2e69ec4de35615df45d7e2d5b"
+      "sha256": "e537b6279e5ce8887bff635633fc098f1c04917bb92152d523829991dd4a0cd8"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -229,7 +229,7 @@
     },
     {
       "file": "scripts/build_identity.py",
-      "sha256": "b8c31b38f7b16fee363cf020dd27cfb3cdf17579a9c16c07cf16c5eeba228de3"
+      "sha256": "85e0fdd7bef36a98de6def9ebeba1293af747b5ff7f66daa1d1271dc3289b868"
     },
     {
       "file": "scripts/build_installer.py",
@@ -273,7 +273,7 @@
     },
     {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "d5249b82d3c1fbc67e31939f42e411017a79d01d04caf1990e98629802a83a90"
+      "sha256": "d5ccf846acb26c533edd869d699f08ed47b88ba27c85ab2b08b351544eace483"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
@@ -285,7 +285,7 @@
     },
     {
       "file": "scripts/Manage-Mod.ps1",
-      "sha256": "a28ca9a10cb2a9ec4247a695ad926b0799a70eb3afe6c6141489bf5a7925d9ea"
+      "sha256": "32daa2591d47eca5578af8e5a8af8fc8c5f487aae26230687e5734d6829dafcb"
     },
     {
       "file": "scripts/merge_term_defaults.py",
@@ -381,7 +381,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "d3b2715c930fe4d45879d3d71162e3147e8fd8271507240607c6f60ea842112b"
+      "sha256": "c58f3d64f8854a85381b3ff3566e9443a9a24daecb02a1d08a3d2574dd7e778e"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -725,7 +725,7 @@
     },
     {
       "file": "tests/build-identity.test.py",
-      "sha256": "c649c645e2c7d54c4f510be632c3ae7a669049139eb7d5a1d160139daa5b5985"
+      "sha256": "caf7aae340205544db4a24dbd40991b929ad09150c2fb9e990e7fd686fea5b76"
     },
     {
       "file": "tests/chat-pipeline-audit.test.cjs",
