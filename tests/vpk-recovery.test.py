@@ -21,7 +21,7 @@ class RecoveryTests(unittest.TestCase):
  def test_missing_vpk_recovers_by_default(self):
   self.f.target.unlink();self.assertEqual(self.run_update(),0,self.f.output);self.assertEqual(self.f.target.read_bytes(),self.new)
  def test_renamed_unique_hash_relinks(self):
-  new_target=self.f.target.with_name('pak98_dir.vpk');self.f.target.rename(new_target);self.assertEqual(self.run_update('-RepairGameVpk'),0,self.f.output);self.assertFalse(self.f.target.exists());self.assertEqual(new_target.read_bytes(),self.new);self.assertEqual(self.record()['target'],str(new_target))
+        new_target=self.f.target.with_name('pak98_dir.vpk');self.f.target.rename(new_target);self.assertEqual(self.run_update('-RepairGameVpk'),0,self.f.output);self.assertFalse(self.f.target.exists());self.assertEqual(new_target.read_bytes(),self.new);self.assertTrue(Path(self.record()['target']).samefile(new_target))
  def test_occupied_slot_preserves_other_mod_and_uses_free_slot(self):
   original=self.other.read_bytes();self.f.target.write_bytes(original);self.assertEqual(self.run_update('-RepairGameVpk'),0,self.f.output);self.assertEqual(self.f.target.read_bytes(),original);target=Path(self.record()['target']);self.assertEqual(target.name,'pak91_dir.vpk');self.assertEqual(target.read_bytes(),self.new)
  def test_duplicate_hash_is_consolidated_without_deletion(self):
