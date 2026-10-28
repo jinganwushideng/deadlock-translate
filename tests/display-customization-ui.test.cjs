@@ -11,7 +11,7 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  else if(url==='/api/terms')res.end('[]');else if(url==='/api/outgoing')res.end('{"items":[]}');
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:0,pending:0,connected:true},terms:10,diagnostics:{phase:'connected',certificate:{state:'ready'}}}));
  else if(url.startsWith('/api/'))res.end('{}');
- else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({channel:'msedge',headless:true});try{
@@ -21,7 +21,7 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  await page.locator('#incomingDisplayMode').selectOption('both');
  await page.locator('#incomingFeedWidth').fill('480');await page.locator('#incomingOpacity').fill('55');await page.locator('#incomingShowAccountName').uncheck();await page.locator('#incomingHeroNamePosition').selectOption('after');await page.locator('#incomingFeedPosition').selectOption('bottom-right');await page.locator('#incomingFeedOffsetX').fill('60');await page.locator('#incomingFeedOffsetY').fill('30');await page.locator('#incomingFeedLines').fill('10');
  await until(()=>previews.at(-1)?.lines===10&&previews.at(-1)?.width===480);
- check(writes===0,'adjusting controls does not save configuration');
+ await page.evaluate(()=>document.activeElement?.blur());await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');check(writes>0,'edited display controls are automatically persisted');
  check(previews.at(-1).mode==='both'&&previews.at(-1).opacity===55&&!previews.at(-1).showAccountName,'draft preview receives mode opacity and identity switches');
  check(previews.at(-1).position==='bottom-right'&&previews.at(-1).offsetX===60&&previews.at(-1).offsetY===30,'draft preview receives exact placement choices');
  check(await page.locator('#displayPreviewStage').count()===0,'no inset imitation stage substitutes for actual game position');
@@ -31,8 +31,8 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  await until(()=>previews.at(-1)?.showAccountName===true&&previews.at(-1)?.heroNamePosition==='after');check(true,'hero order is delivered to game preview');
  await page.locator('#previewDisplay').click();await until(()=>previews.at(-1)?.showAccountName===true);
  check((await page.locator('#displayPreviewStatus').textContent()).includes('没有保存设置'),'native preview request reports its temporary nature');
- await page.locator('#stopDisplayPreview').click();check(stops>0&&writes===0,'stop closes only the preview without saving');
- await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#saveState').textContent.includes('已保存'));
+ await page.locator('#stopDisplayPreview').click();check(stops>0,'stop closes the temporary preview');
+ await page.evaluate(()=>document.activeElement?.blur());await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
  check(saved.incomingDisplayMode==='both'&&saved.incomingFeedLines===10&&saved.incomingFeedWidth===480&&saved.incomingOpacity===55,'save persists typed combined layout settings');
  check(saved.incomingShowAccountName===true&&saved.incomingHeroNamePosition==='after'&&saved.llmThinkingEnabled===true,'save retains identity order and model thinking');
  await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));await page.locator('[data-page="appearance"]').click();check(await page.locator('#incomingFeedLines').inputValue()==='10'&&await page.locator('#incomingFeedPosition').inputValue()==='bottom-right','layout and ten-line setting survive reload');

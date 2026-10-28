@@ -8,7 +8,7 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  else if(url==='/api/terms')res.end('[]');else if(url==='/api/outgoing')res.end('{"items":[]}');
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:12,pending:0,connected:true},terms:10,gameEvidence:{metrics:{hudWaits:3,hudRetryRecovered:2,hudNativeExpired:1,feedRendered:4}},diagnostics:{phase:'connected',certificate:{state:'ready'}}}));
  else if(url.startsWith('/api/'))res.end('{}');
- else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({channel:'msedge',headless:true});try{
@@ -22,7 +22,7 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  await page.locator('#incomingDisplayMode').selectOption('independent');
  check(await page.locator('#incomingFeedOptions').isVisible(),'independent mode reveals bounded display options');
  check(await page.locator('#incomingFeedSeconds').inputValue()==='8'&&await page.locator('#incomingFeedLines').inputValue()==='3','old configs get safe lifetime and line defaults');
- await page.locator('#incomingFeedSeconds').fill('12');await page.locator('#incomingFeedLines').fill('4');await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#saveState').textContent.includes('已保存'));
+ await page.locator('#incomingFeedSeconds').fill('12');await page.locator('#incomingFeedLines').fill('4');await page.evaluate(()=>document.activeElement?.blur());await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
  check(saved.incomingDisplayMode==='independent'&&saved.incomingFeedSeconds===12&&saved.incomingFeedLines===4,'mode and numeric limits save with correct types');
  check(saved.mode==='quality'&&saved.llmThinkingEnabled===true,'display preferences preserve translation mode and thinking');
  await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));await page.locator('[data-page="appearance"]').click();

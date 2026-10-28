@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.0-a90c6b36fd68';
+var BUILD_ID = '0.7.0-bea7738bd522';
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
 (function initialize(restartReason) {
@@ -816,10 +816,16 @@ var DLTChatInputFocused = function () {};
         if (container) container.__dltTailState = tailState;
     }
     function scanChat() {
-        var start = state.chatScanCursor || 0;
-        for (var i = 0; i < state.chats.length; i++) scanContainer(state.chats[(start+i)%state.chats.length], 'regular', 0, 24);
-        state.chatScanCursor = state.chats.length ? (start+1)%state.chats.length : 0;
-        scanContainer(state.lobby, 'lobby', 0, 24);
+        // All history owners share one row/deadline budget. Include the legacy
+        // lobby in the rotation so a busy regular tail cannot consume its turn.
+        var regular = state.chats.length, total = regular + (valid(state.lobby) ? 1 : 0);
+        if (!total) return;
+        var start = (state.chatScanCursor || 0) % total;
+        for (var i = 0; i < total; i++) {
+            var index = (start+i) % total;
+            scanContainer(index < regular ? state.chats[index] : state.lobby, index < regular ? 'regular' : 'lobby', 0, 24);
+        }
+        state.chatScanCursor = (start+1) % total;
     }
     function discoveryFind(id) {
         var panel = state.discoveryIndex[id];

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Inspect','Clean')][string]$Action='Inspect',
     [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'),
     [switch]$IncludeLegacy,

@@ -46,7 +46,9 @@ function queued(text) { return events.flatMap(e => e.messages || []).filter(m =>
 
 for (let i = 0; i < 1000; i++) row('已经翻译过的历史消息', 'system', '[ALL]');
 step(30); events = [];
-const r = row('wait for my ult'); const b = bubble('wait for my ult'); step(4);
+// The canonical intake is whichever view is discovered first. Do not assume
+// that a bounded HUD-priority scan discovers a simultaneous history row first.
+const r = row('wait for my ult'); step(3); const b = bubble('wait for my ult'); step(4);
 assert.equal(requested('wait for my ult').length, 1, 'one request per message across the two views');
 assert.equal(r.FindChildTraverse('DltTranslation').text, '译文 wait for my ult');
 assert.equal(hudLabel(b).text, '译文 wait for my ult');
@@ -55,6 +57,10 @@ const hudOnly = bubble('help on blue lane'); step(4);
 assert.equal(requested('help on blue lane').length, 1, 'HUD-only messages independently request translation');
 assert.equal(queued('help on blue lane')[0].channel, 'hud', 'HUD bubbles carry no channel and must not mix context');
 assert(hudLabel(hudOnly), 'HUD-only translation is attached');
+const firstHud=bubble('HUD arrives before history');step(4);const laterHistory=row('HUD arrives before history');step(3);
+assert.equal(requested('HUD arrives before history').length,1,'a later history row reuses the HUD intake without duplicate translation');
+assert.equal(queued('HUD arrives before history')[0].channel,'hud','HUD-first intake keeps its unknown-channel context rather than guessing a channel');
+assert(hudLabel(firstHud)&&laterHistory.FindChildTraverse('DltTranslation'),'both views receive the one HUD-first translation');
 
 // all_players: enemies, the local player and unknown-side player chat are all translated.
 const beforeEnemy = events.flatMap(e => e.messages).length;

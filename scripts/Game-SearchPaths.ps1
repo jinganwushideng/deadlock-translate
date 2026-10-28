@@ -1,4 +1,4 @@
-﻿# Modify only GameInfo/FileSystem/SearchPaths. Preserve the rest of the user's config.
+# Modify only GameInfo/FileSystem/SearchPaths. Preserve the rest of the user's config.
 function Dlt-DecodeToken([string]$value){
     if(-not $value.StartsWith('"')){return $value}
     [regex]::Replace($value.Substring(1,$value.Length-2),'\\([\\"])',{param($m)$m.Groups[1].Value})

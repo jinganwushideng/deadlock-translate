@@ -7,7 +7,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','applica
  else if(url==='/api/terms')res.end('[]');else if(url==='/api/outgoing')res.end('{"items":[]}');
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:3,pending:scheduling?.unfinished||0,connected:true,scheduling},requests:{fast:{active:1,limit:4,waiting:0},llm:{active:1,limit:4,waiting:0}},sending:{pending:2},terms:0,diagnostics:{phase:'connected',certificate:{state:'ready'},sending:{state:'idle'},gamePrivileges:{detected:false}}}));
  else if(url.startsWith('/api/'))res.end('{}');
- else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({channel:'msedge',headless:true});try{
