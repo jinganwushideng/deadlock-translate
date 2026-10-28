@@ -3,7 +3,8 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.0-9e3c5769bead';
+var BUILD_ID = '0.7.0-43be0c721956';
+var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
 (function initialize(restartReason) {
@@ -18,7 +19,7 @@ var DLTChatInputFocused = function () {};
         return;
     }
     ROOT.__dltOwner = context;
-    try { $.Msg('[DLT] chat adapter 0.6.25 HTTPS initializing'); } catch (_) {}
+    try { $.Msg('[DLT] chat adapter ' + CLIENT_VERSION + ' HTTPS initializing'); } catch (_) {}
     var stopped = false, scheduled = null, closeGuard = null, globalHandlers = [], boundBridge = null, loopGeneration = 0, lastTickAt = Date.now(), lastResumeAt = 0;
     var base = 'https://localhost:17866/bridge/__PAIRING__';
     var loopbackHost = 'localhost', initialLoads = 0;
@@ -2014,7 +2015,7 @@ var DLTChatInputFocused = function () {};
         if (!editorCommand && !pendingLogs && !state.outbox.length && !state.outgoingQueue.length && !state.outgoingSent.length && !state.outgoingPartAcks.length && !(state.statusSupported && state.outgoingStatus.length) && !state.outgoingRefused.length && !state.openSettings && !wantMetrics && !wantHeartbeat && !state.forcePoll && (!(ids.length || chatOpen || outgoingPending || settingsOpen || state.pendingHotkey) || now < state.nextPoll)) return;
         state.forcePoll = false;
         var messages = state.outbox.slice(0, 8);
-        var payload = { clientVersion: '0.6.25', clientBuildId: BUILD_ID, multipartSupported: true, displayPreviewSupported: true, settingsBackgroundSupported: true, session: state.session, seq: ++state.seq, messages: messages, poll: ids,
+        var payload = { clientVersion: CLIENT_VERSION, clientBuildId: BUILD_ID, multipartSupported: true, displayPreviewSupported: true, settingsBackgroundSupported: true, session: state.session, seq: ++state.seq, messages: messages, poll: ids,
             openSettings: state.openSettings, metrics: wantMetrics ? state.metrics : null,
             chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingPartAcks: state.outgoingPartAcks.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),

@@ -464,7 +464,9 @@ function collectRuntimeIssues(d:any,error?:unknown):RuntimeIssue[]{
   const actions:HelpAction[]=p.sameUser===true?['admin','copy-admin','check']:['outgoing','check'];
   add('privilege','权限不匹配：游戏是管理员，后台是普通权限','这可能导致发送快捷键无法被读取；连接异常需结合下面的检查结果处理。',['推荐：退出游戏，取消 Deadlock 和 Steam 快捷方式的“以管理员身份运行”，再从 Steam 正常启动。','如果游戏必须使用管理员权限，主动选择“管理员兼容重启”，由原 Windows 用户确认 UAC；完成后重新加载设置页。','长期使用可复制管理员兼容启动项，保留普通游戏参数。重启后旧待发送任务不会自动补发。'],actions);
  }
- if(d.clientVersion&&d.version&&d.clientVersion!==d.version)add('version','后台与游戏 Mod 版本不一致','当前后台 '+d.version+'，游戏脚本 '+d.clientVersion+'；部分发送功能可能被拒绝。',['退出 Deadlock，用新版 GUI 安装器执行“安装 / 覆盖更新”，同时更新后台和游戏 VPK。','不要只复制后台 EXE。更新后重新启动游戏，再点击“重新检查”。'],['check','logs']);
+ const hasBuildIdentity=!!d.clientBuildId&&!!d.buildId;
+ const mismatchedBuild=hasBuildIdentity?d.clientBuildId!==d.buildId:!!d.clientVersion&&!!d.version&&d.clientVersion!==d.version;
+ if(mismatchedBuild)add('version',hasBuildIdentity?'后台与游戏 Mod 构建不一致':'后台与游戏 Mod 版本不一致','当前后台 '+(hasBuildIdentity?d.buildId:d.version)+'，游戏脚本 '+(hasBuildIdentity?d.clientBuildId:d.clientVersion)+'；部分发送功能可能被拒绝。',['退出 Deadlock，用新版 GUI 安装器执行“安装 / 覆盖更新”，同时更新后台和游戏 VPK。','不要只复制后台 EXE。更新后重新启动游戏，再点击“重新检查”。'],['check','logs']);
  const certificate=d.certificate?.state;
  if(['unavailable','expired','not-yet-valid','untrusted'].includes(certificate)){
   const steps=certificate==='not-yet-valid'?['检查 Windows 日期、时间与时区，校准后重启翻译后台。']:certificate==='untrusted'?['退出游戏，运行 GUI 安装器，在第 1 步确认本程序证书信任。','首次信任后完整退出并重启 Steam，重新加载游戏设置窗口。']:['退出游戏并停止后台，运行 GUI 安装器，在第 1 步修复或续期本程序证书。','用原 Windows 用户操作，完成信任后完整重启 Steam。'];

@@ -1,6 +1,6 @@
 {
   "version": "0.7.0",
-  "buildId": "0.7.0-9e3c5769bead",
+  "buildId": "0.7.0-43be0c721956",
   "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send",
   "files": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "379eff07b148b75ef8019325c53c1b8ecf6a18aa5eba3cd4009a138f5c5be7b5"
+      "sha256": "57728e75cffa01c2d375955479e1cbfaca6c7e636e101c85857d5ff4c808e803"
     },
     {
       "file": ".gitignore",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "31d13877e134ed5ac5e42a3a4149cbb61e8378482cc26a32b642ab7cd1999568"
+      "sha256": "dada090c509eac9794277d2bd515703e2df1a62ab81f706d4dcce65381d1a383"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "6913935d090f6362186b672330e4a89e0cbf98f23f21f19f6ccd512b51a0bf1d"
+      "sha256": "23c9d722e5b25d8433f7d749cd87247d60fc5dfb4cf435b379b7db6e9ba0cbbc"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -117,11 +117,11 @@
     },
     {
       "file": "docs/UPDATE-0.7.0.md",
-      "sha256": "53e9545ddc3fbbb67a4401079512f353b941191f4a6c7213443ecfba63a85a95"
+      "sha256": "4a2f51d3ca335d1f08aa638dc1782874427754afc3f7fd849ed9ade63761ae31"
     },
     {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "75c97e11389ed11506c45b68a30a054eb83f99f801659b4a2b25eefec5b0002d"
+      "sha256": "ce898113377e6c25d522ac13e33bedf6036a82d3e62ba0b3a81167d922ce7747"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -173,7 +173,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "8b7e24f595edd50510c86e094ab4d47317c88d6222fe98e4d1bf2a06bedbefec"
+      "sha256": "d35b92f26f20584a9a045ce0c73eb5993fb00a93e4aad1e47a255242bb73928d"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -381,7 +381,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "86407c13df0e01af68bde8feb9cf8ab66ac28c37d5a670abcf3adaed258d5c13"
+      "sha256": "cd4051a07b8eac54b5adbf18c766ef819ad52251fd95a8af6174ced74e0a4764"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -657,7 +657,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "6485d0252bf4672b82fd8f0fd3d3a4c6b3c2514dafb9b15d1536fb1df35067c2"
+      "sha256": "83d47217158e55fdf0fc6f1d921c0f294eb6aa2393bc531af41023364b673611"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -738,6 +738,10 @@
     {
       "file": "tests/ChatPipelineTests/Program.cs",
       "sha256": "9a53a97f0e1463dc711a0ce1afe44c445aac202879b23269d0f98cc4c95424f5"
+    },
+    {
+      "file": "tests/client-version.test.cjs",
+      "sha256": "8dc13a37c15c33d667b980afc2b80654052b83894881d6f7f13e9f70ef607fbb"
     },
     {
       "file": "tests/community-ui.test.cjs",
@@ -1149,7 +1153,7 @@
     },
     {
       "file": "tests/runtime-alert-ui.test.cjs",
-      "sha256": "181271803466ae32679895877cf8eb6ac99f072aa427d09b6de283eaff0ac352"
+      "sha256": "785361be3cd9ea6e46e41a30e9af0a0a3287ac0105dec98dbbf5ea95f61a6b51"
     },
     {
       "file": "tests/RuntimeAlertTests/Program.cs",

@@ -54,7 +54,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --prefix tests
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          foreach ($test in @('settings-reload.test.cjs', 'game-window.test.cjs', 'native-editor-window.test.cjs', 'native-scene-background.test.cjs', 'send-isolation.test.cjs', 'settings-reload-ui.test.cjs', 'native-editor-ui.test.cjs', 'settings-surface-alpha.test.cjs')) {
+          foreach ($test in @('client-version.test.cjs', 'runtime-alert-ui.test.cjs', 'settings-reload.test.cjs', 'game-window.test.cjs', 'native-editor-window.test.cjs', 'native-scene-background.test.cjs', 'send-isolation.test.cjs', 'settings-reload-ui.test.cjs', 'native-editor-ui.test.cjs', 'settings-surface-alpha.test.cjs')) {
             node (Join-Path tests $test)
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }

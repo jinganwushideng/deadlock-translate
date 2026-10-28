@@ -14,7 +14,7 @@ const server=http.createServer((req,res)=>{
  else if(url==='/api/admin-restart'){adminCalls++;res.end('{}');}
  else if(url==='/api/launch-options')res.end(JSON.stringify({admin:'"D:\\Apps\\DeadlockTranslate\\DeadlockTranslate.exe" --admin-compatible --steam-game %command%'}));
  else if(url==='/api/diagnostics/export'){exportCount++;res.end(JSON.stringify({file:'fixture-log.zip'}));}
- else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{
@@ -24,6 +24,12 @@ const server=http.createServer((req,res)=>{
   const page=await browser.newPage({viewport:{width:1120,height:850}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/in-game/test');await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
   check(await page.locator('#runtimeAlerts').isHidden(),'healthy settings do not show a problem banner');
+  status.diagnostics.buildId=version+'-aaaaaaaaaaaa';status.diagnostics.clientBuildId=status.diagnostics.buildId;status.diagnostics.clientVersion='0.6.25';
+  await page.evaluate(()=>document.getElementById('checkConnection').click());await page.waitForFunction(()=>document.querySelector('#diagnosticsSummary').textContent.includes('0.6.25'));
+  check(await page.locator('[data-issue="version"]').count()===0,'matching builds do not report stale legacy version strings as mismatched installations');
+  status.diagnostics.clientVersion=version;status.diagnostics.clientBuildId=version+'-bbbbbbbbbbbb';await page.evaluate(()=>document.getElementById('checkConnection').click());await page.waitForSelector('[data-issue="version"]');
+  check((await page.locator('[data-issue="version"]').innerText()).includes(version+'-bbbbbbbbbbbb'),'same-version different builds remain visible and identify the actual mismatched build');
+  status=healthy();await page.evaluate(()=>document.getElementById('checkConnection').click());await page.waitForSelector('#runtimeAlerts',{state:'hidden'});
   status.diagnostics.gamePrivileges={detected:true,elevated:true,sameUser:true};
   await page.waitForSelector('[data-issue="privilege"]');
   check((await page.locator('[data-issue="privilege"]').innerText()).includes('原 Windows 用户'),'permission mismatch explains the correct UAC user');
