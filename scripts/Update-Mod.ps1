@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$PackageFolder=$PSScriptRoot,
     [string]$RuntimeFolder,
     [string]$GamePath,

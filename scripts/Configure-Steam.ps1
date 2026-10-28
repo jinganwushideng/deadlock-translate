@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RuntimeFolder=$PSScriptRoot,
     [string]$SteamPath,
     [uint32]$UserId,

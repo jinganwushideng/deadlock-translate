@@ -1,4 +1,4 @@
-# Pure inspection plus typed traces; never changes game files or pairing material.
+﻿# Pure inspection plus typed traces; never changes game files or pairing material.
 function Test-DltIndependentResources([string[]]$Resources) {
     $base=@('panorama/layout/chat.vxml_c','panorama/layout/dlt_menu.vxml_c','panorama/layout/dlt_settings_window.vxml_c','panorama/scripts/dlt_chat.vjs_c','panorama/scripts/dlt_menu.vjs_c','panorama/scripts/dlt_settings_window.vjs_c','panorama/styles/dlt_chat.vcss_c','panorama/styles/dlt_menu.vcss_c','panorama/styles/dlt_settings_window.vcss_c')
     $native=@('panorama/layout/citadel_hud_top_bar_chat.vxml_c','panorama/styles/dlt_native_bubble.vcss_c','panorama/scripts/dlt_native_bubble.vjs_c')

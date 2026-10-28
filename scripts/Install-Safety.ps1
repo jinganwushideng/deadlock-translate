@@ -1,4 +1,4 @@
-# Shared by the GUI, command-line installer and updater. Never logs config contents.
+﻿# Shared by the GUI, command-line installer and updater. Never logs config contents.
 function Assert-DltNoLinks([string]$Path) {
     for($cursor=[IO.Path]::GetFullPath($Path);$cursor;$cursor=[IO.Path]::GetDirectoryName($cursor)) {
         if((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {

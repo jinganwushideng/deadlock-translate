@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $taskRoot=Split-Path $PSScriptRoot -Parent
 $taskFixture=Join-Path $taskRoot ('artifacts\installer-test-'+[Guid]::NewGuid().ToString('N'))
 $taskCitadel=Join-Path $taskFixture 'game\citadel'

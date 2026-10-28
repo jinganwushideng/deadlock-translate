@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$RequestFile,[Parameter(Mandatory=$true)][string]$ResultFile)
+﻿param([Parameter(Mandatory=$true)][string]$RequestFile,[Parameter(Mandatory=$true)][string]$ResultFile)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)

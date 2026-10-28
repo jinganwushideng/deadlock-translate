@@ -213,7 +213,7 @@
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
-      "sha256": "dbe4e25e9d3cbbb9e36cac288f28c4960aea22aee3fff2485a4b39e01c46f871"
+      "sha256": "580e82bee664c2d8e2d6dcdb809e5081424dec3c035bf52a89fb927dc44cd169"
     },
     {
       "file": "scripts/build.ps1",
@@ -245,7 +245,7 @@
     },
     {
       "file": "scripts/Configure-Steam.ps1",
-      "sha256": "4e139b13f89e2658c448d737f0db443eae62372881a6a7fabb823161485b3643"
+      "sha256": "79afaa68a1f855f80ccace92948664e704fe4edf842bf5bb935855d0bf767590"
     },
     {
       "file": "scripts/Export-Diagnostics.cmd",
@@ -257,15 +257,15 @@
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
-      "sha256": "c1a8ed55f2ad1dc2c02d1a3bb8b39634b9efcdb41b90017c88b0ef0e399e30f9"
+      "sha256": "7082351b353e6132c5a5bec956b8e4743f1c90b6dfb27351c0e5b38ebc4f63d4"
     },
     {
       "file": "scripts/Game-SearchPaths.ps1",
-      "sha256": "fbf2e314176d2f4d8f524360c3a00c4c1103fd866c4350f2d6a16657d6a6f545"
+      "sha256": "f6898dc1003dc6ffdc87350fe5451f61d22c4223998843831bc552c8e01a9dea"
     },
     {
       "file": "scripts/Install-Safety.ps1",
-      "sha256": "001b8d810ffd25030984100dc34de3506e2953f419ad223b5d0040e1ec581e3c"
+      "sha256": "daf85ae5241a4f452ea861681a4d49f355fc037bab6445f8bcafe7f78ec0e608"
     },
     {
       "file": "scripts/Install.cmd",
@@ -273,7 +273,7 @@
     },
     {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "b637867f97dd36c166f119e8544fcdd4f87d346de983edd909daf65a6122d8e9"
+      "sha256": "d5ccf846acb26c533edd869d699f08ed47b88ba27c85ab2b08b351544eace483"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
@@ -285,7 +285,7 @@
     },
     {
       "file": "scripts/Manage-Mod.ps1",
-      "sha256": "daa0a80def62eab1019b7087b400600c67f6f8ba2dfb359aa046ec2e8ccfd842"
+      "sha256": "32daa2591d47eca5578af8e5a8af8fc8c5f487aae26230687e5734d6829dafcb"
     },
     {
       "file": "scripts/merge_term_defaults.py",
@@ -337,7 +337,7 @@
     },
     {
       "file": "scripts/Trust-Local-Https.ps1",
-      "sha256": "1e0050e6fd217a147c94f91f2325a148b7751227ff49b510c74b6fbfd709c4bb"
+      "sha256": "ee9706b49d13d047986876df2c5a81c9f00684499f2fc103d466988c8ade0a10"
     },
     {
       "file": "scripts/Uninstall.cmd",
@@ -345,15 +345,15 @@
     },
     {
       "file": "scripts/Update-Archive.ps1",
-      "sha256": "4b5281879ec56ea81aaa155c7f55652466ab6e871f1e8920052e4048b3dcdd76"
+      "sha256": "b55d9f3e3169cde0f85e8a3b956bc7db3849ac64c9e2a1cb8c44c3b7a3ed9d9e"
     },
     {
       "file": "scripts/Update-Mod.ps1",
-      "sha256": "390d7121bc88a24af46f5c2becc5d1b5e8bcb78321ee52ce0f040c051c78af44"
+      "sha256": "60526677eaf50386788ca3d222c77938fe490741edfdcacc74a7cc29a7381396"
     },
     {
       "file": "scripts/Vpk-Recovery.ps1",
-      "sha256": "c4e454b48ad89eb789769a1d5bfa6d7911883988f8fc47db0aa844f90607d2cb"
+      "sha256": "313fe9602da91d92c841ac4e6bcfd98343ad6fd38ba7599f47c34d12019e2068"
     },
     {
       "file": "scripts/vpk.py",
@@ -833,7 +833,7 @@
     },
     {
       "file": "tests/game-location.test.ps1",
-      "sha256": "3a0522ba831e17c827e8e7bffd7f3dd87d559dfdba96de2cc7c3006eede54e06"
+      "sha256": "1d57c28b41e6c15c7617b4db4874b57252943facb94efa5ea1baea2ac0907f43"
     },
     {
       "file": "tests/game-searchpaths.test.ps1",
@@ -897,7 +897,7 @@
     },
     {
       "file": "tests/install-safety.test.ps1",
-      "sha256": "e206ae8a29df74876b1482483d9e091f09ac6228658f3059b4ee75bc34675150"
+      "sha256": "5815ede17d9608c33cbe9319769cced929158108c4dd0d98846d15c912ed3d6f"
     },
     {
       "file": "tests/installer-workflow.test.py",
@@ -905,7 +905,7 @@
     },
     {
       "file": "tests/installer.test.ps1",
-      "sha256": "59b359320cd8fcb0ebc894509d42bd2458920f1aae1830089d1caf4e29766911"
+      "sha256": "e45fb5774b00ba760a3765c8cb28e5578dafa3847e614909d44247b6dcbb9ba2"
     },
     {
       "file": "tests/InstallerTests/InstallerTests.csproj",

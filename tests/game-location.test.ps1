@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 . (Join-Path (Split-Path $PSScriptRoot -Parent) 'scripts\Find-Deadlock.ps1')
 $taskFixture=Join-Path (Split-Path $PSScriptRoot -Parent) ('artifacts\game-locate-'+[Guid]::NewGuid().ToString('N'));New-Item -ItemType Directory -Path $taskFixture|Out-Null
 function Check($v,[string]$n){if(-not $v){throw "FAIL: $n"};$script:passed++;Write-Output "PASS: $n"}

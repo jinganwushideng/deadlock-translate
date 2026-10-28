@@ -1,4 +1,4 @@
-param()
+﻿param()
 $ErrorActionPreference='Stop'
 $taskRepo=Split-Path $PSScriptRoot -Parent
 . (Join-Path $taskRepo 'scripts\Install-Safety.ps1')

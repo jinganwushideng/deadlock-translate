@@ -1,4 +1,4 @@
-# Dot-sourced by Manage-Mod.ps1. No automatic full-disk scan.
+﻿# Dot-sourced by Manage-Mod.ps1. No automatic full-disk scan.
 function Normalize-DeadlockPath([string]$Path){
     if([string]::IsNullOrWhiteSpace($Path)){return $null}
     $taskInput=[Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))

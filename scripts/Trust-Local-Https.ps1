@@ -1,4 +1,4 @@
-param([string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'),[switch]$ConfirmTrust,[switch]$RemoveTrust,[switch]$Renew,[string]$RuntimeFolder=$PSScriptRoot)
+﻿param([string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'),[switch]$ConfirmTrust,[switch]$RemoveTrust,[switch]$Renew,[string]$RuntimeFolder=$PSScriptRoot)
 $ErrorActionPreference='Stop'
 $taskExe=Join-Path $RuntimeFolder 'DeadlockTranslate.exe'
 if($Renew -and $RemoveTrust){throw 'Renew and RemoveTrust cannot be combined.'}

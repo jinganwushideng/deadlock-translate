@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$DownloadFolder=$PSScriptRoot,
     [string]$PackageZip,
     [string]$RuntimeFolder,

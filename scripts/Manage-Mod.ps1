@@ -1,4 +1,4 @@
-param([ValidateSet('Inspect','Install','Uninstall','Repair')][string]$Action='Inspect',[string]$GamePath,[switch]$AllowRelated,[string]$StateDirectory,[ValidateSet('Auto','Deep','Manual')][string]$LocateMode='Auto',[string[]]$ScanRoots,[switch]$NonInteractive,[string]$PackageFolder=$PSScriptRoot,[switch]$AllowReadOnlyGameinfo,[string]$ErrorResultFile,[string]$TraceFile)
+﻿param([ValidateSet('Inspect','Install','Uninstall','Repair')][string]$Action='Inspect',[string]$GamePath,[switch]$AllowRelated,[string]$StateDirectory,[ValidateSet('Auto','Deep','Manual')][string]$LocateMode='Auto',[string[]]$ScanRoots,[switch]$NonInteractive,[string]$PackageFolder=$PSScriptRoot,[switch]$AllowReadOnlyGameinfo,[string]$ErrorResultFile,[string]$TraceFile)
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
 . (Join-Path $PSScriptRoot 'Game-SearchPaths.ps1')
