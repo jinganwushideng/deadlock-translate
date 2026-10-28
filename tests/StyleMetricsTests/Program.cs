@@ -18,7 +18,14 @@ foreach(var tone in OutgoingStyle.Tones.Where(t=>t!="none"))Check(OutgoingStyle.
 foreach(var invalid in new[]{defaults with{OutgoingTone="bad"},defaults with{OutgoingTone="custom"},defaults with{OutgoingEnglishCase="bad"},defaults with{OutgoingCustomTone=new string('x',501)},defaults with{OutgoingCustomTone="bad\0"}}){bool rejected=false;try{ConfigStore.Validate(invalid);}catch(ArgumentException){rejected=true;}Check(rejected,"invalid style settings rejected");}
 var store=new ConfigStore(Path.Combine(temp,"state"));store.Save(defaults with{LlmKey="fixture-key",LlmBaseUrl="http://localhost:17870/v1",OutgoingMode="quality",LlmStreaming=false,OutgoingTone="custom",OutgoingCustomTone="PRIVATE_STYLE_MARKER",OutgoingEnglishCase="lower"});
 Check(new ConfigStore(store.DirectoryPath).Current.OutgoingCustomTone=="PRIVATE_STYLE_MARKER","style preference saved locally");
-var terms=new Terms(store.DirectoryPath,Path.Combine(root,"src/Bridge/data/terms.json"));var handler=new Fixture();using var http=new HttpClient(handler);await using var audit=new DiagnosticLog(Path.Combine(temp,"audit"));using var translator=new Translators(store,terms,http,audit);
+// Keep style/case tests independent of Valve-generated localization data.
+var fixtureTerms=Path.Combine(temp,"fixture-terms.json");
+File.WriteAllText(fixtureTerms,JsonSerializer.Serialize(new[]{
+    new { source="阿波罗",target="阿波罗",english="Apollo",kind="name",ambiguous=false },
+    new { source="跑酷大师",target="跑酷大师",english="Stamina Mastery",kind="name",ambiguous=false },
+    new { source="减速魔咒",target="减速魔咒",english="Slowing Hex",kind="name",ambiguous=false }
+},ConfigStore.Json));
+var terms=new Terms(store.DirectoryPath,fixtureTerms);var handler=new Fixture();using var http=new HttpClient(handler);await using var audit=new DiagnosticLog(Path.Combine(temp,"audit"));using var translator=new Translators(store,terms,http,audit);
 var settings=store.Current;var source="阿波罗出个跑酷，用来应对减速魔咒";var prepared=terms.PrepareOutgoingNames(source);var required=prepared.Map.Values.ToArray();handler.Reply=string.Join(" ",required)+" DON'T PUSH IN 10s";
 var translated=await translator.TranslateOutgoing(source,settings,false,CancellationToken.None);
 Check(translated==OutgoingStyle.ApplyCase(handler.Reply,settings),"provider names validated before lowercase conversion");

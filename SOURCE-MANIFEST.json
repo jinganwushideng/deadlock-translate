@@ -1,6 +1,6 @@
 {
   "version": "0.7.0",
-  "buildId": "0.7.0-bea7738bd522",
+  "buildId": "0.7.0-9e3c5769bead",
   "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send",
   "files": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "bc8b20c109694568dcce3c3a5dd045bb689fc844317cabf8ee7b9486e3b8e685"
+      "sha256": "379eff07b148b75ef8019325c53c1b8ecf6a18aa5eba3cd4009a138f5c5be7b5"
     },
     {
       "file": ".gitignore",
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "93aac36d0d0779c9e5e556d1fe9df38eb685d60dd368648d5525552291479a40"
+      "sha256": "31d13877e134ed5ac5e42a3a4149cbb61e8378482cc26a32b642ab7cd1999568"
     },
     {
       "file": "CHANGELOG.md",
@@ -49,7 +49,7 @@
     },
     {
       "file": "docs/BUILDING.md",
-      "sha256": "2931a08c986e79534e1378532a69d04d69c7f3681600b974a9847c9e47ab0976"
+      "sha256": "22d907bb10dd06fe58591f069f08912a5b6ae8b8a4f7b31432e912dcf064c1ff"
     },
     {
       "file": "docs/CHAT-PIPELINE-AUDIT-0.6.18.md",
@@ -173,7 +173,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "9d027329570fa45a3c718b764093852f1a5b58fd327d9fe51ec0c8b1523abfe5"
+      "sha256": "8b7e24f595edd50510c86e094ab4d47317c88d6222fe98e4d1bf2a06bedbefec"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -381,7 +381,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "329e312a0075203138960fc5611cbf2323a8f5edc9f6612eb4e07559c8657d69"
+      "sha256": "86407c13df0e01af68bde8feb9cf8ab66ac28c37d5a670abcf3adaed258d5c13"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -893,7 +893,7 @@
     },
     {
       "file": "tests/IncomingStyleTests/Program.cs",
-      "sha256": "d15a6e1b242c31c24beeaa77f59f1674449bfafc765aafc9d8c3aff3779afe39"
+      "sha256": "05fe9eed9bcdc3af7f856cba5a2d07651bfa1696a8de478765bb368f96d24187"
     },
     {
       "file": "tests/install-safety.test.ps1",
@@ -1245,7 +1245,7 @@
     },
     {
       "file": "tests/StyleMetricsTests/Program.cs",
-      "sha256": "bf1ab64feddb23cec827efe95747987a4716a0605383c93889999de3b6116187"
+      "sha256": "9ba4f0826c1b7a382f209a2a2cb5352985479866c51d4200d7b1f6ffb13f5f91"
     },
     {
       "file": "tests/StyleMetricsTests/StyleMetricsTests.csproj",

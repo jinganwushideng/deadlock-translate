@@ -93,14 +93,22 @@ jobs:
       - name: Streaming phases, usage privacy and optional channel context
         run: dotnet run --project tests/StreamingTests -c Release
       - name: Thinking budget and tactical equipment shorthand (mock HTTP)
+        if: ${{ hashFiles('src/Bridge/data/terms.json') != '' }}
         run: dotnet run --project tests/SendTermTests -c Release
       - name: Dense proper names, compact prompts and provider timings
+        if: ${{ hashFiles('src/Bridge/data/terms.json') != '' }}
         run: dotnet run --project tests/NamePerformanceTests -c Release
       - name: Alias and legacy name preservation
+        if: ${{ hashFiles('src/Bridge/data/terms.json') != '' }}
         run: |
           dotnet run --project tests/GlossaryTests -c Release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           dotnet run --project tests/LegacyNameTests -c Release
+      - name: Explain local game corpus coverage
+        if: ${{ hashFiles('src/Bridge/data/terms.json') == '' }}
+        shell: pwsh
+        run: |
+          'Full generated-dictionary suites (SendTermTests, NamePerformanceTests, GlossaryTests, LegacyNameTests) require the builder''s local game resources and are not run on this public runner. Style, cache, send, receive and privacy tests use isolated fixtures. See docs/BUILDING.md to run the corpus suites locally.' >> $env:GITHUB_STEP_SUMMARY
       - name: Multilingual target and queue snapshot tests
         run: dotnet run --project tests/LanguageTests
       - name: Diagnostic privacy, log rotation and hotkey state tests

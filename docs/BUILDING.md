@@ -46,6 +46,8 @@ dotnet build src/Bridge -c Release
 
 ## 自动测试
 
+公开 CI 不包含 Valve 游戏原始资源或生成词库。风格、缓存等单元检查使用独立样例；SendTermTests、NamePerformanceTests、GlossaryTests、LegacyNameTests 需要先从自己的游戏生成完整词库，不在没有该词库的公共运行器上执行。正式包的本机词库专项与公共 CI 范围分别记录。
+
 以下测试不访问云端翻译，不启动游戏：
 
 ```powershell

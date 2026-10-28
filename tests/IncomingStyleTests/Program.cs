@@ -24,7 +24,13 @@ foreach (var bad in new[] { defaults with { IncomingTone = "invalid" }, defaults
 var store = new ConfigStore(Path.Combine(temp, "state"));
 store.Save(defaults with { LlmKey = "fixture-key", LlmBaseUrl = "http://localhost:17870/v1", LlmStreaming = false, OutgoingMode = "quality", OutgoingTone = "custom", OutgoingCustomTone = "PRIVATE_OUTGOING_STYLE", IncomingTone = "custom", IncomingCustomTone = "PRIVATE_INCOMING_STYLE" });
 Check(new ConfigStore(store.DirectoryPath).Current.IncomingCustomTone == "PRIVATE_INCOMING_STYLE", "receive custom style persists locally");
-var terms = new Terms(store.DirectoryPath, Path.Combine(root, "src/Bridge/data/terms.json"));
+// Style and cache behavior must be testable without a private game installation.
+// Full generated-dictionary coverage lives in GlossaryTests / LegacyNameTests.
+var fixtureTerms = Path.Combine(temp, "fixture-terms.json");
+File.WriteAllText(fixtureTerms, JsonSerializer.Serialize(new[] {
+    new { source = "Abrams", target = "亚伯兰", english = "Abrams", kind = "name", ambiguous = false }
+}, ConfigStore.Json));
+var terms = new Terms(store.DirectoryPath, fixtureTerms);
 var handler = new Fixture(); using var http = new HttpClient(handler); await using var log = new DiagnosticLog(Path.Combine(temp, "audit"));
 using var translators = new Translators(store, terms, http, log);
 var settings = store.Current; const string source = "Abrams do not fight, hold blue lane for 10s";
