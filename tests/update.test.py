@@ -32,7 +32,8 @@ def snapshot(folder):
 class UpdateTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='dlt-update-')
-        self.root = Path(self.temp.name)
+        # Match PowerShell's canonical path spelling on Windows 8.3 TEMP paths.
+        self.root = Path(self.temp.name).resolve()
         self.runtime = self.root / '旧版程序'
         self.package = self.root / '新版安装包'
         self.state = self.root / '个人状态'

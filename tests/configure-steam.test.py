@@ -13,7 +13,9 @@ SCRIPT = ROOT / 'scripts/Configure-Steam.ps1'
 class SteamConfigTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='dlt-steam-doc-')
-        self.root = Path(self.temp.name)
+        # Hosted Windows runners may expose TEMP through an 8.3 alias. Use the
+        # same canonical directory spelling as Resolve-Path in PowerShell.
+        self.root = Path(self.temp.name).resolve()
         self.runtime = self.root / '翻译程序 空格'
         self.runtime.mkdir()
         (self.runtime / 'DeadlockTranslate.exe').write_bytes(b'fake EXE - never executed')

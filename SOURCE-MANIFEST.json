@@ -765,7 +765,7 @@
     },
     {
       "file": "tests/configure-steam.test.py",
-      "sha256": "99848583915de3a5fc2004fd2ca4593e4b03f7d3fa8f159be7419d7e200e9043"
+      "sha256": "c1a417eae06a3bf93a98da133d45637d2a8d552c41cc29b61093cc4e5aba4c66"
     },
     {
       "file": "tests/CoreTests/CoreTests.csproj",
@@ -1269,7 +1269,7 @@
     },
     {
       "file": "tests/update.test.py",
-      "sha256": "106f699f8eb56b6b1b9142fac50bc0a2bb1597dff136a589ba40b58d351d59b8"
+      "sha256": "c522e135587090c69a12510ea699d1d86e086fbc4f95a1e0bb8df57459ecd6f9"
     },
     {
       "file": "tests/upgrade-0623-http.test.cjs",
