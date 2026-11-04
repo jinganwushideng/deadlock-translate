@@ -122,8 +122,13 @@ check('a commit requested during claim never steals focus or drops the original 
 check('blur waits for IME commit and ignores an in-field focus return',()=>{
  const w=world();w.ready();w.sandbox.DLTEditorBlur();w.tick();assert.equal(w.commands.length,1);w.nativeFocus='HTML';w.fields.DltNativeEditMulti.text='输入法刚提交的中文';w.sandbox.DLTEditorBlur();w.tick();assert.equal(w.commands.at(-1).value,'输入法刚提交的中文');
 });
-check('unknown geometry never places an editable field at guessed screen coordinates',()=>{
- const w=world();delete w.page.GetPositionWithinWindow;w.ready();assert(w.fields.DltNativeEditStatus.text.includes('无法定位'));assert.equal(w.commands.at(-1).action,'claim');
+check('missing geometry uses a centered native editor without guessed screen offsets',()=>{
+ const w=world();delete w.page.GetPositionWithinWindow;w.ready();assert(w.fields.DltNativeEditor.cls.has('DialogEditor'));assert.equal(w.fields.DltNativeEditor.style.width,'640px');assert.equal(w.fields.DltNativeEditMulti.text,'初始中文\n保留原词');assert.equal(w.fields.DltNativeEditApplyLabel.text,'回填');assert.equal(w.nativeFocus,'DltNativeEditMulti');assert(w.owner.__dltSettingsInputEvidence.flags&1024);
+});
+check('zero or unavailable scale uses the same fallback and retains input across later geometry recovery',()=>{
+ const w=world();w.host.actualuiscale_x=0;w.ready();w.fields.DltNativeEditMulti.text='居中框中的中文';w.host.actualuiscale_x=1;w.tick();assert(w.fields.DltNativeEditor.cls.has('DialogEditor'));assert.equal(w.fields.DltNativeEditMulti.text,'居中框中的中文');
+ w.nativeFocus='HTML';w.sandbox.DLTEditorBlur();w.tick();assert.equal(w.commands.length,1,'a focus/IME change must not submit the centered draft');
+ w.signal(undefined,true);w.tick();w.tick();assert.equal(w.commands.at(-1).value,'居中框中的中文');w.reply({state:'applied'});assert(!w.fields.DltNativeEditor.cls.has('DialogEditor'));assert.equal(w.fields.DltNativeEditMulti.text,'');
 });
 check('malformed and unbounded title geometry cannot open an editor',()=>{
  const w=world();w.tick();w.geometry[4]=Infinity;w.signal();w.tick();assert.equal(w.commands.length,0);w.geometry[4]=999999;w.signal();w.tick();assert.equal(w.commands.length,0);

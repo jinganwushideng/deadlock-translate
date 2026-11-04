@@ -1,5 +1,5 @@
 {
-  "version": "0.7.0",
+  "version": "0.7.1",
   "chatPipelineFix": "native-parent-size-nudge",
-  "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send"
+  "featureRevision": "settings-input-recovery-and-explicit-secret-paste"
 }

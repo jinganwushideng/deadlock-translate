@@ -37,7 +37,7 @@ const latest=()=>[...jobs.values()].at(-1);
   const initialGeometry=await page.evaluate(()=>{const v=document.title.split(':').at(-1).split(',').map(Number),r=document.querySelector('#incomingCustomTone').getBoundingClientRect();return {v,x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width),h:Math.round(r.height)};});
   check(initialGeometry.v.length===16&&initialGeometry.v[2]===initialGeometry.x&&initialGeometry.v[3]===initialGeometry.y&&initialGeometry.v[4]===initialGeometry.w&&initialGeometry.v[5]===initialGeometry.h,'inline title contains bounded numeric geometry for the exact DOM field');
   const oldTitle=await page.title();await page.evaluate(()=>document.querySelector('#contentScroll').scrollTop-=25);await page.waitForFunction(title=>document.title!==title,oldTitle);check((await page.title()).split(':').at(-1)!==oldTitle.split(':').at(-1),'scrolling immediately republishes the field position');
-  latest().state='editing';await page.waitForFunction(()=>document.querySelector('#nativeInputStatus').textContent.includes('正在原位置编辑'));
+  latest().state='editing';await page.waitForFunction(()=>document.querySelector('#nativeInputStatus').textContent.includes('正在原生输入框编辑'));
   latest().value='用中文玩家口语\n保留角色与装备名';latest().state='applied';await page.waitForFunction(()=>document.querySelector('#incomingCustomTone').value==='用中文玩家口语\n保留角色与装备名');
   check(await page.locator('#incomingCustomTone').inputValue()==='用中文玩家口语\n保留角色与装备名','confirmed native Unicode reaches the actual field before automatic persistence');
   await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');check(settings.incomingCustomTone==='用中文玩家口语\n保留角色与装备名'&&saves>=1,'automatic save persists only the returned Unicode draft');

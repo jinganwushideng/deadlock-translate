@@ -21,7 +21,7 @@ Check(announcements.ShouldShow("0.6.24",secondRevision),"same version with chang
 announcements.MarkSeen("0.6.24",secondRevision);
 Check(!announcements.ShouldShow("0.6.24",firstRevision)&&!announcements.ShouldShow("0.6.24",secondRevision),"alternating same-version revisions keep their read state");
 Check(!announcements.ShouldShow("0.6.24"),"revision-aware marker remains compatible with version-only checks");
-Check(history.Current.Version=="0.7.0"&&history.Current.Title.Contains("设置界面")&&history.Current.Changes[0].Contains("设置界面")&&history.Current.Changes.Any(x=>x.Contains("发送")),"current announcement leads with the final settings and sending changes");
+Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("输入兼容")&&history.Current.Changes.Any(x=>x.Contains("密钥"))&&history.Current.Changes.Any(x=>x.Contains("原生")),"current announcement describes the input recovery and secret paste changes");
 Check(history.Entries.Any(e=>e.Version=="0.6.24"&&e.Changes.Any(x=>x.Contains("备份"))),"previous backup-cleanup update remains in history");
 Check(typeof(ReleaseNotesWindow).Assembly.GetManifestResourceNames().Contains("community-qr.png"),"feedback QR is embedded for offline display");
 using(var maintenance=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("scripts/Backup-Maintenance.ps1")){

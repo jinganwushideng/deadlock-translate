@@ -1,0 +1,44 @@
+// Actual settings page, isolated broker; no system clipboard, game, or cloud API.
+const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+const fixture=path.join(__dirname,'native-editor-ui.test.cjs'),m=new Module(fixture,module);
+m.filename=fixture;m.paths=Module._nodeModulePaths(__dirname);
+m._compile(fs.readFileSync(fixture,'utf8').split('(async()=>{')[0]+'\nmodule.exports={server,jobs,requests,errors,get settings(){return settings;}};',fixture);
+const w=m.exports,checks=[];function check(value,name){assert(value,name);checks.push(name);console.log('PASS '+name);}
+(async()=>{let browser;try{
+ await new Promise(r=>w.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+w.server.address().port;
+ browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(base+'/in-game/fixture');await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
+ check(await page.locator('#inputRecoveryButton').isVisible(),'recovery is available before any field can lock navigation');
+ await page.locator('nav [data-page="providers"]').click();const original=await page.locator('#model').inputValue();
+ await page.locator('#model').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{button:0,bubbles:true,cancelable:true})));
+ await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));check(w.requests.length===1,'click-only activation opens the same native transaction');
+ check(!await page.locator('#model').evaluate(el=>el.classList.contains('native-inline-active'))&&await page.locator('#model').inputValue()===original,'pending claim cannot blank the original field');
+ const pending=[...w.jobs.values()].at(-1);await page.waitForSelector('#inputRecovery:visible',{timeout:7000});
+ check((await page.locator('#inputRecoveryStatus').textContent()).includes('接管较慢')&&w.requests.length===1,'slow claim offers recovery without retry loops or cancelling unknown native text');
+ await page.locator('#directSettingsInput').click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
+ check(await page.locator('#model').inputValue()===original,'explicit fallback preserves the page value');
+ check(!await page.locator('#nativeInputEnabled').isChecked(),'fallback disables the event interceptor for this session');
+ const count=w.requests.length;await page.locator('#model').fill('direct 中文');
+ const pasteAllowed=await page.locator('#model').evaluate(el=>el.dispatchEvent(new Event('paste',{bubbles:true,cancelable:true})));
+ check(pasteAllowed&&w.requests.length===count,'direct text/paste events never start a hidden native editor');
+ pending.state='applied';pending.value='LATE NATIVE RESULT';await page.waitForTimeout(400);
+ check(await page.locator('#model').inputValue()==='direct 中文','late native completion cannot overwrite fallback typing');
+ await page.locator('#pageTitle').click();await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ check(w.settings.model==='direct 中文','fallback text participates in the normal save transaction');
+ await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));await page.locator('nav [data-page="providers"]').click();await page.locator('#model').click();
+ check(!await page.locator('#nativeInputEnabled').isChecked()&&w.requests.length===count,'reload retains the local fallback rather than trapping the user again');
+ await page.locator('#inputRecoveryButton').click();await page.locator('#restoreNativeInput').click();
+ await page.route('**/api/native-editor',route=>route.fulfill({status:503,json:{error:'fixture broker unavailable'}}));
+ await page.locator('#model').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{button:0,bubbles:true,cancelable:true})));
+ await page.waitForFunction(()=>document.querySelector('#inputRecoveryStatus').textContent.includes('无法打开原生输入框'));
+ check(!await page.locator('#model').evaluate(el=>el.classList.contains('native-inline-active'))&&await page.locator('#model').inputValue()==='direct 中文','creation failure releases the mask and exposes a local remedy');
+ await page.locator('#directSettingsInput').click();await page.locator('#model').fill('still editable');await page.locator('#pageTitle').click();await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ await page.setViewportSize({width:510,height:900});check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'recovery actions fit narrow settings windows');
+ await page.goto(base+'/');await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ check(await page.locator('#inputRecoveryButton').isHidden(),'external browser keeps ordinary native-free editing');
+ await page.locator('nav [data-page="providers"]').click();await page.locator('#model').fill('browser unaffected');
+ check(w.requests.length===count,'external browser never sends an editing ticket');
+ check(errors.length===0,'recovery leaves the actual page free of script errors');
+ const output=path.join(__dirname,'../artifacts/input-recovery-20261101/ui-tests.json');fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify({passed:checks.length,checks,realGame:false,systemClipboardUsed:false,cloudCalls:0},null,2));
+}finally{if(browser)await browser.close();w.server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

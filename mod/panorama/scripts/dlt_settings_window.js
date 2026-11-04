@@ -185,6 +185,10 @@ var DLTSettingsKeepOpen = function () { return true; };
         if (formFocusSeen) flags |= 128;
         if (editor) flags |= 256;
         try { if (editor && valid(editor.entry) && editor.entry.BHasKeyFocus && editor.entry.BHasKeyFocus()) flags |= 512; } catch (_) {}
+        if (editor && editor.centered) flags |= 1024;
+        if (editor && editor.phase === 'loading') flags |= 2048;
+        if (editor && editor.phase === 'returning') flags |= 4096;
+        if (editor && editor.phase === 'error') flags |= 8192;
         if (flags === lastInputEvidence) return;
         lastInputEvidence = flags;
         root.__dltSettingsInputEvidence = { flags: flags, revision: (root.__dltSettingsInputEvidence ? root.__dltSettingsInputEvidence.revision : 0) + 1 };
@@ -288,9 +292,14 @@ var DLTSettingsKeepOpen = function () { return true; };
     }
     function positionEditor(geometry) {
         if (!editor) return false;
+        if (editor.centered) return positionCenteredEditor();
         var origin = panelPosition(context), pageOrigin = panelPosition(page), scaleX = Number(context.actualuiscale_x), scaleY = Number(context.actualuiscale_y);
         var width = Number(page.actuallayoutwidth), height = Number(page.actuallayoutheight);
-        if (!origin || !pageOrigin || !isFinite(scaleX) || !isFinite(scaleY) || scaleX <= 0 || scaleY <= 0 || !isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) return false;
+        if (!origin || !pageOrigin || !isFinite(scaleX) || !isFinite(scaleY) || scaleX <= 0 || scaleY <= 0 || !isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) {
+            // Some game/CEF combinations do not expose usable physical geometry.
+            // A native centered surface needs neither DOM offsets nor DPI conversion.
+            editor.centered = true; return positionCenteredEditor();
+        }
         var g = geometry, sx = width / g[0] / scaleX, sy = height / g[1] / scaleY;
         var signature = g.join(',') + ':' + pageOrigin.x + ':' + pageOrigin.y + ':' + origin.x + ':' + origin.y + ':' + width + ':' + height + ':' + scaleX + ':' + scaleY;
         if (signature === editor.positionSignature) return true;
@@ -309,6 +318,23 @@ var DLTSettingsKeepOpen = function () { return true; };
         }
         editor.errorPanel.style.position = Math.max(0, (g[2] - left) * sx) + 'px ' + Math.max(0, Math.min((g[3] + g[5] - top) * sy + 4, (bottom - top) * sy - 72)) + 'px 0px';
         editor.panel.SetHasClass('InlineClipped', !shown);
+        return true;
+    }
+    function positionCenteredEditor() {
+        if (!editor) return false;
+        if (editor.positionSignature !== 'centered') {
+            editor.positionSignature = 'centered';
+            editor.panel.SetHasClass('DialogEditor', true); editor.panel.SetHasClass('InlineClipped', false);
+            editor.panel.style.position = '0px 0px 0px'; editor.panel.style.width = '640px'; editor.panel.style.height = 'fit-children';
+            for (var i = 0; i < 2; i++) {
+                var entry = i ? editor.multi : editor.single;
+                entry.style.position = '0px 0px 0px'; entry.style.width = '100%'; entry.style.height = i ? '168px' : '54px';
+                entry.style.fontSize = '18px'; entry.style.paddingTop = '10px'; entry.style.paddingRight = '12px';
+                entry.style.paddingBottom = '10px'; entry.style.paddingLeft = '12px';
+            }
+            editor.errorPanel.style.position = '0px 0px 0px'; editor.errorPanel.style.width = '100%';
+            editor.errorPanel.visible = true; editor.status.text = '原位定位不可用，已改为居中输入。输入完成后点击回填。';
+        }
         return true;
     }
     function focusEditor() {
@@ -339,7 +365,8 @@ var DLTSettingsKeepOpen = function () { return true; };
         if (!keepCommand && root.__dltNativeEditorCommand && root.__dltNativeEditorCommand.id === previous.id) root.__dltNativeEditorCommand = null;
         if (root.__dltNativeEditorReply && root.__dltNativeEditorReply.id === previous.id) root.__dltNativeEditorReply = null;
         try { if (valid(previous.panel) && previous.ownsContext && previous.panel.SetTopOfInputContext) previous.panel.SetTopOfInputContext(false); } catch (_) {}
-        try { previous.single.text = ''; previous.multi.text = ''; previous.panel.RemoveClass('ShowEditor'); } catch (_) {}
+        try { previous.single.text = ''; previous.multi.text = ''; previous.panel.RemoveClass('ShowEditor'); previous.panel.RemoveClass('DialogEditor'); } catch (_) {}
+        inputEvidence();
     }
     function startEditor(signal) {
         var id = signal.id;
@@ -370,6 +397,7 @@ var DLTSettingsKeepOpen = function () { return true; };
     function queueEditorCommit(force) {
         var current = editor;
         if (!current || current.phase !== 'editing') return;
+        if (current.centered && !force) return;
         if (force) current.forceCommit = true;
         if (current.commitScheduled) return;
         current.commitScheduled = true;
@@ -403,6 +431,7 @@ var DLTSettingsKeepOpen = function () { return true; };
                         if (editor.entry.SetMaxChars) editor.entry.SetMaxChars(result.maxLength);
                         editor.entry.text = result.value; editor.entry.enabled = true;
                         editor.phase = 'editing'; editor.status.text = ''; editor.apply.enabled = true;
+                        if (editor.centered) { editor.errorPanel.visible = true; editor.status.text = '原位定位不可用，已改为居中输入。输入完成后点击回填。'; editor.applyLabel.text = '回填'; }
                         if (!positioned) { editorError('无法定位文字框，请重新加载设置或暂用浏览器编辑。'); return; }
                         if (!signal.commit) focusEditor();
                     }
@@ -411,6 +440,7 @@ var DLTSettingsKeepOpen = function () { return true; };
         }
         if (editor && editor.phase === 'editing' && signal.commit) queueEditorCommit(true);
         if (editor && (editor.phase === 'loading' || editor.phase === 'returning') && Date.now() - editor.sentAt > 8000) editorError('后台响应超时，编辑内容仍保留；可以重试或取消。');
+        inputEvidence();
     }
     var titleEvents = ['HTMLChangedTitle', 'HTMLTitle'];
     for (var e = 0; e < titleEvents.length; e++) {

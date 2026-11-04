@@ -1,7 +1,7 @@
 {
-  "version": "0.7.0",
-  "buildId": "0.7.0-43be0c721956",
-  "featureRevision": "native-settings-scene-composition-autosave-isolated-native-send",
+  "version": "0.7.1",
+  "buildId": "0.7.1-bcfc41aa5064",
+  "featureRevision": "settings-input-recovery-and-explicit-secret-paste",
   "files": [
     {
       "file": ".gitattributes",
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "57728e75cffa01c2d375955479e1cbfaca6c7e636e101c85857d5ff4c808e803"
+      "sha256": "9b9f4e03b5584058cffa105ad752368b8fb9ae51ce241cfb3e51e65a03bfada1"
     },
     {
       "file": ".gitignore",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "dada090c509eac9794277d2bd515703e2df1a62ab81f706d4dcce65381d1a383"
+      "sha256": "5644b1b3e219eac047b59c8c69d2bb7b0ebbd1629d3c519893615a66f2fdc61f"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "23c9d722e5b25d8433f7d749cd87247d60fc5dfb4cf435b379b7db6e9ba0cbbc"
+      "sha256": "c0c1c97d8d515b2f61354f0962dd925cf2b1b33849da8d4f9ab6833f56f01e11"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -37,7 +37,7 @@
     },
     {
       "file": "docs/AI-INSTALL-GUIDE.md",
-      "sha256": "7690dc5cfb5a223e4af2558122bb56bf738e41258e839d53b872de70916d0bf9"
+      "sha256": "23981f655f5c60280eab09fb5e1b69af171395db764586721ca2c49f9d9c18da"
     },
     {
       "file": "docs/BACKUP-MAINTENANCE.md",
@@ -65,7 +65,7 @@
     },
     {
       "file": "docs/GUI-INSTALLER.md",
-      "sha256": "b6d935d413c4dfecb19c8bd5ab99db721389cd8ddd3424554abc097ee75658dc"
+      "sha256": "4b81bc5af3b9f1c8f142e21fc4497cb4467d958ec7af4019a756f483e9ea1b7f"
     },
     {
       "file": "docs/images/chat-bilingual.png",
@@ -89,7 +89,7 @@
     },
     {
       "file": "docs/README.md",
-      "sha256": "d258b19057a0e3f16e576099c15f13c9fc47ec09e837dfba9a74c253b3c7a1e0"
+      "sha256": "2b7d77dcdfba9c6ee50bcbd2c223eb4cf6a0184465c6882a84fbc4b7299824fe"
     },
     {
       "file": "docs/SOURCE-AUDIT.md",
@@ -97,7 +97,7 @@
     },
     {
       "file": "docs/TEST-REPORT.md",
-      "sha256": "8498dec514fc147aeaabd985796e9f10bdb039b2ba910656b8a159d462e0d889"
+      "sha256": "f0217eb328c945721eda5ce52ba25fdb3f8ead6f7b5c832db46f1600155fcf52"
     },
     {
       "file": "docs/UPDATE-0.6.23.1.md",
@@ -120,12 +120,16 @@
       "sha256": "4a2f51d3ca335d1f08aa638dc1782874427754afc3f7fd849ed9ade63761ae31"
     },
     {
+      "file": "docs/UPDATE-0.7.1.md",
+      "sha256": "095a899cc5ef95fe1091daf960ba3cc7a2e4bf694b4987ad339cc7375ac77b90"
+    },
+    {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "ce898113377e6c25d522ac13e33bedf6036a82d3e62ba0b3a81167d922ce7747"
+      "sha256": "33784bd6a183d282ae4643e84da3d8cb21487b4f4d65638fb1602d48860c5999"
     },
     {
       "file": "docs/USER-GUIDE.md",
-      "sha256": "9398c8a629cc50a28ba5d0ce493aa1dba726fc5cad1befc9eafb354c9ca487e2"
+      "sha256": "06a2c382132316025d6d0df6a07df3dc85ba54cbf24d2d7b824f70e90f5a3183"
     },
     {
       "file": "docs/VALIDATION.md",
@@ -173,7 +177,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "d35b92f26f20584a9a045ce0c73eb5993fb00a93e4aad1e47a255242bb73928d"
+      "sha256": "c72dd882f4ad725a9c0021de2262e243c9c8de3f3e2045b81f9bcf904c850b8f"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -185,7 +189,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_settings_window.js",
-      "sha256": "7878ba68d86d41a69c341b122f3b64401735f5878aa32f28377b0d1ec5b36b82"
+      "sha256": "5aee878a845bcf6a293023b99374cedb1a63d95ae3cee8341b1168b34209c505"
     },
     {
       "file": "mod/panorama/styles/dlt_chat.css",
@@ -201,7 +205,7 @@
     },
     {
       "file": "mod/panorama/styles/dlt_settings_window.css",
-      "sha256": "5106be9dbfe5e82c4977f99a2f5d4f63bf8bfaaf3c475547a33b3a9485504776"
+      "sha256": "a4dcea0c1ebfd165dc4de22e569f021726e5da8622369464b2d0849331b74d5d"
     },
     {
       "file": "NOTICE",
@@ -209,7 +213,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "c9ae10f0090a5e2e53c8a2d887c9aa7618dee0ca1bb1bf895becb632d60d9286"
+      "sha256": "320f3d23c83d56d57c3c642a6094e15576394c65d48ba6f2c62cfb92f11b01e3"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
@@ -253,7 +257,7 @@
     },
     {
       "file": "scripts/export_source.py",
-      "sha256": "e6527115b4703077b70aec8e0f97373e5ea5e0b11e4420ce668a0b361170c1cd"
+      "sha256": "fb18480091137abc4337dbcd8ff4cbbaab4eb978833b5d2186251889b8692c56"
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
@@ -377,11 +381,11 @@
     },
     {
       "file": "src/Bridge/Bridge.csproj",
-      "sha256": "6a20d3fe41a5ee5a67756361d29f16fe16f90a5b79525f9c27fcee997120e122"
+      "sha256": "8cc175e2d91777367d1c4ccd99744fefa01c24f6a5e34d361d2556523083d8e3"
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "cd4051a07b8eac54b5adbf18c766ef819ad52251fd95a8af6174ced74e0a4764"
+      "sha256": "07389ee1814fa4d13c59851a0bc91e70f8054896416eb6a5d38409d31c3ddb44"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -505,7 +509,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "3884d5e3c936542381251bb3da2306a489ef936405cc5418dea6ab52fc83bc13"
+      "sha256": "fed903cd748301b4e7359dd2a132607c43064564b5ca9a5ade2fd8ffcccad6d7"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -526,6 +530,10 @@
     {
       "file": "src/Bridge/QuickMessages.cs",
       "sha256": "d3ea7758da3932183dbfb9e5e7d363ed9d4bdd40460ca88412f6800935a38b49"
+    },
+    {
+      "file": "src/Bridge/SecretClipboard.cs",
+      "sha256": "d2c45602d762419d1e7be0e39c4fc846176975b0d42a77c212f7d74df41005da"
     },
     {
       "file": "src/Bridge/StartupCompatibility.cs",
@@ -577,7 +585,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "c094f4e84e1c41fee11c7f46f42ce9b527f039b78ca17f1023d0a2eb1231ae16"
+      "sha256": "223239ae4101ad3116be153c5c87b71a4f8f2319c4117f1a9ed7e6a706ef61e1"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -597,7 +605,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/style.css",
-      "sha256": "04173bf01c68b0dbbcf1f22bf0d3c0551085036d5a923f14b216f636b5441883"
+      "sha256": "a9f8d3fae337eb583463f62dc881e70efa24f930b635d9a216dc009c63532afa"
     },
     {
       "file": "src/Installer/app.manifest",
@@ -605,7 +613,7 @@
     },
     {
       "file": "src/Installer/Installer.csproj",
-      "sha256": "6ed74bc54fb8b1883d56f4319dd62eda04b190520f2f692c3c861547a9ce3f64"
+      "sha256": "2d6823f69571645794e42a344a1ab170881128892e3e7a32fad50a6530c190d6"
     },
     {
       "file": "src/Installer/InstallerAnnouncement.cs",
@@ -657,7 +665,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "83d47217158e55fdf0fc6f1d921c0f294eb6aa2393bc531af41023364b673611"
+      "sha256": "1778713efbb5d501e147a9246f7f43f9d6995eb5e4044e0d9bcad7810ef54a21"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -900,6 +908,10 @@
       "sha256": "05fe9eed9bcdc3af7f856cba5a2d07651bfa1696a8de478765bb368f96d24187"
     },
     {
+      "file": "tests/input-recovery-ui.test.cjs",
+      "sha256": "7407b6375a2caa46fdfc96309b49dd56ec6c9b3e9d9e4deeec627602018165a1"
+    },
+    {
       "file": "tests/install-safety.test.ps1",
       "sha256": "5815ede17d9608c33cbe9319769cced929158108c4dd0d98846d15c912ed3d6f"
     },
@@ -917,7 +929,7 @@
     },
     {
       "file": "tests/InstallerTests/Program.cs",
-      "sha256": "bf6096d2faf120d36f1afd3545837ca8ec9523dcbcb920c997fc7209152fd6e2"
+      "sha256": "5fe6f45eb0c43868d293e006ae25fc20b3381212fc7b8b9beaf63602d8e7acd7"
     },
     {
       "file": "tests/keepalive-http-ui.test.cjs",
@@ -997,11 +1009,11 @@
     },
     {
       "file": "tests/native-editor-ui.test.cjs",
-      "sha256": "43021cd1198ab8c8b2612f08f4b8de755d13cb341d84864fc06edde4380a8935"
+      "sha256": "1b32917ca6098d273640359cd243e60289920f3e660ebdd4fd1539d20965def8"
     },
     {
       "file": "tests/native-editor-window.test.cjs",
-      "sha256": "27013a8a01ba0b94312ba2f37586e6ff88bb9684acd942e5e125adf486df4bd7"
+      "sha256": "5f7100565894f5252a90ad9ce5a5d1b23575f276a4cf10def83b3cf54d618e73"
     },
     {
       "file": "tests/native-hero-identity.test.cjs",
@@ -1168,6 +1180,22 @@
       "sha256": "d7ba5d1c10cdfa69a0027813c80cd022c6a4fe2c7ca69b92b5687036b8f3c31f"
     },
     {
+      "file": "tests/secret-clipboard-http.test.cjs",
+      "sha256": "1fa87e5f08b717edf4fab3d1fbb64da31f0d1498c24965c68050a89316a50afb"
+    },
+    {
+      "file": "tests/secret-clipboard-ui.test.cjs",
+      "sha256": "ac1eae286a294a97815956a73ffe78c1c6db2efa801cae09f732599ec4a4cc4f"
+    },
+    {
+      "file": "tests/SecretClipboardTests/Program.cs",
+      "sha256": "457e2a9454410977261285e4c5fe8f2e3e059e810a26cb269f662de49d7ded8a"
+    },
+    {
+      "file": "tests/SecretClipboardTests/SecretClipboardTests.csproj",
+      "sha256": "ff14f57392fc7f999c0c8bb8dff773bebe1909a3a281343715f8624e8664ace2"
+    },
+    {
       "file": "tests/send-isolation.test.cjs",
       "sha256": "459d9711157773c549b712bdca2e31833dd404041b7dcf8f598a4e9a73ff2f6a"
     },
@@ -1297,7 +1325,7 @@
     },
     {
       "file": "version.json",
-      "sha256": "9e87a36923afe3dc113a012d03e4c53c2939fb3a1b2fe00d205d391a232268b3"
+      "sha256": "3175d5b333c3a3aea16c8278a20394fffe93345e399628ff1d20e453a319a6e9"
     }
   ],
   "lineEndings": "Git-normalized LF for text; binary bytes unchanged. Runtime source ZIP retains its own byte-exact manifest."

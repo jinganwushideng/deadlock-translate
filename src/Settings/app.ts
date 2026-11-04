@@ -7,7 +7,7 @@ let nativeBackgroundAvailable=inGame&&new URLSearchParams(location.search).get('
 function backgroundSuffix(){return nativeBackgroundAvailable?':background:'+((window.DltSettingsBackground?.mode())||'static'):'';}
 function refreshSettingsBackground(){window.DltSettingsBackground?.apply($<HTMLSelectElement>('settingsBackgroundMode').value||'static',{nativeAvailable:inGame&&nativeBackgroundAvailable});}
 let gameRecoveryUntil=0,surfaceProbeUntil=0,surfaceProbeSequence=0;
-type NativeEditSession={id:string,field:HTMLInputElement|HTMLTextAreaElement,before:string,timer:ReturnType<typeof setTimeout>|null,commitRequested:boolean,geometry:string,completion:Promise<boolean>,complete:(applied:boolean)=>void,resize:ResizeObserver|null};
+type NativeEditSession={id:string,field:HTMLInputElement|HTMLTextAreaElement,before:string,timer:ReturnType<typeof setTimeout>|null,watchdog:ReturnType<typeof setTimeout>|null,commitRequested:boolean,geometry:string,completion:Promise<boolean>,complete:(applied:boolean)=>void,resize:ResizeObserver|null};
 let nativeEditorSession:NativeEditSession|null=null,nativeEditorOwner='',nativeEditIntent=0;
 function publishSettingsState(state:'ready'|'offline'|'error'|'reconnect'){if(settingsReloadRequested)return;if(state==='ready'&&Date.now()<gameRecoveryUntil)return;if(state==='reconnect')gameRecoveryUntil=Date.now()+1200;if(inGame&&!settingsClosing){if(nativeEditorSession?.id)publishNativeGeometry(true);else document.title='DLTSETTINGS:'+(surfaceProbeUntil>Date.now()&&state==='ready'?'surfaceprobe:'+surfaceProbeSequence:state+':'+(++settingsSignal))+backgroundSuffix()+saveSuffix()+windowLoadSuffix();}}
 type Term={source:string,target:string,english:string,kind:string,ambiguous:boolean,legacyTarget?:string};
@@ -21,7 +21,7 @@ let terms:Term[]=[];let current:Record<string,unknown>={};let clearAzure=false,c
 function notice(text:string,error=false){$('notice').textContent=text;$('notice').classList.toggle('error',error);}
 class ApiError extends Error {constructor(message:string,public status:number,public data?:any){super(message);}}
 async function api(path:string,method='GET',data?:unknown){
- const bounded=path==='display-preview'||path.startsWith('native-editor')||method==='GET'&&(['status','diagnostics','config','terms','outgoing'].includes(path)||path.startsWith('hotkey/recording/'));
+ const bounded=path==='settings/paste-secret'||path==='display-preview'||path.startsWith('native-editor')||method==='GET'&&(['status','diagnostics','config','terms','outgoing'].includes(path)||path.startsWith('hotkey/recording/'));
  const controller=bounded&&typeof AbortController!=='undefined'?new AbortController():null;
  const timer=controller?setTimeout(()=>controller.abort(),5000):null;
  try{const res=await fetch('/api/'+path,{method,signal:controller?.signal,headers:{'Content-Type':'application/json','X-DLT-Request':'1',...(path==='config'&&method==='PUT'&&settingsRevision?{'If-Match':'"'+settingsRevision+'"'}:{})},body:data===undefined?undefined:JSON.stringify(data)});let body:any;try{body=await res.json();}catch{body={};}if(!res.ok)throw new ApiError(body.error||'连接失败，请重新通过设置按钮打开页面',res.status,body);return body;}finally{if(timer!==null)clearTimeout(timer);}
@@ -42,6 +42,20 @@ document.querySelectorAll<HTMLButtonElement>('.subnav button').forEach(b=>b.addE
 document.querySelectorAll<HTMLButtonElement>('[data-go-page]').forEach(b=>b.addEventListener('click',()=>void selectPage(b.dataset.goPage!)));
 function bind(id:string,action:()=>Promise<unknown>|void){$(id).addEventListener('click',async()=>{const button=$<HTMLButtonElement>(id);button.disabled=true;try{await action();}catch(e){notice(String((e as Error).message),true);}finally{button.disabled=false;}});}
 bind('clearAzure',()=>{clearAzure=true;markSettingsDraft();notice('将自动保存并清除 Azure 密钥。');});bind('clearLlm',()=>{clearLlm=true;markSettingsDraft();notice('将自动保存并清除大模型密钥。');});
+async function pasteSecret(fieldId:'llmKey'|'azureKey'){
+ if(!settingsInitialized||settingsClosing)return;
+ await commitNativeEditor();
+ const field=$<HTMLInputElement>(fieldId),before=field.value,epoch=settingsEpoch;
+ const result=await api('settings/paste-secret','POST',{field:fieldId});
+ if(settingsClosing||!field.isConnected||field.value!==before||settingsEpoch!==epoch)throw new Error('密钥框或设置已变化，本次粘贴未覆盖新输入。');
+ if(typeof result.value!=='string'||!result.value.length||result.value.length>4096)throw new Error('粘贴结果无效，原密钥保持不变。');
+ field.value=result.value;field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
+ if(fieldId==='llmKey')clearLlm=false;else clearAzure=false;
+ // Focus stays on the explicit button, letting the normal conditional save run.
+ notice('密钥已填入遮罩框，等待自动保存。');scheduleAutoSave();
+}
+bind('pasteLlmKey',()=>pasteSecret('llmKey'));
+bind('pasteAzureKey',()=>pasteSecret('azureKey'));
 bind('test',async()=>{await save();$('testResult').textContent='正在翻译…';const response=await api('test','POST',{direction:$<HTMLSelectElement>('testDirection').value,provider:$<HTMLSelectElement>('testProvider').value,text:$<HTMLInputElement>('testText').value});$('testResult').textContent=response.translation+'\n'+response.elapsedMs+' ms';});
 function drawTerms(){
  const search=$<HTMLInputElement>('termSearch').value.toLowerCase();const body=$('termRows');clearChildren(body);
@@ -228,9 +242,10 @@ async function commitNativeEditor(){
 function finishNativeEditor(session:NativeEditSession,message:string,error=false,applied=false){
  if(nativeEditorSession!==session)return;
  if(session.timer!==null)clearTimeout(session.timer);
+ if(session.watchdog!==null)clearTimeout(session.watchdog);
  session.resize?.disconnect();session.field.classList.remove('native-inline-active');session.complete(applied);
  nativeEditorSession=null;$('cancelNativeInput').hidden=true;$('nativeInputStatus').textContent=message;
- publishSettingsState('ready');if(error)notice(message,true);
+ publishSettingsState('ready');if(error){showInputRecovery(message);notice(message,true);}
 }
 async function cancelNativeEditor(){
  const session=nativeEditorSession;if(!session)return;
@@ -258,11 +273,16 @@ async function pollNativeEditor(session:NativeEditSession){
    try{await api(nativeEditorPath(session.id),'DELETE');}catch{}return;
   }
   if(result.state==='cancelled'){finishNativeEditor(session,'已取消编辑，页面中的原内容保持不变。');return;}
-  $('nativeInputStatus').textContent=result.state==='editing'?'正在原位置编辑；移开焦点自动回填，Esc 撤销本次编辑。':'正在接入原位中文输入…';
+  if(result.state==='editing'){
+   if(session.watchdog!==null){clearTimeout(session.watchdog);session.watchdog=null;}
+   session.field.classList.add('native-inline-active');
+  }
+  $('nativeInputStatus').textContent=result.state==='editing'?'正在原生输入框编辑；移开焦点自动回填，Esc 撤销本次编辑。':'正在接入原位中文输入…';
  }catch(e){
   if(nativeEditorSession!==session)return;
   if(e instanceof ApiError&&e.status===404){finishNativeEditor(session,'原生编辑请求已过期。请确认后台与 VPK 已成套更新，再点击输入框重试。',true);return;}
   $('nativeInputStatus').textContent='暂时无法取得编辑结果，原内容仍保留；可以重试或取消当前编辑。';
+  showInputRecovery('输入回传暂时失败，原内容仍保留。可等待恢复，或取消本次原生编辑后改用网页输入/粘贴。');
  }
  if(nativeEditorSession===session){publishNativeGeometry();session.timer=setTimeout(()=>void pollNativeEditor(session),150);}
 }
@@ -272,8 +292,9 @@ async function beginNativeEditor(field:HTMLInputElement|HTMLTextAreaElement){
  if(nativeEditorSession)await commitNativeEditor();
  if(intent!==nativeEditIntent||settingsClosing||!field.isConnected||field.disabled||field.readOnly||!field.getClientRects().length||getComputedStyle(field).visibility==='hidden'||Number(getComputedStyle(field).opacity)===0||nativeEditorSession)return;
  let complete!:(applied:boolean)=>void;const completion=new Promise<boolean>(resolve=>{complete=resolve;});
- const session:NativeEditSession={id:'',field,before:field.value,timer:null,commitRequested:false,geometry:'',completion,complete,resize:null};nativeEditorSession=session;
- field.classList.add('native-inline-active');
+ const session:NativeEditSession={id:'',field,before:field.value,timer:null,watchdog:null,commitRequested:false,geometry:'',completion,complete,resize:null};nativeEditorSession=session;
+ // Keep the original field readable until the native side actually claims it.
+ session.watchdog=setTimeout(()=>{if(nativeEditorSession===session)showInputRecovery('原生输入接管较慢；若看不到编辑框，可取消本次编辑并切换网页输入/粘贴。网页原内容仍保留。');},4000);
  $('cancelNativeInput').hidden=false;$('nativeInputStatus').textContent='正在准备原生输入框…';
  try{
   await stopRecording();if(nativeEditorSession!==session||settingsClosing)return;
@@ -289,10 +310,26 @@ async function beginNativeEditor(field:HTMLInputElement|HTMLTextAreaElement){
  }catch(e){finishNativeEditor(session,'无法打开原生输入框：'+(e as Error).message,true);}
 }
 $('nativeInputHelp').hidden=!inGame;
+const nativeInputPreference='dlt.native-input-enabled.v1';
+if(inGame){try{$<HTMLInputElement>('nativeInputEnabled').checked=sessionStorage.getItem(nativeInputPreference)!=='off';}catch{}}
+function rememberNativeInput(){try{sessionStorage.setItem(nativeInputPreference,$<HTMLInputElement>('nativeInputEnabled').checked?'on':'off');}catch{}}
+function showInputRecovery(message?:string){if(!inGame)return;$('inputRecovery').hidden=false;if(message)$('inputRecoveryStatus').textContent=message;}
+$('inputRecoveryButton').hidden=!inGame;
+bind('inputRecoveryButton',()=>showInputRecovery('原生输入没有反应时，可改用网页输入/粘贴；取消只撤销尚未回填的原生草稿，网页现有内容保留。'));
+bind('directSettingsInput',()=>{
+ const field=nativeEditorSession?.field;
+ $<HTMLInputElement>('nativeInputEnabled').checked=false;rememberNativeInput();void cancelNativeEditor();
+ showInputRecovery('已改为网页输入/粘贴；未回填的原生编辑已撤销，网页原内容保留。可尝试右键粘贴；仍不可用时请在程序目录运行 Settings.cmd，用浏览器编辑。');
+ if(field?.isConnected)field.focus();
+});
+bind('restoreNativeInput',()=>{
+ $<HTMLInputElement>('nativeInputEnabled').checked=true;rememberNativeInput();
+ showInputRecovery('已恢复原生输入，请重新点击文字框。数字、下拉框和密钥框保持原有操作。');
+});
 function requestNativeCommitFromPointer(target:EventTarget|null){
  if(!inGame||!nativeEditorSession||target===nativeEditorSession.field)return;
  if(target instanceof Element){
-  if(target.closest('#cancelNativeInput,#nativeInputEnabled'))return;
+  if(target.closest('#cancelNativeInput,#nativeInputEnabled,#inputRecoveryButton,#inputRecovery'))return;
   const label=target.closest('label');if(label?.control===nativeEditorSession.field)return;
  }
  nativeEditorSession.commitRequested=true;publishNativeGeometry(true);
@@ -307,7 +344,15 @@ document.addEventListener('mousedown',event=>{
 },true);
 // The embedded browser can deliver activation/click after a native input owned
 // the preceding mouse-down. The click must still finish the old editor.
-document.addEventListener('click',event=>requestNativeCommitFromPointer(event.target),true);
+document.addEventListener('click',event=>{
+ requestNativeCommitFromPointer(event.target);
+ // Some embedded-browser builds deliver activation without mousedown/focusin.
+ const field=event.target;
+ if(inGame&&settingsInitialized&&!settingsClosing&&$<HTMLInputElement>('nativeInputEnabled').checked&&event.button===0&&
+ (field instanceof HTMLTextAreaElement||field instanceof HTMLInputElement&&['text','search','url','email','tel'].includes(field.type))&&!field.disabled&&!field.readOnly){
+  event.preventDefault();void beginNativeEditor(field).catch(error=>notice((error as Error).message,true));
+ }
+},true);
 // Labels and keyboard focus can activate an input without a mousedown on the
 // field itself. Route those through the same single native editor transaction.
 document.addEventListener('focusin',event=>{
@@ -320,9 +365,10 @@ document.addEventListener('focusin',event=>{
 document.addEventListener('scroll',()=>publishNativeGeometry(),true);
 window.addEventListener('resize',()=>publishNativeGeometry());
 bind('cancelNativeInput',()=>cancelNativeEditor());
-$('nativeInputEnabled').addEventListener('change',()=>{if(!$<HTMLInputElement>('nativeInputEnabled').checked)void cancelNativeEditor();});
+$('nativeInputEnabled').addEventListener('change',()=>{rememberNativeInput();if(!$<HTMLInputElement>('nativeInputEnabled').checked)void cancelNativeEditor();});
 window.addEventListener('pagehide',()=>{
  const session=nativeEditorSession;if(!session)return;if(session.timer!==null)clearTimeout(session.timer);
+ if(session.watchdog!==null)clearTimeout(session.watchdog);
  session.resize?.disconnect();session.field.classList.remove('native-inline-active');session.complete(false);nativeEditorSession=null;
  if(session.id)void fetch('/api/'+nativeEditorPath(session.id),{method:'DELETE',keepalive:true,headers:{'X-DLT-Request':'1'}});
 });

@@ -183,6 +183,11 @@ app.MapPost("/api/community/bilibili",()=>{
     }
 });
 app.MapGet("/api/config",()=>config.Public());
+app.MapPost("/api/settings/paste-secret",(SecretPasteRequest request)=>{
+    if(!SecretClipboard.ValidField(request.Field))return Results.BadRequest(new{error="只允许粘贴大模型或 Azure 密钥。",code="clipboard-field"});
+    try{return Results.Ok(new{value=SecretClipboard.ReadKey()});}
+    catch(SecretClipboardException ex){return Results.Json(new{error=ex.Message,code=ex.Code},statusCode:409);}
+});
 app.MapGet("/api/languages",()=>TranslationLanguages.Presets);
 app.MapPost("/api/display-preview",(DisplayPreviewOptions value)=>!engine.Connected ? Results.Conflict(new{error="游戏聊天尚未连接，无法显示游戏内测试。请启动游戏并确认翻译已连接后再试。"}) : Volatile.Read(ref previewClientReady)==0 ? Results.Conflict(new{error="游戏内 VPK 尚不支持显示测试，请成套覆盖本次完整包并重启游戏；只替换后台不会更新游戏脚本。"}) : Results.Ok(displayPreview.Start(value)));
 app.MapDelete("/api/display-preview",()=>Results.Ok(displayPreview.Stop()));

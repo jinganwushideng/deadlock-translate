@@ -35,6 +35,9 @@
 .DltWindowTitle, .DltWindowButton Label { color: #eee7d5; }
 .DltWindowButton { background-color: #49483e; border: 1px solid #999384; }
 .DltNativeEditEntry { color: #f0e9d8; background-color: #49483e; border: 2px solid #999384; border-radius: 8px; }
+.DltNativeEditor.DialogEditor { horizontal-align: center; vertical-align: center; max-width: 90%; max-height: 85%; flow-children: down; padding: 18px; background-color: #242722; border: 2px solid #999384; border-radius: 8px; }
+.DltNativeEditor.DialogEditor .DltNativeEditEntry { ignore-parent-flow: false; }
+.DltNativeEditor.DialogEditor .DltNativeEditError { margin-top: 10px; background-color: none; border: 0px; }
 .DltSurfaceProbeInfo { visibility: collapse; horizontal-align: center; vertical-align: top; margin-top: 160px; width: 740px; padding: 18px; z-index: 500; background-color: #141414ee; }
 .DltSurfaceProbeInfo.DltProbeActive { visibility: visible; }
 .DltSurfaceProbeInfo Label { width: 100%; color: #f0e9d8; font-size: 22px; white-space: normal; }
