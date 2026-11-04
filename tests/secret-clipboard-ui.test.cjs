@@ -27,6 +27,7 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',name)));
 });
 const checks=[];function check(ok,name){assert(ok,name);checks.push(name);console.log('PASS '+name);}
+async function until(ready){const deadline=Date.now()+6000;while(!ready()&&Date.now()<deadline)await new Promise(r=>setTimeout(r,20));assert(ready(),'expected clipboard save did not reach the fixture');}
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -34,12 +35,12 @@ const checks=[];function check(ok,name){assert(ok,name);checks.push(name);consol
  await page.locator('nav [data-page="providers"]').click();await page.waitForTimeout(1100);
  check(clips.length===0,'opening settings and status polling never read the clipboard');
  check(await page.locator('#llmKey').getAttribute('type')==='password'&&await page.locator('#azureKey').getAttribute('type')==='password','both credentials retain password masking');
- await page.locator('#pasteLlmKey').click();await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ await page.locator('#pasteLlmKey').click();await until(()=>secrets.llm===fake.llmKey);await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存'&&document.querySelector('#llmKey').value==='');
  check(clips.length===1&&clips[0].method==='POST'&&JSON.stringify(clips[0].body)==='{"field":"llmKey"}','one explicit click requests one field without sending clipboard data in the request');
  check(secrets.llm===fake.llmKey&&secrets.azure==='','only the chosen provider secret is saved');
  check(await page.locator('#llmKey').inputValue()===''&&(await page.locator('#llmKey').getAttribute('placeholder')).includes('已保存'),'successful save clears the transient field and shows only a saved marker');
  check(!(await page.title()).includes(fake.llmKey)&&!(await page.locator('body').innerText()).includes(fake.llmKey)&&nativeRequests===0,'credential bypasses native game drafts and all visible title/status text');
- const llm=secrets.llm;await page.locator('#pasteAzureKey').click();await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ const llm=secrets.llm;await page.locator('#pasteAzureKey').click();await until(()=>secrets.azure===fake.azureKey);await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存'&&document.querySelector('#azureKey').value==='');
  check(secrets.azure===fake.azureKey&&secrets.llm===llm,'Azure paste leaves the other saved credential unchanged');
  const before=writes.length;fail=true;await page.locator('#pasteLlmKey').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('剪贴板没有文字'));await page.waitForTimeout(600);
  check(secrets.llm===llm&&writes.length===before,'empty clipboard does not clear or rewrite an existing key');

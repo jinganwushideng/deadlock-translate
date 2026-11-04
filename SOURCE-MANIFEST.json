@@ -1185,7 +1185,7 @@
     },
     {
       "file": "tests/secret-clipboard-ui.test.cjs",
-      "sha256": "ac1eae286a294a97815956a73ffe78c1c6db2efa801cae09f732599ec4a4cc4f"
+      "sha256": "479d54474e4bedabeb62ac9551814a493f45c84241415922c5d6848aafb8418e"
     },
     {
       "file": "tests/SecretClipboardTests/Program.cs",
