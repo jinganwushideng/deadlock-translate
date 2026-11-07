@@ -37,30 +37,34 @@ public sealed class ReleaseNotesWindow : Form
         columns.Controls.Add(card,0,0);columns.Controls.Add(CommunityPanel(),1,0);main.Controls.Add(columns,0,3);
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true, Padding = new Padding(0, 14, 0, 0), Margin = Padding.Empty };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        footer.Controls.Add(new Label { Text = "功能简记；完整记录随运行包 CHANGELOG.md 提供。", AutoSize = true, ForeColor = InstallerColors.Muted, Anchor = AnchorStyles.Left, Font = new Font(Font.FontFamily, 8.5f) }, 0, 0);
+        var project = new ActionButton(ButtonKind.Quiet)
+        {
+            Name = "openGitHubProject", Text = "GitHub 项目 ↗", Font = Font,
+            Anchor = AnchorStyles.Left, MinimumSize = new Size(138, 40), Margin = Padding.Empty,
+            AccessibleDescription = CommunityLinks.GitHubProject
+        };
+        project.Click += (_, _) => OpenProject(this);
+        footer.Controls.Add(project, 0, 0);
         var close = new ActionButton(ButtonKind.Primary) { Text = announcement?"知道了，继续":"关闭", Font = Font, MinimumSize = new Size(120, 40), Margin = Padding.Empty, DialogResult = DialogResult.Cancel };
         close.Click += (_, _) => Close(); footer.Controls.Add(close, 1, 0); main.Controls.Add(footer, 0, 4);
         Controls.Add(main); CancelButton = close; versions.SelectedIndex = 0;
     }
     private Control CommunityPanel(){
-        var panel=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Margin=new Padding(16,0,0,0),Padding=new Padding(12),BackColor=InstallerColors.Card};
+        var panel=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,Margin=new Padding(16,0,0,0),Padding=new Padding(12),BackColor=InstallerColors.Card};
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        for(var i=0;i<5;i++)panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));panel.RowStyles.Add(new RowStyle(SizeType.Percent,100));panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for(var i=0;i<4;i++)panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));panel.RowStyles.Add(new RowStyle(SizeType.Percent,100));panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.Controls.Add(new Label{Text="反馈与及时更新",AutoSize=true,ForeColor=InstallerColors.Ink,Font=new Font(Font,FontStyle.Bold),Margin=new Padding(0,0,0,8)},0,0);
         panel.Controls.Add(new Label{Text="QQ 群 923443423",AutoSize=true,ForeColor=InstallerColors.Ink,Margin=new Padding(0,0,0,6)},0,1);
         panel.Controls.Add(new Label{Text="加入群聊反馈问题，获取及时更新。",AutoSize=true,MaximumSize=new Size(190,0),ForeColor=InstallerColors.Muted,Margin=new Padding(0,0,0,8)},0,2);
         var copy=new ActionButton{Text="复制群号",Dock=DockStyle.Top,Height=34,Margin=new Padding(0,0,0,8)};
         copy.Click+=(_,_)=>{try{Clipboard.SetText("923443423");copy.Text="已复制 923443423";}catch{copy.Text="群号：923443423";}};panel.Controls.Add(copy,0,3);
-        var project = new ActionButton { Name = "openGitHubProject", Text = "GitHub 项目 ↗", Dock = DockStyle.Top, Height = 34, Margin = new Padding(0, 0, 0, 8), AccessibleDescription = CommunityLinks.GitHubProject };
-        project.Click += (_, _) => OpenProject(this);
-        panel.Controls.Add(project, 0, 4);
         var picture=new QrThumbnail{Name="communityQr",Dock=DockStyle.Fill,Cursor=Cursors.Hand,Margin=Padding.Empty};
         using(var stream=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("community-qr.png")){
             if(stream!=null){using var original=Image.FromStream(stream);picture.Image=new Bitmap(original);}
         }
-        picture.Click+=(_,_)=>ShowQr();panel.Controls.Add(picture,0,5);
-        var large=new ActionButton{Text="查看二维码大图",Dock=DockStyle.Top,Height=32,Margin=new Padding(0,6,0,0)};large.Click+=(_,_)=>ShowQr();panel.Controls.Add(large,0,6);
-        panel.Resize+=(_,_)=>picture.Visible=panel.ClientSize.Height>=370;
+        picture.Click+=(_,_)=>ShowQr();panel.Controls.Add(picture,0,4);
+        var large=new ActionButton{Text="查看二维码大图",Dock=DockStyle.Top,Height=32,Margin=new Padding(0,6,0,0)};large.Click+=(_,_)=>ShowQr();panel.Controls.Add(large,0,5);
+        panel.Resize+=(_,_)=>picture.Visible=panel.ClientSize.Height>=330;
         return panel;
     }
     internal static void OpenProject(IWin32Window owner)
@@ -112,6 +116,9 @@ public sealed class ReleaseNotesWindow : Form
         }
         Save("current"); window.SelectVersion("0.6.0"); Save("history");
         window.MinimumSize = Size.Empty; window.ClientSize = new Size(600, 420); Save("small");
+        var project = window.Controls.Find("openGitHubProject", true).Single();
+        if (!project.Visible || !window.RectangleToScreen(window.ClientRectangle).Contains(project.RectangleToScreen(project.ClientRectangle)))
+            throw new InvalidOperationException("The project button is outside the compact release notes window.");
         File.WriteAllText(Path.Combine(folder, "release-history-preview.json"), JsonSerializer.Serialize(new { version = InstallerVersion.Current, versions = window.VersionCount, selected = window.SelectedVersion, historyPresent = window.RenderedText.Contains("多语言收发"), installed = false, shellStarted = false }));
         window.Close();
     }

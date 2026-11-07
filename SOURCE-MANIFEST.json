@@ -1,6 +1,6 @@
 {
   "version": "0.7.2",
-  "buildId": "0.7.2-427018162098",
+  "buildId": "0.7.2-7216c2897ad2",
   "featureRevision": "installer-game-migration-and-recoverable-preflight",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "da3f50f41ad26912cea24293c38b50919545dd8c76cd7d0c9c8008b079e8cf95"
+      "sha256": "554cf5aea4c5bbf3bb019173a10764e0977ef316c3b4cad263dd4963fc4344df"
     },
     {
       "file": "CHANGELOG.md",
@@ -181,7 +181,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "2817ea80a37f69d293e615378d798f5235177b87c46e4d66c25f393a42255bce"
+      "sha256": "786511e8d44277f805152b57278b97040a034102250c6090be0668d7467967bb"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -389,7 +389,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "580922f812bf32f5d7d67e880e508039db32b527adcc92e7a098148a9ab1ba27"
+      "sha256": "752669d0562f9ab75c9ed13d863e4d64b5c47e989991330751e1a2a36bf5865c"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -649,7 +649,7 @@
     },
     {
       "file": "src/Installer/ReleaseNotesWindow.cs",
-      "sha256": "4f45ec08952f994803397ec686269a17055b855aaaffc8924683df8430a41b18"
+      "sha256": "30b56b9e6aacc3ff6c3a009bb5f15b6f97cfc2709b62fa46aa893d197eb0ec89"
     },
     {
       "file": "src/Installer/ResumeState.cs",

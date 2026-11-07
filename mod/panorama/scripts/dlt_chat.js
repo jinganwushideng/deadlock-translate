@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.2-427018162098';
+var BUILD_ID = '0.7.2-7216c2897ad2';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
