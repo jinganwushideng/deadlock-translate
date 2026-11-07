@@ -58,6 +58,7 @@ public sealed partial class Wizard
         menu.Items.Add("导出安装日志…", null, (_, _) => ExportLog());
         menu.Items.Add("以管理员权限重开…", null, (_, _) => Elevate());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("GitHub 项目 ↗", null, (_, _) => ReleaseNotesWindow.OpenProject(this));
         menu.Items.Add("关于与许可证…", null, (_, _) => ShowNotices());
         more.Click += (_, _) => menu.Show(more, new Point(0, -menu.GetPreferredSize(Size.Empty).Height));
         toolButtons.Controls.Add(more);
@@ -253,6 +254,14 @@ public sealed partial class Wizard
         var summary = Section(Mode == "install" ? Flag(plan, "installed") ? "覆盖更新" : "首次安装" : Mode == "repair" ? "修复安装" : "卸载游戏组件");
         Label(summary, Mode == "install" && Flag(plan, "installed") ? "当前 " + Str(plan, "version") + "  →  " + InstallerVersion.Current : "请核对以下位置与选项。");
         Label(summary, "游戏：" + game.Text + "\n程序：" + runtime.Text + "\n启动项：" + (configure.Checked ? "自动配置" : "手动配置") + (Mode != "uninstall" ? "\n账号：" + (user.SelectedItem?.ToString() ?? "尚未选择") : ""));
+        var correction=Field(plan,"gameCorrection");
+        if(correction.ValueKind==JsonValueKind.Object)Note(summary,Str(correction,"message")+"\n原选择："+Str(correction,"requested"));
+        var migration=Field(plan,"migration");
+        if(migration.ValueKind==JsonValueKind.Object){
+            var recovery=Section("游戏重装 / 目录迁移",Str(migration,"message"));
+            Label(recovery,"旧游戏："+Str(migration,"oldGame")+"\n当前游戏："+Str(migration,"newGame"));
+            Note(recovery,"点击执行后自动备份旧记录、重建当前游戏记录并成套恢复。旧位置只停用哈希确认的本程序 VPK，不改写其他 Mod 或旧游戏配置；失败时尝试回退。");
+        }
         var reinstall=Field(plan,"reinstall");
         if(reinstall.ValueKind==JsonValueKind.Object&&(Str(reinstall,"kind")!="fresh"||Str(reinstall,"recordState")=="invalid")){
             var recovery=Section("手动删除后的重新安装",Str(reinstall,"message"));
@@ -276,7 +285,7 @@ public sealed partial class Wizard
         var readiness=Section("安装前检查", "此页不写入配置。开始执行前会再次检查，并测试目标目录的写入权限。");
         var checks=Items(Field(plan,"preflight")).ToArray();
         Note(readiness, "已检查 "+checks.Length+" 个目标；程序、游戏 VPK 与安装记录一起校验。");
-        foreach(var check in checks.Where(v=>Flag(v,"blocking")||Flag(v,"requiresReadOnlyConsent")||Str(v,"code")=="file-locked")){
+        foreach(var check in checks.Where(v=>Flag(v,"blocking")||Flag(v,"requiresReadOnlyConsent")||Str(v,"code") is "file-locked" or "steam-manual-fallback")){
             Label(readiness, Str(check,"message")+"\n"+Str(check,"path"));Note(readiness,Str(check,"remedy"));
         }
         if(Flag(plan,"needsReadOnlyConsent"))Check(readiness,allowReadOnly);
@@ -351,7 +360,13 @@ public sealed partial class Wizard
         repairMissing.Checked=repairGameVpk.Checked=true;Draw();CaptureImage(Variant("recovery"));
         plan=JsonSerializer.SerializeToElement(new{installed=true,version="0.6.20",needsGameRepair=true,needsRepair=true,reinstall=new{kind="reinstall-in-place",recordState="missing",originalRuntime=runtime.Text,runtime=runtime.Text,message="安装记录已丢失，已确认原程序目录。保留个人数据，自动重建记录并成套重装，无需先卸载。"},gameVpk=new{state="missing",recordedTarget=@"D:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak90_dir.vpk",target=@"D:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak90_dir.vpk",message="游戏翻译 VPK 已被手动删除，将从完整安装包恢复"}});
         Draw();CaptureImage(Variant("reinstall"));
+        plan=JsonSerializer.SerializeToElement(new{installed=true,version="0.7.1",needsGameRepair=true,needsRepair=true,blocked=false,migration=new{oldGame=@"D:\Steam\steamapps\common\Deadlock",newGame=game.Text,oldState="missing",message="检测到游戏重装或迁移：将备份旧记录，在当前游戏恢复成套翻译包。"},gameCorrection=new{requested=@"D:\Steam\steamapps\common\Deadlock",selected=game.Text,message="原游戏已不完整，已找到唯一有效的新游戏目录。"},preflight=new[]{new{code="steam-manual-fallback",blocking=false,message="自动配置 Steam 暂不可用，核心安装可以继续；完成页会提供完整启动项。",remedy="尚未选择可用的 Steam 账号。"}}});
+        Draw();CaptureImage(Variant("migration"));
+        mode.SelectedIndex=2;
+        plan=JsonSerializer.SerializeToElement(new{installed=true,version="0.7.1",blocked=false,gameCorrection=new{requested=game.Text,selected=@"D:\Steam\steamapps\common\Deadlock",message="将按旧安装记录卸载；旧游戏已不完整，保留个人数据，不修改新游戏。"}});
+        Draw();CaptureImage(Variant("orphan-uninstall"));mode.SelectedIndex=0;
         step = 4; details.Text = "✓ 后台程序与游戏 VPK 已成套更新\r\n✓ 个人设置、密钥与证书已保留\r\n✓ Steam 启动项已检查"; Draw(); CaptureImage(Variant("complete"));
+        completionNotes=true;details.Text="✓ 后台、设置页和游戏 VPK 已成套恢复\r\n✓ 旧安装记录与已确认的旧 VPK 已备份\r\nSteam 自动配置未完成，请复制下方完整启动项到 Steam → Deadlock 属性 → 启动选项。";Draw();CaptureImage(Variant("manual-steam"));completionNotes=false;
         step = 0; MinimumSize = Size.Empty; ClientSize = new Size(900, 610); Draw(); CaptureImage(Variant("small"));
         if(new Control[]{allowReadOnly,repairMissing,repairGameVpk}.Any(c=>c.IsDisposed))throw new InvalidOperationException("Shared repair controls were disposed while switching installer pages.");
         Close();

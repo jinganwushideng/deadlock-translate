@@ -18,21 +18,24 @@ function Run([string]$script,[string[]]$arguments){
     if($script -in @('Manage-Mod.ps1','Update-Mod.ps1','Configure-Steam.ps1')){$arguments+=@('-ErrorResultFile',$failureFile);if($script -in @('Manage-Mod.ps1','Update-Mod.ps1')){$arguments+=@('-TraceFile',$script:DltTraceFile)}}
     if($script -in @('Manage-Mod.ps1','Update-Mod.ps1') -and $q.allowReadOnlyGameinfo){$arguments+='-AllowReadOnlyGameinfo'}
     $previousPreference=$ErrorActionPreference
-    try{$ErrorActionPreference='Continue';$out=& powershell.exe -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $script) @arguments 2>&1;$childExit=$LASTEXITCODE}finally{$ErrorActionPreference=$previousPreference}
+    $childExit=-1
+    try{$ErrorActionPreference='Continue';$out=& (Join-Path $PSHOME 'powershell.exe') -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $script) @arguments 2>&1;$childExit=$LASTEXITCODE}finally{$ErrorActionPreference=$previousPreference}
     if($childExit -ne 0){
         if(Test-Path -LiteralPath $failureFile){
             $fault=Get-Content -LiteralPath $failureFile -Raw -Encoding UTF8|ConvertFrom-Json
             $ex=[IO.IOException]::new($fault.message);$ex.Data['dltFault']=$fault;throw $ex
         }
         # Never publish Configure-Steam's JSON, launch arguments or config contents to logs.
-        $detail='请检查所选目录、文件占用和权限；此步骤没有返回结构化诊断。'
-        throw ($script+'：'+$detail)
+        $category='child-no-result';$text=($out|Out-String)
+        if($text -match 'ParserError|ParseException'){$category='child-parser'}elseif($text -match 'PSSecurityException|UnauthorizedAccess|AccessDenied'){$category='child-access'}elseif($text -match 'ModuleNotFound|Modules_ModuleNotFound'){$category='child-module'}elseif($text -match 'CommandNotFoundException'){$category='child-command'}
+        Write-DltInstallTrace 'child-process' $script ($category+':exit='+$childExit)
+        Throw-DltFault $category ('script-'+$script.Replace('.ps1','')) '' ($script+' 未完成，退出码 '+$childExit+'；错误类别 '+$category+'。') '请重试本步骤或导出日志；已保留脚本阶段和退出码，不需要删除配置或证书。'
     }
 }
 function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
     NoLinks $state
     $gi=Join-Path $game 'game\citadel\gameinfo.gi';$checks=@()
-    try{$change=if($q.mode -eq 'uninstall'){$install -and $install.gameinfoChanged -and (Hash $gi) -eq $install.gameinfoAfterHash.ToLowerInvariant()}else{(Get-DltSearchPathsPlan ([IO.File]::ReadAllBytes($gi)) -EnsureAddons).Changed}}catch{$ex=[IO.IOException]::new('无法读取游戏配置。',$_.Exception);$ex.Data['dltFault']=Get-DltFault $_ 'gameinfo-preflight' $gi;throw $ex}
+    try{$change=if($q.mode -eq 'uninstall'){$install -and $install.gameinfoChanged -and (Test-Path -LiteralPath $gi) -and (Hash $gi) -eq $install.gameinfoAfterHash.ToLowerInvariant()}else{(Get-DltSearchPathsPlan ([IO.File]::ReadAllBytes($gi)) -EnsureAddons).Changed}}catch{$ex=[IO.IOException]::new('无法读取游戏配置。',$_.Exception);$ex.Data['dltFault']=Get-DltFault $_ 'gameinfo-preflight' $gi;throw $ex}
     if($change){$checks+=Get-DltFileCheck $gi 'gameinfo' -AllowReadOnly}else{$checks+=@{path=$gi;stage='gameinfo';code='preserved';message='配置已满足要求，保留原文件';blocking=$false;requiresReadOnlyConsent=$false}}
     $checks+=Get-DltFileCheck (Join-Path $state 'install-manifest.json') 'installation-record'
     if($install){$taskVpkState=Get-DltGameVpkState $install (Join-Path $game 'game\citadel\addons') $runtime
@@ -44,7 +47,7 @@ function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
         foreach($file in $meta.files){$checks+=Get-DltFileCheck (Join-Path $runtime $file.file) 'runtime-files' -DeferLock}
     }
     foreach($folder in @((Join-Path $game 'game\citadel\addons'),$state,$runtime)|Select-Object -Unique){
-        try{Assert-DltNoLinks $folder;if($Apply -and ($q.mode -in @('install','repair') -or $folder -ne $runtime)){Assert-DltWritableDirectory $folder 'directory-preflight'}}catch{
+        try{Assert-DltNoLinks $folder;if($Apply -and ($q.mode -in @('install','repair') -or $folder -ne $runtime) -and ($q.mode -ne 'uninstall' -or (Test-Path -LiteralPath $folder))){Assert-DltWritableDirectory $folder 'directory-preflight'}}catch{
             $fault=Get-DltFault $_ 'directory-preflight' $folder;$checks+=@{path=$folder;stage=$fault.stage;code=$fault.code;message=$fault.message;remedy=$fault.remedy;blocking=$true;requiresReadOnlyConsent=$false;nativeError=$fault.nativeError;hresult=$fault.hresult;attributes=$fault.attributes;rollback=@()}
         }
     }
@@ -53,10 +56,10 @@ function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
             $steamPreview=Join-Path ([IO.Path]::GetDirectoryName($ResultFile)) ('steam-preview-'+[Guid]::NewGuid().ToString('N')+'.json')
             Run 'Configure-Steam.ps1' @((SteamArgs $runtime)+@('-PreviewRuntime','-ResultFile',$steamPreview))
             $steamPlan=Get-Content -LiteralPath $steamPreview -Raw -Encoding UTF8|ConvertFrom-Json
-            if($steamPlan.before -cne $steamPlan.after){$checks+=Get-DltFileCheck $steamPlan.file 'steam-preflight'}
+            if($steamPlan.before -cne $steamPlan.after){$steamCheck=Get-DltFileCheck $steamPlan.file 'steam-preflight';if($steamCheck.blocking){Throw-DltCheck $steamCheck};$checks+=$steamCheck}
             else{$checks+=@{path=$steamPlan.file;stage='steam-preflight';code='ready';message='所选账号的启动项已匹配；不重复写入';blocking=$false;requiresReadOnlyConsent=$false}}
         }catch{
-            $fault=Get-DltFault $_ 'steam-preflight';$checks+=@{path=$fault.path;stage=$fault.stage;code=$fault.code;message=$fault.message;remedy=$fault.remedy;blocking=$true;requiresReadOnlyConsent=$false;nativeError=$fault.nativeError;hresult=$fault.hresult;attributes=$fault.attributes;rollback=@()}
+            $fault=Get-DltFault $_ 'steam-preflight';$script:DltSteamUnavailable=$fault;$checks+=@{path=$fault.path;stage='steam-preflight';code='steam-manual-fallback';message='自动配置 Steam 暂不可用，核心安装可以继续；完成页会提供完整启动项。';remedy=$fault.message;blocking=$false;requiresReadOnlyConsent=$false;nativeError=$fault.nativeError;hresult=$fault.hresult;attributes=$fault.attributes;rollback=@()}
         }
     }
     if($Apply){foreach($check in $checks){
@@ -65,7 +68,7 @@ function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
     }}
     return @($checks)
 }
-function ReadInstall { $f=Join-Path $state 'install-manifest.json';if(Test-Path -LiteralPath $f){$record=Get-Content -LiteralPath $f -Raw -Encoding UTF8|ConvertFrom-Json;if(-not $record.target -or $record.vpkHash -notmatch '^[a-fA-F0-9]{64}$'){throw '安装记录缺失关键字段，请手动定位旧程序并恢复记录。'};return $record} }
+function ReadInstall { $f=Join-Path $state 'install-manifest.json';if(Test-Path -LiteralPath $f){$record=Get-Content -LiteralPath $f -Raw -Encoding UTF8|ConvertFrom-Json;if(-not $record.target -or $record.vpkHash -notmatch '^[a-fA-F0-9]{64}$'){throw '安装记录缺失关键字段，将按重新安装流程备份恢复。'};$null=Get-DltRecordedGame $record;return $record} }
 function ResolveInstall([string]$game,[string]$runtime){
     if(-not [IO.Path]::IsPathRooted($q.runtime)){Throw-DltFault 'runtime-path-relative' 'reinstall-preflight' '' '程序目录需要完整的磁盘路径。' '请选择程序文件夹，或输入 C:\Apps\DeadlockTranslate 这样的完整路径。'}
     $record=$null;$issue='missing';$originalHash='';$file=Join-Path $state 'install-manifest.json';NoLinks $file
@@ -74,7 +77,18 @@ function ResolveInstall([string]$game,[string]$runtime){
     if(-not $record -and $q.mode -ne 'uninstall'){$reinstall=Get-DltReinstallPlan $game $runtime $q.mode;$runtime=$reinstall.runtime;$record=$reinstall.record}
     Write-DltInstallTrace 'record-inspection' $file $issue $originalHash
     if($reinstall){Write-DltInstallTrace 'reinstall-plan' $runtime $reinstall.kind}
-    return @{install=$record;runtime=$runtime;reinstall=$reinstall;recordState=$issue;recordHash=$originalHash}
+    $migration=$null
+    if($record -and $q.mode -in @('install','repair')){$migration=Get-DltGameMigrationPlan $record $game $runtime;if($migration){$record=$migration.record}}
+    return @{install=$record;runtime=$runtime;reinstall=$reinstall;migration=$migration;recordState=$issue;recordHash=$originalHash}
+}
+function ResolveGame {
+    $script:DltGameCorrection=$null
+    if($q.mode -eq 'uninstall'){$record=$null;try{$record=ReadInstall}catch{};if($record){$recorded=Get-DltRecordedGame $record;NoLinks $recorded;if([string]::IsNullOrWhiteSpace($q.game) -or (Full $q.game) -ine $recorded){$script:DltGameCorrection=@{requested=$q.game;selected=$recorded;message='卸载将按原安装记录处理旧位置；不会删除当前新游戏的文件。'}};return $recorded}}
+    $game=Normalize-DeadlockPath $q.game
+    if($game){return $game}
+    $found=@(Find-DeadlockQuick -Libraries @($q.steam))
+    if($found.Count -eq 1){$script:DltGameCorrection=@{requested=$q.game;selected=$found[0];message='原选择已失效，已定位到唯一完整游戏目录。'};return $found[0]}
+    Throw-DltFault 'game-not-found' 'game-location' $q.game '尚未找到唯一的完整 Deadlock 安装。' '点击快速检测或深层扫描；也可在 Steam 管理菜单浏览本地文件后选择该目录。未写入任何游戏文件。'
 }
 function ValidateTargets([string]$game,[string]$runtime,$install){
     NoLinks $game;NoLinks $runtime
@@ -137,6 +151,7 @@ function Inspect {
     $users=@();if($steam -and (Test-Path -LiteralPath (Join-Path $steam 'userdata'))){foreach($d in Get-ChildItem -LiteralPath (Join-Path $steam 'userdata') -Directory){if($d.Name -match '^\d+$' -and [long]$d.Name -gt 0 -and [long]$d.Name -le [uint32]::MaxValue -and (Test-Path -LiteralPath (Join-Path $d.FullName 'config\localconfig.vdf'))){$users+=@{id=$d.Name;name=$names[$d.Name];active=([string]$active -eq $d.Name)}}}}
     $runtime=if($install){$install.runtimeFolder}else{Join-Path $env:LOCALAPPDATA 'Programs\DeadlockTranslate'}
     $game=if($install){Split-Path (Split-Path (Split-Path (Split-Path $install.target -Parent) -Parent) -Parent) -Parent}elseif($games.Count -eq 1){$games[0]}else{''}
+    if($q.mode -ne 'uninstall' -and -not (Normalize-DeadlockPath $game) -and $games.Count -eq 1){$game=$games[0]}
     @{games=@($games);game=$game;runtime=$runtime;recordError=$recordError;installedVersion=if($install){$install.version}else{''};installed=[bool]$install;steam=$steam;users=@($users);activeUser=[string]$active;certificate=(CertStatus);gameRunning=[bool](Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue);steamRunning=[bool](Get-Process -Name steam -ErrorAction SilentlyContinue)}
 }
 function Conflicts([string]$game,$KnownInstall=$null){
@@ -151,6 +166,7 @@ function Conflicts([string]$game,$KnownInstall=$null){
 }
 function StopBackend([string]$runtime){
     if(-not $runtime){return};$own=@(Get-CimInstance Win32_Process -Filter "Name='DeadlockTranslate.exe'"|Where-Object {$_.ExecutablePath -ieq (Join-Path $runtime 'DeadlockTranslate.exe')})
+    if(-not $own.Count){return}
     $pairFile=Join-Path $runtime 'pairing.key';if(-not(Test-Path -LiteralPath $pairFile)){if($own.Count){throw '旧后台缺少配对文件，请手动停止。'};return}
     $key=([IO.File]::ReadAllText($pairFile)).Trim();if($key -notmatch '^[0-9a-fA-F]{48}$'){throw '旧后台配对文件无效，请在设置页停止后台。'}
     try{$health=Invoke-RestMethod 'http://localhost:17865/health' -TimeoutSec 2}catch{if($own.Count){throw '旧后台仍运行但无法连接，请在设置页停止它。'};return}
@@ -257,7 +273,7 @@ try{
             $result=CertStatus
         }
         'plan'{
-            $game=Normalize-DeadlockPath $q.game;if(-not $game){throw '请选择完整游戏目录、citadel 目录或 deadlock.exe。'};NoLinks $game
+            $game=ResolveGame;NoLinks $game
             $runtime=Full $q.runtime;NoLinks $runtime
             if($runtime -ieq [IO.Path]::GetPathRoot($runtime).TrimEnd('\') -or $runtime.StartsWith((Full $game)+'\',[StringComparison]::OrdinalIgnoreCase) -or $runtime -ieq (Full $game) -or (Full $game).StartsWith($runtime+'\',[StringComparison]::OrdinalIgnoreCase) -or $runtime -ieq (Full $state) -or $runtime.StartsWith((Full $state)+'\',[StringComparison]::OrdinalIgnoreCase) -or (Full $state).StartsWith($runtime+'\',[StringComparison]::OrdinalIgnoreCase)){throw '程序目录不能是磁盘根目录、游戏目录或个人状态目录。'}
             $decision=ResolveInstall $game $runtime;$install=$decision.install;$runtime=$decision.runtime;$q.runtime=$runtime
@@ -270,25 +286,42 @@ try{
             $needsRepair=$install -and (-not(Test-Path -LiteralPath (Join-Path $runtime 'DeadlockTranslate.exe')) -or -not(Test-Path -LiteralPath (Join-Path $runtime 'data\terms.json')) -or -not(Test-Path -LiteralPath (Join-Path $runtime 'dlt_translate_dir.vpk')))
             if($install -and (Test-Path -LiteralPath (Join-Path $runtime 'dlt_translate_dir.vpk')) -and (Hash (Join-Path $runtime 'dlt_translate_dir.vpk')) -ne $install.vpkHash.ToLowerInvariant()){$needsRepair=$true}
             $needsRepair=$needsRepair -or ($integrity -and $integrity.requiresRepair)
-            if($decision.reinstall -and $install){$needsRepair=$true}
+            if(($decision.reinstall -or $decision.migration) -and $install){$needsRepair=$true}
             $reinstallInfo=if($decision.reinstall){@{kind=$decision.reinstall.kind;originalRuntime=$decision.reinstall.originalRuntime;runtime=$runtime;message=$decision.reinstall.message;recordState=$decision.recordState}}else{$null}
             $result=@{reinstallSuggested=[bool]($q.mode -eq 'uninstall' -and -not $install);reinstall=$reinstallInfo;fullRepair=[bool]($q.mode -eq 'repair' -and ($install -or $decision.reinstall));gameVpk=$vpkState;runtimeIntegrity=$integrity;needsGameRepair=[bool]($vpkState -and $vpkState.requiresRepair);game=$game;runtime=$runtime;installed=[bool]$install;needsRepair=[bool]$needsRepair;version=if($install){$install.version}else{''};conflicts=@($conflicts);launch=$launch;gameRunning=[bool](Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue);certificate=(CertStatus)}
+            $result.migration=if($decision.migration){@{oldGame=$decision.migration.oldGame;newGame=$game;oldState=$decision.migration.oldState;message=$decision.migration.message}}else{$null}
+            $result.gameCorrection=$script:DltGameCorrection
+            $result.recordHash=$decision.recordHash
             $checks=@(Readiness $game $runtime $install);$result.preflight=$checks;$result.blocked=[bool]@($checks|Where-Object {$_.blocking}).Count;$result.needsReadOnlyConsent=[bool]@($checks|Where-Object {$_.requiresReadOnlyConsent}).Count
         }
-        'recover'{$game=Normalize-DeadlockPath $q.game;if(-not $game){throw '游戏目录无效。'};$recovered=Recover $game (Full $q.runtime);$result=Inspect;if($recovered -and $recovered.reinstallRequired){$result.reinstallRequired=$true;$result.message=$recovered.message}}
+        'recover'{$game=ResolveGame;$runtime=Full $q.runtime;$decision=ResolveInstall $game $runtime;if($decision.migration){$result=Inspect;$result.reinstallRequired=$true;$result.game=$game;$result.message='检测到游戏位置变化。继续安装或修复即可备份旧记录并自动迁移，无需手动删除记录。'}else{$recovered=Recover $game $runtime;$result=Inspect;if($recovered -and $recovered.reinstallRequired){$result.reinstallRequired=$true;$result.message=$recovered.message}}}
         'apply'{
             if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '请退出 Deadlock 后再开始；不会强制结束游戏。'}
-            $game=Normalize-DeadlockPath $q.game;if(-not $game){throw '游戏目录无效。'};$runtime=Full $q.runtime;NoLinks $game;NoLinks $runtime
+            $game=ResolveGame;$runtime=Full $q.runtime;NoLinks $game;NoLinks $runtime
             $decision=ResolveInstall $game $runtime;$install=$decision.install;$runtime=$decision.runtime;$q.runtime=$runtime;$backup=Join-Path $state ('backups\gui-'+[Guid]::NewGuid().ToString('N'))
+            if($q.reviewedRecordHash -and $q.reviewedRecordHash -ne $decision.recordHash){Throw-DltFault 'file-changed' 'record-review' (Join-Path $state 'install-manifest.json') '安装记录在预览后变化，请重新检查；尚未修改文件。'}
             ValidateTargets $game $runtime $install
             Emit '检查目标文件、写入权限和回退空间…';$null=Readiness $game $runtime $install -Apply
             New-Item -ItemType Directory -Force -Path $backup|Out-Null
             $disabled=@();$installedNow=$false;$coreDone=$false;$warnings=@();$optionalFailures=@();$steamDone=$false;$steamCleanup=$null;$stage=$null;$adoptedRecordHash='';$savedInvalidRecord=''
+            $migrationRecord='';$migrationHash='';$migrationVpk=$null
             try{
                 if($q.mode -eq 'install' -or ($q.mode -eq 'repair' -and ($install -or $decision.reinstall))){
                     if(-not (CertStatus).ready){throw '请先完成第 1 步的证书确认。'}
                     Emit '校验证书私钥…';$p=Start-Process -FilePath (Join-Path $payload 'DeadlockTranslate.exe') -ArgumentList @('--prepare-https','--no-shell','--data-dir',('"'+$state+'"')) -WindowStyle Hidden -PassThru -Wait;if($p.ExitCode){throw '证书私钥无法读取，请使用原安装用户。'}
                     if(-not (CertStatus).ready){throw '证书私钥对应的证书与当前信任不一致，请返回证书步骤重新检测并确认信任。'}
+                    if($decision.migration){
+                        Emit '正在备份旧安装记录并迁移到当前游戏…';$recordFile=Join-Path $state 'install-manifest.json'
+                        if((Hash $recordFile) -ne $decision.recordHash){Throw-DltFault 'file-changed' 'migration-record' $recordFile '旧记录在检测后变化，已保留原文件，请重新检查。'}
+                        $migrationRecord=Join-Path $backup 'previous-game-install-manifest.json';[IO.File]::Copy($recordFile,$migrationRecord,$false)
+                        StopBackend $decision.migration.oldRuntime
+                        $oldVpk=$decision.migration.oldOwnedVpk
+                        if($oldVpk){NoLinks $oldVpk;if((Hash $oldVpk) -ne $decision.migration.oldHash.ToLowerInvariant()){Throw-DltFault 'file-changed' 'migration-old-vpk' $oldVpk '旧翻译文件在检测后变化，请重新检查。'}
+                            $saved=$oldVpk+'.dlt-migrated-'+[Guid]::NewGuid().ToString('N')+'.bak';[IO.File]::Move($oldVpk,$saved);$migrationVpk=@{original=$oldVpk;backup=$saved;hash=$decision.migration.oldHash.ToLowerInvariant()};Write-DltInstallTrace 'migration-old-vpk' $oldVpk 'backed-up-and-disabled' $migrationVpk.hash
+                        }
+                        Write-DltAtomic $recordFile ([Text.UTF8Encoding]::new($false).GetBytes(($install|ConvertTo-Json -Depth 6))) -ExpectedHash $decision.recordHash -Stage 'migration-record';$migrationHash=Hash $recordFile
+                        Write-DltInstallTrace 'game-migration' $game 'new-game-record-staged' $decision.recordHash $migrationHash
+                    }
                     foreach($c in @(Conflicts $game $install)){
                         if($c.kind -eq 'related'){if(-not $q.allowRelated){throw '检测到相关聊天/HUD Mod，请先在预览中明确确认共存。'};continue}
                         $approved=@($q.disable|Where-Object {$_.file -ceq $c.file -and $_.hash -ceq $c.hash});if($approved.Count -ne 1){throw ('存在未确认的冲突或不可读资源包：'+$c.file)}
@@ -303,7 +336,7 @@ try{
                         Emit '旧安装记录已丢失，将保留数据并成套重装…';$recordFile=Join-Path $state 'install-manifest.json'
                         Write-DltAtomic $recordFile ([Text.UTF8Encoding]::new($false).GetBytes(($install|ConvertTo-Json -Depth 6))) -ExpectedHash '-' -Stage 'record-rebuild';$adoptedRecordHash=Hash $recordFile
                     }
-                    if($install){Emit '正在成套更新后台、设置页和 VPK…';$a=@('-PackageFolder',$payload,'-RuntimeFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');if($q.repairMissing -or $decision.reinstall){$a+='-RepairMissingRuntime'};if($q.repairGameVpk -or $decision.reinstall){$a+='-RepairGameVpk';if($q.recoveryTarget){$a+=@('-RecoveryTarget',$q.recoveryTarget)}};Run 'Update-Mod.ps1' $a}
+                    if($install){Emit '正在成套更新后台、设置页和 VPK…';$a=@('-PackageFolder',$payload,'-RuntimeFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');if($q.repairMissing -or $decision.reinstall -or $decision.migration){$a+='-RepairMissingRuntime'};if($q.repairGameVpk -or $decision.reinstall -or $decision.migration){$a+='-RepairGameVpk';if($q.recoveryTarget){$a+=@('-RecoveryTarget',$q.recoveryTarget)}};Run 'Update-Mod.ps1' $a}
                     else{
                         $stage=$runtime+'.dlt-stage-'+[Guid]::NewGuid().ToString('N');NoLinks $stage
                         Emit '正在复制完整程序并安装游戏 Mod…';New-Item -ItemType Directory -Force -Path $stage|Out-Null;Copy-Item -Path (Join-Path $payload '*') -Destination $stage -Recurse
@@ -319,7 +352,15 @@ try{
                     if(-not $install){throw '没有可验证的安装记录；请先恢复安装记录。'};StopBackend $runtime
                     # Do not remove files while Steam still points to the translator unless manual mode was chosen.
                     if($q.configureSteam){Emit '正在移除此 Steam 目录中指向本程序的启动前缀…';$steamCleanup=RemoveSteamPrefixes $runtime $backup;$steamDone=$true}
-                    Emit '正在卸载本程序 VPK…';Run 'Manage-Mod.ps1' @('-Action','Uninstall','-PackageFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');$coreDone=$true
+                    if(-not (Normalize-DeadlockPath $game)){
+                        Emit '旧游戏已不完整，正在备份清理本程序的失效安装记录…';$recordFile=Join-Path $state 'install-manifest.json';$oldTarget=$install.target;NoLinks $oldTarget
+                        $savedVpk=$null
+                        try{
+                            if(Test-Path -LiteralPath $oldTarget -PathType Leaf){if((Hash $oldTarget) -eq $install.vpkHash.ToLowerInvariant()){$savedVpk=$oldTarget+'.dlt-uninstalled-'+[Guid]::NewGuid().ToString('N')+'.bak';[IO.File]::Move($oldTarget,$savedVpk)}else{$warnings+='旧 VPK 槽位内容已变更，已保留该文件。'}}
+                            if((Hash $recordFile) -ne $decision.recordHash){throw '安装记录在检查后变化。'};[IO.File]::Move($recordFile,(Join-Path $backup 'uninstalled-install-manifest.json'))
+                        }catch{if($savedVpk -and -not(Test-Path -LiteralPath $oldTarget) -and (Hash $savedVpk) -eq $install.vpkHash.ToLowerInvariant()){[IO.File]::Move($savedVpk,$oldTarget)};throw}
+                        $warnings+='旧游戏已移除或不完整，未改写其游戏配置；个人数据保留，可直接重新安装。'
+                    }else{Emit '正在卸载本程序 VPK…';Run 'Manage-Mod.ps1' @('-Action','Uninstall','-PackageFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive')};$coreDone=$true
                     if($q.restoreConflicts){foreach($c in @($install.disabledConflicts|Where-Object {$_})){
                         if((Full (Split-Path $c.original -Parent)) -ine (Full (Join-Path $game 'game\citadel\addons')) -or (Full (Split-Path $c.disabled -Parent)) -ine (Full (Split-Path $c.original -Parent)) -or -not $c.disabled.StartsWith($c.original+'.dlt-disabled-',[StringComparison]::OrdinalIgnoreCase)){$warnings+='旧冲突备份路径不属于当前游戏，已保留。';continue}
                         NoLinks $c.original;NoLinks $c.disabled
@@ -330,14 +371,17 @@ try{
                     if($q.removeRuntime){try{$warnings+=RemoveOwnedRuntime $runtime $backup}catch{$warnings+='程序清理未全部完成；已移除文件有备份，剩余文件保留。'}}else{$warnings+='程序文件和个人设置已保留；游戏 Mod 已卸载。可从完成页打开原目录。'}
 
                 }else{throw '未知操作。'}
-                if($q.configureSteam -and $q.mode -ne 'uninstall'){
+                if($q.configureSteam -and $q.mode -ne 'uninstall' -and $script:DltSteamUnavailable){$optionalFailures+=$script:DltSteamUnavailable;$warnings+='核心安装已完成。Steam 自动配置不可用，请在完成页复制启动项，或重新运行安装器重试。'}
+                elseif($q.configureSteam -and $q.mode -ne 'uninstall'){
                     try{Emit '正在正常退出 Steam、备份并配置所选账号…';Run 'Configure-Steam.ps1' (SteamArgs $runtime -Apply);$steamDone=$true}catch{$optionalFailures+=Get-DltFault $_ 'steam-configuration';$warnings+='程序操作已完成，但 Steam 启动项未配置。请复制界面给出的启动项手动设置，或重试。'}
                 }
                 if(-not $q.configureSteam){$warnings+=if($q.mode -eq 'uninstall'){'请从所有相关 Steam 账号手动移除翻译启动前缀，避免残留启动项。'}else{'已按选择跳过 Steam 配置，请复制启动项到 Steam 后再启动游戏。'}}
-                $result=@{complete=($warnings.Count -eq 0);coreDone=$coreDone;steamDone=$steamDone;warnings=@($warnings);failures=@($optionalFailures);runtime=$runtime;backup=$backup;mode=$q.mode;reinstalled=[bool]$decision.reinstall}
+                $result=@{complete=($warnings.Count -eq 0);coreDone=$coreDone;steamDone=$steamDone;warnings=@($warnings);failures=@($optionalFailures);runtime=$runtime;backup=$backup;mode=$q.mode;reinstalled=[bool]$decision.reinstall;migrated=[bool]$decision.migration}
             }catch{
                 $originalFailure=$_
                 if(-not $coreDone){foreach($c in $disabled){try{if((Test-Path -LiteralPath $c.disabled) -and -not(Test-Path -LiteralPath $c.original) -and (Hash $c.disabled) -eq $c.hash){Move-Item -LiteralPath $c.disabled -Destination $c.original}else{$warnings+='冲突包回退未完成，保留备份：'+$c.disabled}}catch{$warnings+='冲突包回退未完成，保留备份：'+$c.disabled}}
+                    if($migrationRecord -and $migrationHash){try{if((Hash $recordFile) -ne $migrationHash){throw 'Record changed'};Write-DltAtomic $recordFile ([IO.File]::ReadAllBytes($migrationRecord)) -ExpectedHash $migrationHash -Stage 'rollback-migration-record';Write-DltInstallTrace 'game-migration' $game 'rolled-back'}catch{$warnings+='迁移记录未能安全回退，原记录备份保留：'+$migrationRecord}}
+                    if($migrationVpk){try{if(Test-Path -LiteralPath $migrationVpk.original){throw 'Old slot changed'};if((Hash $migrationVpk.backup) -ne $migrationVpk.hash){throw 'Backup changed'};[IO.File]::Move($migrationVpk.backup,$migrationVpk.original)}catch{$warnings+='旧翻译文件回退未完成，备份保留：'+$migrationVpk.backup}}
                     $recordFile=Join-Path $state 'install-manifest.json'
                     if($adoptedRecordHash){try{if((Hash $recordFile) -ne $adoptedRecordHash){throw 'Record changed'};Remove-Item -LiteralPath $recordFile;Write-DltInstallTrace 'rollback-record' $recordFile 'temporary-record-removed'}catch{$warnings+='临时安装记录无法安全回退，原备份保留：'+$backup}}
                     if($savedInvalidRecord -and (Test-Path -LiteralPath $savedInvalidRecord)){try{if(Test-Path -LiteralPath $recordFile){throw 'Record slot changed'};[IO.File]::Move($savedInvalidRecord,$recordFile)}catch{$warnings+='原损坏记录备份保留：'+$savedInvalidRecord}}

@@ -126,10 +126,10 @@ function Write-DltAtomic {param([string]$Path,[byte[]]$Bytes,[string]$ExpectedHa
   self.assertFalse(r['ok']);self.assertEqual(r['failure']['code'],'fixture-denied');self.assertEqual(r['failure']['stage'],'install-record');self.assertEqual(gi.read_bytes(),before);self.assertFalse(self.target.exists());self.assertFalse((self.state/'install-manifest.json').exists());self.assertTrue(list(self.game.glob('game/citadel/gameinfo.gi.dlt-before-install-*.bak')))
  def test_rollback_never_overwrites_external_gameinfo_change(self):
   self.inject_manifest_failure(external_change=True);gi=self.game/'game/citadel/gameinfo.gi';r=self.call('apply');self.assertFalse(r['ok']);self.assertEqual(r['failure']['code'],'fixture-denied');self.assertEqual(gi.read_text(),'EXTERNAL CHANGE');self.assertTrue(r['failure']['rollback']);self.assertFalse(self.target.exists())
- def test_steam_account_preflight_blocks_before_copy(self):
+ def test_steam_account_preflight_falls_back_without_blocking_core(self):
   self.simulate_certificate_gate();file=self.account(1,'-novid',appid='777');before=file.read_bytes();r=self.call('plan',configureSteam=True)
-  self.assertTrue(r['ok'],r);self.assertTrue(r['data']['blocked']);self.assertTrue(any(c['code']=='steam-no-game-record' for c in r['data']['preflight']))
-  r=self.call('apply',configureSteam=True);self.assertFalse(r['ok']);self.assertEqual(r['failure']['code'],'steam-no-game-record');self.assertEqual(file.read_bytes(),before);self.assertEqual(list(self.runtime.iterdir()),[]);self.assertFalse(self.target.exists())
+  self.assertTrue(r['ok'],r);self.assertFalse(r['data']['blocked']);self.assertTrue(any(c['code']=='steam-manual-fallback' for c in r['data']['preflight']))
+  r=self.call('apply',configureSteam=True);self.assertTrue(r['ok'],r);self.assertTrue(r['data']['coreDone']);self.assertFalse(r['data']['steamDone']);self.assertEqual(file.read_bytes(),before);self.assertEqual(self.target.read_bytes(),self.vpk)
  def test_valid_steam_preflight_is_readonly_with_missing_runtime(self):
   file=self.account(1,'-novid');before=file.read_bytes();r=self.call('plan',configureSteam=True);self.assertTrue(r['ok'],r);self.assertFalse(r['data']['blocked']);self.assertEqual(file.read_bytes(),before);self.assertEqual(list(self.runtime.iterdir()),[])
  def test_directory_access_denial_keeps_full_fault_and_no_copy(self):

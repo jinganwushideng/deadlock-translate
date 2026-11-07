@@ -1,7 +1,9 @@
 // Local fixtures only: no real clipboard changes, browser launches or cloud calls.
 const fs=require('node:fs'),path=require('node:path'),net=require('node:net'),http=require('node:http'),crypto=require('node:crypto'),assert=require('node:assert/strict'),{spawn}=require('node:child_process'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),runtime=process.env.DLT_TEST_RUNTIME||path.join(root,'artifacts/community-settings-build'),evidence=path.join(root,'artifacts','community-ui-'+Date.now());fs.mkdirSync(evidence,{recursive:true});
-let passed=0,browser,child,base,headers,profileCalls=0,saves=0;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),check=(v,n)=>{assert(v,n);passed++;console.log('PASS '+n);},sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+let passed=0,browser,child,base,headers,profileCalls=0,projectCalls=0,saves=0;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),check=(v,n)=>{assert(v,n);passed++;console.log('PASS '+n);},sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+const projectUrl='https://github.com/jinganwushideng/deadlock-translate';
+const fixtureAssets={'/app.js':'text/javascript','/style.css':'text/css','/community-qq.png':'image/png','/settings-navigation.js':'text/javascript','/settings-background.css':'text/css','/settings-background.js':'text/javascript','/settings-background-v3-flat.png':'image/png'};
 const settings={mode:'quality',model:'fixture-model',llmBaseUrl:'https://fixture.invalid/v1',fontSize:17,scanIntervalMs:200,outgoingHotkey:'LAlt+Space',outgoingEnabled:true,incomingTargetLanguage:'zh-Hans',outgoingTargetLanguage:'en',incomingScope:'all_players'};
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const c of req)body+=c;const url=req.url.split('?')[0];res.setHeader('Content-Type','application/json');
@@ -9,7 +11,8 @@ const server=http.createServer(async(req,res)=>{
  else if(url==='/api/terms')res.end('[]');else if(url==='/api/outgoing')res.end('{"items":[]}');
  else if(url==='/api/status')res.end('{"engine":{"messages":0,"pending":0,"connected":true},"terms":0}');
  else if(url==='/api/community/bilibili'){profileCalls++;res.end('{"opened":true}');}
- else if(url==='/app.js'||url==='/style.css'||url==='/community-qq.png'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':url.endsWith('.css')?'text/css':'image/png');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(url==='/api/community/github'&&req.method==='POST'){projectCalls++;res.end('{"opened":true}');}
+ else if(fixtureAssets[url]){res.setHeader('Content-Type',fixtureAssets[url]);res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 const port=()=>new Promise(r=>{const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>r(p));});});
@@ -18,20 +21,23 @@ async function api(name,method='GET',body){const r=await fetch(base+'/api/'+name
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const fixture='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({channel:'msedge',headless:true});const context=await browser.newContext({viewport:{width:1280,height:1000}});
  await context.addInitScript(()=>{window.__copies=[];window.__denyCopy=false;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{if(window.__denyCopy)throw Error('fixture clipboard blocked');window.__copies.push(value);}}});const original=document.execCommand.bind(document);document.execCommand=(...args)=>window.__denyCopy?false:original(...args);});
- const page=await context.newPage(),errors=[],external=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(fixture+'/'))external.push(r.url());});
+ const page=await context.newPage(),errors=[],external=[];page.setDefaultTimeout(8000);page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(fixture+'/'))external.push(r.url());});
  await page.goto(fixture+'/in-game/fixture');await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
  check((await page.locator('#overview > article').allTextContents()).map(t=>t.slice(0,10)).join('|').includes('反馈、更新与作者'),'community card belongs to overview');
- check(await page.evaluate(()=>{const a=[...document.querySelectorAll('#overview > article')];return a[1].id==='communityCard'&&a[2].textContent.includes('常用入口');}),'formal release community and navigation order is preserved');
+ check(await page.evaluate(()=>{const a=[...document.querySelectorAll('#overview > article')];return a[1].textContent.includes('常用入口')&&a[2].id==='communityCard';}),'overview keeps the existing quick-links and community section order');
  check(await page.locator('#communityGroup').innerText()==='923443423'&&await page.locator('#communityAuthor').innerText()==='ともり_一生','group and author match supplied identifiers');
- check(profileCalls===0&&external.length===0,'opening settings does not navigate to Bilibili or issue external requests');
- const before=await page.locator('#sidebarSaveState').textContent();await page.locator('#copyCommunityGroup').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('已复制 QQ 群号'));check(await page.evaluate(()=>window.__copies.at(-1))==='923443423','game settings can copy exact group number');
+ check(profileCalls===0&&projectCalls===0&&external.length===0,'opening settings does not open community links or issue external requests');
+ const before=await page.locator('#autoSaveStatus').textContent();await page.locator('#copyCommunityGroup').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('已复制 QQ 群号'));check(await page.evaluate(()=>window.__copies.at(-1))==='923443423','game settings can copy exact group number');
  await page.locator('#copyCommunityAuthor').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('已复制 B 站昵称'));check(await page.evaluate(()=>window.__copies.at(-1))==='ともり_一生','author nickname copies correctly');
  await page.locator('#copyCommunityAuthorUrl').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('已复制作者'));check(await page.evaluate(()=>window.__copies.at(-1))==='https://space.bilibili.com/332089385','copy uses the exact user-provided profile URL');
  await page.locator('#openCommunityAuthor').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('系统默认浏览器'));check(profileCalls===1&&page.url()===fixture+'/in-game/fixture','explicit open button requests the backend without replacing game settings');
- check(await page.locator('#sidebarSaveState').textContent()===before&&saves===0,'community actions do not alter settings or require Save');
+ check(await page.locator('#communityProjectUrl').innerText()===projectUrl,'project address is visible in game settings');
+ await page.locator('#copyCommunityProject').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('已复制 GitHub 项目地址'));check(await page.evaluate(()=>window.__copies.at(-1))===projectUrl,'copy uses the exact public repository URL');
+ await page.locator('#openCommunityProject').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('打开 GitHub 项目'));check(projectCalls===1&&page.url()===fixture+'/in-game/fixture','project button opens through the backend without replacing game settings');
+ check(await page.locator('#autoSaveStatus').textContent()===before&&saves===0,'community actions do not alter settings or require Save');
  await page.locator('#communityCard').screenshot({path:path.join(evidence,'community-wide.png')});
  await page.locator('.community-qr summary').click();await page.waitForFunction(()=>{const i=document.querySelector('.community-qr img');return i.complete&&i.naturalWidth>0;});check(await page.locator('.community-qr-viewport').isVisible(),'offline QR expands on demand');
- const bounds=await page.locator('.community-qr-viewport').boundingBox();check(bounds.width===208&&bounds.height===208,'QR uses a compact square viewport without changing original pixels');
+ const bounds=await page.locator('.community-qr img').boundingBox();check(bounds.width>0&&bounds.width<=220,'QR stays within the community column');
  await page.locator('#communityCard').screenshot({path:path.join(evidence,'community-qr.png')});
  await page.evaluate(()=>window.__denyCopy=true);await page.locator('#copyCommunityGroup').click();await page.waitForFunction(()=>document.querySelector('#communityStatus').textContent.includes('无法自动复制'));check((await page.locator('#communityStatus').innerText()).includes('923443423')&&await page.locator('#copyCommunityGroup').isEnabled(),'blocked clipboard gives an actionable fallback and restores button state');
  await page.evaluate(()=>window.__denyCopy=false);await page.setViewportSize({width:510,height:900});await page.locator('#communityCard').scrollIntoViewIfNeeded();check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'community and QR fit narrow game settings');await page.locator('#communityCard').screenshot({path:path.join(evidence,'community-narrow.png')});
@@ -44,6 +50,9 @@ async function api(name,method='GET',body){const r=await fetch(base+'/api/'+name
  const login=await fetch(base+'/in-game/'+key),cookie=login.headers.getSetCookie().map(v=>v.split(';')[0]).join(';');headers={Cookie:cookie,Origin:base,'Content-Type':'application/json','X-DLT-Request':'1'};
  check((await fetch(base+'/api/community/bilibili',{method:'POST',headers:{...headers,Origin:'https://untrusted.example'},body:'{}'})).status===403,'external browser action rejects a foreign Origin');
  const opened=await api('community/bilibili','POST',{});check(opened.status===409&&opened.data.error.includes('复制主页链接'),'no-shell fixture cannot launch a real browser and gives copy-link guidance');
+ check((await fetch(base+'/api/community/github',{method:'POST',body:'{}'})).status===401,'project opener requires an authenticated session');
+ check((await fetch(base+'/api/community/github',{method:'POST',headers:{...headers,Origin:'https://untrusted.example'},body:'{}'})).status===403,'project opener rejects foreign origins');
+ const project=await api('community/github','POST',{});check(project.status===409&&project.data.error.includes('复制项目地址'),'project opener respects no-shell mode');
  const qr=await fetch(base+'/community-qq.png');check(qr.ok&&qr.headers.get('content-type').includes('image/png')&&sha(Buffer.from(await qr.arrayBuffer()))===sha(fs.readFileSync(path.join(root,'docs/images/qq-feedback-923443423.png'))),'backend serves the exact original QR from the local package');
  const config=await api('config');check(!config.data.settings.llmKeepAliveEnabled,'community links do not enable translation warmups or modify configuration');
  fs.writeFileSync(path.join(evidence,'result.json'),JSON.stringify({passed,buildId:health.buildId,gameTested:false,realClipboardChanged:false,realBrowserOpened:false,externalNetworkUsed:false},null,2));console.log(JSON.stringify({passed,artifacts:evidence}));

@@ -21,7 +21,7 @@ Check(announcements.ShouldShow("0.6.24",secondRevision),"same version with chang
 announcements.MarkSeen("0.6.24",secondRevision);
 Check(!announcements.ShouldShow("0.6.24",firstRevision)&&!announcements.ShouldShow("0.6.24",secondRevision),"alternating same-version revisions keep their read state");
 Check(!announcements.ShouldShow("0.6.24"),"revision-aware marker remains compatible with version-only checks");
-Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("输入兼容")&&history.Current.Changes.Any(x=>x.Contains("密钥"))&&history.Current.Changes.Any(x=>x.Contains("原生")),"current announcement describes the input recovery and secret paste changes");
+Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("安装恢复")&&history.Current.Changes.Any(x=>x.Contains("迁移"))&&history.Current.Changes.Any(x=>x.Contains("Steam")),"current announcement describes automatic migration and installer recovery");
 Check(history.Entries.Any(e=>e.Version=="0.6.24"&&e.Changes.Any(x=>x.Contains("备份"))),"previous backup-cleanup update remains in history");
 Check(typeof(ReleaseNotesWindow).Assembly.GetManifestResourceNames().Contains("community-qr.png"),"feedback QR is embedded for offline display");
 using(var maintenance=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("scripts/Backup-Maintenance.ps1")){
@@ -63,8 +63,10 @@ var uiThread=new Thread(()=>{
   Check(layout.RootElement.GetProperty("row").GetProperty("Height").GetInt32()>0,"input rows retain height after responsive layout");
   Check(layout.RootElement.GetProperty("mode").GetProperty("Height").GetInt32()<=layout.RootElement.GetProperty("row").GetProperty("Height").GetInt32(),"dropdown fits its input row");
   Check(layout.RootElement.GetProperty("updateHistoryAvailable").GetBoolean(),"release notes entry is visible without a settings or browser dependency");
-  Check(new[]{"busy","error","locations","review","readonly","recovery","reinstall","complete","small"}.All(n=>File.Exists(Path.Combine(temp,"installer-ui-"+n+".png"))),"disabled, error, readonly, VPK recovery, orphan reinstall and small-window preview states render");
+  Check(new[]{"busy","error","locations","review","readonly","recovery","reinstall","migration","orphan-uninstall","complete","manual-steam","small"}.All(n=>File.Exists(Path.Combine(temp,"installer-ui-"+n+".png"))),"disabled, recovery, migration, orphan uninstall, manual Steam and small-window preview states render");
   using var notes=new ReleaseNotesWindow();
+  var project = notes.Controls.Find("openGitHubProject", true).Single();
+  Check(project.AccessibleDescription=="https://github.com/jinganwushideng/deadlock-translate","installer release notes expose the public project address");
   Check(notes.SelectedVersion==InstallerVersion.Current&&notes.RenderedText.Contains(history.Current.Title)&&history.Current.Changes.All(notes.RenderedText.Contains),"release notes default to current version and all current feature text");
   notes.SelectVersion("0.6.0");Check(notes.RenderedText.Contains("多语言收发")&&!notes.RenderedText.Contains("安装器新增离线更新日志"),"selecting old version replaces the content rather than appending current notes");
   notes.SelectVersion("0.4.0");Check(notes.RenderedText.Contains("历史源码版本记录"),"source-only history is distinguished from an installer release");

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace DeadlockTranslate.Setup;
@@ -42,22 +43,37 @@ public sealed class ReleaseNotesWindow : Form
         Controls.Add(main); CancelButton = close; versions.SelectedIndex = 0;
     }
     private Control CommunityPanel(){
-        var panel=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,Margin=new Padding(16,0,0,0),Padding=new Padding(12),BackColor=InstallerColors.Card};
+        var panel=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Margin=new Padding(16,0,0,0),Padding=new Padding(12),BackColor=InstallerColors.Card};
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        for(var i=0;i<4;i++)panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));panel.RowStyles.Add(new RowStyle(SizeType.Percent,100));panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for(var i=0;i<5;i++)panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));panel.RowStyles.Add(new RowStyle(SizeType.Percent,100));panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.Controls.Add(new Label{Text="反馈与及时更新",AutoSize=true,ForeColor=InstallerColors.Ink,Font=new Font(Font,FontStyle.Bold),Margin=new Padding(0,0,0,8)},0,0);
         panel.Controls.Add(new Label{Text="QQ 群 923443423",AutoSize=true,ForeColor=InstallerColors.Ink,Margin=new Padding(0,0,0,6)},0,1);
         panel.Controls.Add(new Label{Text="加入群聊反馈问题，获取及时更新。",AutoSize=true,MaximumSize=new Size(190,0),ForeColor=InstallerColors.Muted,Margin=new Padding(0,0,0,8)},0,2);
         var copy=new ActionButton{Text="复制群号",Dock=DockStyle.Top,Height=34,Margin=new Padding(0,0,0,8)};
         copy.Click+=(_,_)=>{try{Clipboard.SetText("923443423");copy.Text="已复制 923443423";}catch{copy.Text="群号：923443423";}};panel.Controls.Add(copy,0,3);
+        var project = new ActionButton { Name = "openGitHubProject", Text = "GitHub 项目 ↗", Dock = DockStyle.Top, Height = 34, Margin = new Padding(0, 0, 0, 8), AccessibleDescription = CommunityLinks.GitHubProject };
+        project.Click += (_, _) => OpenProject(this);
+        panel.Controls.Add(project, 0, 4);
         var picture=new QrThumbnail{Name="communityQr",Dock=DockStyle.Fill,Cursor=Cursors.Hand,Margin=Padding.Empty};
         using(var stream=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("community-qr.png")){
             if(stream!=null){using var original=Image.FromStream(stream);picture.Image=new Bitmap(original);}
         }
-        picture.Click+=(_,_)=>ShowQr();panel.Controls.Add(picture,0,4);
-        var large=new ActionButton{Text="查看二维码大图",Dock=DockStyle.Top,Height=32,Margin=new Padding(0,6,0,0)};large.Click+=(_,_)=>ShowQr();panel.Controls.Add(large,0,5);
-        panel.Resize+=(_,_)=>picture.Visible=panel.ClientSize.Height>=330;
+        picture.Click+=(_,_)=>ShowQr();panel.Controls.Add(picture,0,5);
+        var large=new ActionButton{Text="查看二维码大图",Dock=DockStyle.Top,Height=32,Margin=new Padding(0,6,0,0)};large.Click+=(_,_)=>ShowQr();panel.Controls.Add(large,0,6);
+        panel.Resize+=(_,_)=>picture.Visible=panel.ClientSize.Height>=370;
         return panel;
+    }
+    internal static void OpenProject(IWin32Window owner)
+    {
+        try
+        {
+            using var browser = Process.Start(new ProcessStartInfo(CommunityLinks.GitHubProject) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            MessageBox.Show(owner, "无法打开系统默认浏览器。请手动访问项目地址：\n" + CommunityLinks.GitHubProject,
+                "同频 · GitHub 项目", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
     }
     private sealed class QrThumbnail:Control {
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]

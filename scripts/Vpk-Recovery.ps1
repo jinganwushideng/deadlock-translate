@@ -43,6 +43,24 @@ function Get-DltReinstallPlan([string]$Game,[string]$Runtime,[string]$Mode) {
     if(-not $target){Throw-DltFault 'reinstall-path-unavailable' 'reinstall-preflight' $parent '无法找到可用的空程序目录。' '请选择其他空目录，原残留文件和个人数据保持原样。'}
     return @{kind='fresh-directory';originalRuntime=$runtimeFull;runtime=$target;identity=$identity;message='安装记录缺失且残留目录不能确认归属；保留该目录，改用新的空目录安装，保留个人设置并更新 Steam 启动路径';record=$null}
 }
+function Get-DltRecordedGame($Record) {
+    if(-not $Record -or $Record.vpkHash -notmatch '^[a-fA-F0-9]{64}$' -or -not [IO.Path]::IsPathRooted($Record.target)){Throw-DltFault 'record-invalid' 'record-preflight' '' '安装记录无法确认游戏位置。' '选择安装或修复，安装器会备份无效记录并恢复程序。'}
+    $target=[IO.Path]::GetFullPath($Record.target)
+    if($target -notmatch '(?i)[\\/]game[\\/]citadel[\\/]addons[\\/]pak\d{2,3}_dir\.vpk$'){Throw-DltFault 'record-path-invalid' 'record-preflight' $target '旧记录不是本程序的标准游戏路径。' '保留记录和原文件，选择新的空程序目录重新安装。'}
+    return [IO.Path]::GetFullPath((Split-Path (Split-Path (Split-Path (Split-Path $target -Parent) -Parent) -Parent) -Parent)).TrimEnd('\')
+}
+function Get-DltGameMigrationPlan($Record,[string]$Game,[string]$Runtime) {
+    $oldGame=Get-DltRecordedGame $Record
+    if($oldGame -ieq [IO.Path]::GetFullPath($Game).TrimEnd('\')){return $null}
+    $oldState='unavailable';$oldOwned=$null
+    try{
+        Assert-DltNoLinks $oldGame
+        if(Test-Path -LiteralPath $oldGame){$old=Get-DltGameVpkState $Record (Join-Path $oldGame 'game\citadel\addons') $Record.runtimeFolder;$oldState=$old.state;if($old.state -in @('ready','renamed')){$oldOwned=$old.target}}
+    }catch{$oldState='preserved-unverified'}
+    $gi=Join-Path $Game 'game\citadel\gameinfo.gi'
+    $new=[pscustomobject]@{target=Join-Path $Game 'game\citadel\addons\pak90_dir.vpk';vpkHash=$Record.vpkHash;version=$Record.version;runtimeFolder=$Runtime;gameinfoChanged=$false;gameinfoBefore='';gameinfoAfterHash=Get-DltHash $gi}
+    return @{kind='game-migration';oldGame=$oldGame;newGame=$Game;oldState=$oldState;oldOwnedVpk=$oldOwned;oldRuntime=$Record.runtimeFolder;oldHash=$Record.vpkHash;record=$new;message='检测到游戏重装或迁移：将备份旧记录，在当前游戏恢复成套翻译包；哈希确认的旧翻译文件会备份停用，其他文件保留。'}
+}
 function Write-DltInstallTrace([string]$Stage,[string]$Path,[string]$Outcome,[string]$ExpectedHash='',[string]$ActualHash='') {
     if(-not $script:DltTraceFile){return}
     try{

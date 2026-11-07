@@ -170,18 +170,20 @@ app.MapPost("/api/native-editor",(NativeEditorDraft request)=>{
 app.MapGet("/api/native-editor/{id}",(string id,string owner)=>nativeEditor.Read(id,owner) is {} value?Results.Ok(value):Results.NotFound(new{error="原生编辑已过期，请重新点击输入框。"}));
 app.MapDelete("/api/native-editor/{id}",(string id,string owner)=>{nativeEditor.Cancel(id,owner);return Results.Ok();});
 app.MapGet("/community-qq.png",()=>Results.File(Path.Combine(staticRoot,"community-qq.png"),"image/png"));
-app.MapPost("/api/community/bilibili",()=>{
-    const string homepage="https://space.bilibili.com/332089385";
-    if(noShell)return Results.Conflict(new{error="本次后台禁止打开外部窗口，请复制主页链接后手动打开。"});
+IResult OpenCommunityLink(string url, string linkName)
+{
+    if(noShell)return Results.Conflict(new{error=$"本次后台禁止打开外部窗口，请复制{linkName}后手动打开。"});
     try{
         // Fixed destination, user-initiated, with the existing session and Origin checks.
         // Do not navigate the game's embedded settings panel to an external website.
-        using var browser=Process.Start(new ProcessStartInfo(homepage){UseShellExecute=true});
+        using var browser=Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
         return Results.Ok(new{opened=true});
     }catch(Exception ex)when(ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException){
-        return Results.Json(new{error="无法打开系统默认浏览器，请复制主页链接后手动打开。"},statusCode:502);
+        return Results.Json(new{error=$"无法打开系统默认浏览器，请复制{linkName}后手动打开。"},statusCode:502);
     }
-});
+}
+app.MapPost("/api/community/bilibili",()=>OpenCommunityLink("https://space.bilibili.com/332089385", "主页链接"));
+app.MapPost("/api/community/github",()=>OpenCommunityLink(CommunityLinks.GitHubProject, "项目地址"));
 app.MapGet("/api/config",()=>config.Public());
 app.MapPost("/api/settings/paste-secret",(SecretPasteRequest request)=>{
     if(!SecretClipboard.ValidField(request.Field))return Results.BadRequest(new{error="只允许粘贴大模型或 Azure 密钥。",code="clipboard-field"});

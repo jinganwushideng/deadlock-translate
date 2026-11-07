@@ -39,6 +39,8 @@ public sealed class Runner(Package package,Action<string> progress,InstallerAudi
         var data=doc.RootElement.GetProperty("data");
         if(data.TryGetProperty("gameVpk",out var gameVpk)||data.TryGetProperty("runtimeIntegrity",out _))audit?.Record("integrity-report",new{gameVpk=gameVpk.ValueKind==JsonValueKind.Undefined?(object?)null:gameVpk,runtimeIntegrity=data.TryGetProperty("runtimeIntegrity",out var ri)?ri:(object?)null});
         if(data.TryGetProperty("reinstall",out var reinstall)&&reinstall.ValueKind==JsonValueKind.Object)audit?.Record("reinstall-plan",reinstall);
+        if(data.TryGetProperty("migration",out var migration)&&migration.ValueKind==JsonValueKind.Object)audit?.Record("game-migration-plan",migration);
+        if(data.TryGetProperty("gameCorrection",out var correction)&&correction.ValueKind==JsonValueKind.Object)audit?.Record("game-location-recovery",correction);
         if(doc.RootElement.GetProperty("data").TryGetProperty("failures",out var failures)&&failures.ValueKind==JsonValueKind.Array)foreach(var failure in failures.EnumerateArray())audit?.Record("optional-step-failed",new{action,failure});
         return doc.RootElement.GetProperty("data").Clone();
     }

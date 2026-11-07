@@ -389,6 +389,11 @@ bind('openCommunityAuthor',async()=>{
  try{await api('community/bilibili','POST',{});communityNotice('已在系统默认浏览器打开作者主页，欢迎点个关注！');}
  catch(e){communityNotice((e as Error).message,true);}
 });
+bind('copyCommunityProject',()=>copyCommunity($('communityProjectUrl').textContent!.trim(),'已复制 GitHub 项目地址。'));
+bind('openCommunityProject',async()=>{
+ try{await api('community/github','POST',{});communityNotice('已在系统默认浏览器打开 GitHub 项目。');}
+ catch(e){communityNotice((e as Error).message,true);}
+});
 function fileText(file:File):Promise<string>{
     if(typeof file.text==='function')return file.text();
     return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('无法读取词库文件'));reader.readAsText(file);});

@@ -60,3 +60,6 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 :root{--settings-safe-top:clamp(88px,9vh,144px);--settings-safe-bottom:clamp(32px,4.5vh,72px)}
 .shell{padding-top:var(--settings-safe-top);padding-bottom:var(--settings-safe-bottom)}
 .shell>aside,main{min-height:0}
+.community-project{margin-top:22px;padding-top:16px;border-top:1px solid rgba(217,207,181,.24)}
+.community-project h4{margin:0 0 7px}
+.community-project code{overflow-wrap:anywhere;user-select:text}

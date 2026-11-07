@@ -1,5 +1,5 @@
 {
-  "version": "0.7.1",
+  "version": "0.7.2",
   "chatPipelineFix": "native-parent-size-nudge",
-  "featureRevision": "settings-input-recovery-and-explicit-secret-paste"
+  "featureRevision": "installer-game-migration-and-recoverable-preflight"
 }

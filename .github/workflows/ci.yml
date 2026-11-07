@@ -39,6 +39,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/installer-workflow.test.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/installer-migration.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/vpk-recovery.test.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compile settings
