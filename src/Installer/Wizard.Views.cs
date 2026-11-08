@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.InteropServices;
 
 namespace DeadlockTranslate.Setup;
 
@@ -11,7 +12,46 @@ public sealed partial class Wizard
     FlowLayoutPanel? column;
     bool suppressDialogs;
     readonly ActionButton changeMode=new(ButtonKind.Quiet){Text="更改操作模式",Visible=false};
+    readonly ActionButton steamManagement=new(ButtonKind.Quiet){Name="steamManagementButton",Text="启动项管理"};
+    readonly ActionButton browserSettings=new(ButtonKind.Quiet){Name="browserSettingsButton",Text="浏览器后台设置"};
+    ActionButton? certificateAction;
+    Label? modeHint;
     [System.Runtime.InteropServices.DllImport("uxtheme.dll",CharSet=System.Runtime.InteropServices.CharSet.Unicode)]static extern int SetWindowTheme(IntPtr handle,string? app,string? id);
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr wParam,IntPtr lParam);
+
+    private sealed class BufferedContentPanel : Panel
+    {
+        public BufferedContentPanel() { DoubleBuffered = true; ResizeRedraw = true; }
+    }
+
+    private void RefreshModeControls()
+    {
+        if(step!=0 || steamOnly || certificateAction is not {IsDisposed:false} action || modeHint is not {IsDisposed:false} hint)return;
+        var uninstall=Mode=="uninstall";
+        var valid=ready&&Flag(Field(snapshot,"certificate"),"ready");
+        action.Kind=uninstall?ButtonKind.Danger:valid?ButtonKind.Secondary:ButtonKind.Primary;
+        action.Text=uninstall?"撤销本程序证书信任…":valid?"检查现有证书":"准备并信任证书";
+        action.Invalidate();
+        renew.Enabled=ready&&!busy&&!uninstall;
+        hint.Text=Mode switch {
+            "uninstall"=>"卸载可直接进入下一步，无需安装证书。",
+            "repair"=>"成套修复需要证书就绪。已有有效证书可直接沿用。",
+            _=>"证书就绪后，点击下一步选择游戏与程序位置。"
+        };
+    }
+
+    private async Task RunCertificateAction()
+    {
+        if(Mode=="uninstall"){
+            if(MessageBox.Show("只撤销本程序当前证书的信任，Windows 可能需要确认。继续？",Text,MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
+            await Work(async()=>{await runner!.Run(Request("remove-certificate"));await Inspect();Log("证书信任撤销步骤完成。");},true);
+            return;
+        }
+        await Work(async()=>{
+            var q=Request("certificate");q["renew"]=renew.Checked;await runner!.Run(q);await Inspect();
+            Log("证书检查完成。首次信任后请完整重启 Steam。");
+        },true);
+    }
 
     string errorMessage = "";
     static readonly string[] StepNames = ["准备开始", "选择安装位置", "检查并确认", "正在执行", "操作结果"];
@@ -36,12 +76,22 @@ public sealed partial class Wizard
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         outer.Controls.Add(main, 1, 0);
 
-        var header = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(28, 25, 22, 16), Margin = Padding.Empty };
+        var headerGrid = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Padding = new Padding(28, 25, 22, 16), Margin = Padding.Empty };
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var header = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         stage.Font = new Font(Font.FontFamily, 9, FontStyle.Bold); stage.ForeColor = accent; stage.Margin = new Padding(0, 0, 0, 7);
         title.ForeColor = accent; title.Font = new Font(Font.FontFamily, 21, FontStyle.Bold); title.Margin = new Padding(0, 0, 0, 8);
         subtitle.ForeColor = InstallerColors.Muted; subtitle.Margin = Padding.Empty;
         changeMode.Click+=(_,_)=>{if(busy||writing)return;reviewed=null;plan=default;step=0;Draw();};
-        header.Controls.AddRange([stage, title, subtitle, changeMode]); main.Controls.Add(header, 0, 0);
+        var headerActions=new FlowLayoutPanel{AutoSize=true,WrapContents=false,Anchor=AnchorStyles.Top|AnchorStyles.Right,Margin=new Padding(12,0,0,0)};
+        steamManagement.Margin=new Padding(0,0,8,0);
+        steamManagement.Click+=(_,_)=>{if(steamOnly)CloseSteamManagement();else OpenSteamManagement();};
+        browserSettings.Margin=Padding.Empty;
+        browserSettings.Click+=async(_,_)=>await OpenBrowserSettings();
+        headerActions.Controls.AddRange([steamManagement,browserSettings]);
+        header.Controls.AddRange([stage, title, subtitle, changeMode]);
+        headerGrid.Controls.Add(header,0,0);headerGrid.Controls.Add(headerActions,1,0);main.Controls.Add(headerGrid,0,0);
         content.Padding = Padding.Empty; content.Margin = Padding.Empty; content.BackColor = bg;
         main.Controls.Add(content, 0, 1);
         content.Resize += (_, _) => LayoutView();
@@ -58,6 +108,7 @@ public sealed partial class Wizard
         menu.Items.Add("导出安装日志…", null, (_, _) => ExportLog());
         menu.Items.Add("以管理员权限重开…", null, (_, _) => Elevate());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("检查更新…", null, (_, _) => ShowUpdates());
         menu.Items.Add("GitHub 项目 ↗", null, (_, _) => ReleaseNotesWindow.OpenProject(this));
         menu.Items.Add("关于与许可证…", null, (_, _) => ShowNotices());
         more.Click += (_, _) => menu.Show(more, new Point(0, -menu.GetPreferredSize(Size.Empty).Height));
@@ -96,7 +147,7 @@ public sealed partial class Wizard
         if (description != null) Label(panel, description);
         return panel;
     }
-    void Label(FlowLayoutPanel parent, string text, bool heading = false)
+    Label Label(FlowLayoutPanel parent, string text, bool heading = false)
     {
         var label = new Label
         {
@@ -105,6 +156,7 @@ public sealed partial class Wizard
             Margin = new Padding(0, heading ? 0 : 6, 0, heading ? 10 : 5), Tag = "wrap-text"
         };
         parent.Controls.Add(label);
+        return label;
     }
     void Note(FlowLayoutPanel parent, string text)
     {
@@ -148,14 +200,18 @@ public sealed partial class Wizard
         }
         // Keep labels and cards enabled so system-disabled text cannot turn the page black.
         Walk(content); toolButtons.Enabled = !busy; changeMode.Enabled = enabled && !busy && !writing;
-        if (enabled) user.Enabled = Mode != "uninstall";
+        steamManagement.Enabled=enabled&&!writing;
+        browserSettings.Enabled=enabled&&!writing&&!openingBrowserSettings;
+        if (enabled) user.Enabled = steamOnly || Mode != "uninstall";
+        if(step==0)renew.Enabled=enabled&&Mode!="uninstall";
     }
     void LayoutView()
     {
         if (column == null || column.IsDisposed) return;
         var width = Math.Max(340, content.ClientSize.Width - 48 - SystemInformation.VerticalScrollBarWidth);
         column.Width = width; column.MinimumSize = new Size(width, 0); column.MaximumSize = new Size(width, 32767);
-        subtitle.MaximumSize = new Size(Math.Max(300, content.ClientSize.Width - 56), 0);
+        var actionsWidth=steamManagement.Parent?.GetPreferredSize(Size.Empty).Width??0;
+        subtitle.MaximumSize = new Size(Math.Max(180, content.ClientSize.Width - 72 - actionsWidth), 0);
         foreach (var section in sections)
         {
             section.MinimumSize = new Size(width, 0); section.MaximumSize = new Size(width, 32767); section.Width = width;
@@ -169,16 +225,23 @@ public sealed partial class Wizard
     }
     void Draw()
     {
+        const uint wmSetRedraw=0x000B;
+        var window=content.IsHandleCreated&&content.Visible?content.Handle:IntPtr.Zero;
+        if(window!=IntPtr.Zero)SendMessage(window,wmSetRedraw,IntPtr.Zero,IntPtr.Zero);
         content.SuspendLayout();
+        try{
+        certificateAction=null;modeHint=null;
         foreach (var c in new Control[] { mode, game, user, runtime, steam, launch, details, configure, stopSteam, admin, related, restoreConflicts, removeCertificate, renew, conflicts, repairMissing, repairGameVpk, allowReadOnly, removeRuntime }) c.Parent?.Controls.Remove(c);
         foreach (var c in content.Controls.Cast<Control>().ToArray()) c.Dispose();
         sections.Clear(); content.AutoScrollPosition = Point.Empty;
         column = new FlowLayoutPanel { Location = new Point(24, 0), AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 10) };
         content.Controls.Add(column);
         title.Text = StepNames[step]; subtitle.Text = StepDescriptions[step]; stage.Text = $"STEP {step + 1:00} / 05";
-        navigation.Step = step; navigation.Busy = busy; navigation.Invalidate();changeMode.Visible=step>0;changeMode.Enabled=!busy&&!writing;
-        previous.Enabled = !busy && step > 0 && step < 3;
+        navigation.Step = step; navigation.Busy = busy; navigation.Invalidate();changeMode.Visible=step>0&&!steamOnly;changeMode.Enabled=!busy&&!writing;
+        steamManagement.Text=steamOnly?"返回安装器":"启动项管理";
+        previous.Enabled = !steamOnly && !busy && step > 0 && step < 3;
         next.Enabled = !busy; next.Text = !ready ? "重新检测" : step switch { 0 => "下一步", 1 => "检查并预览", 2 => Mode == "uninstall" ? "确认卸载" : "开始执行", 3 => "执行中…", _ => "返回首页" };
+        if(steamOnly&&step==1){title.Text="Steam 启动项";subtitle.Text="检查所选账号，确认后再执行。";next.Text="预览所选账号";}
 
         if (errorMessage.Length > 0)
         {
@@ -186,14 +249,18 @@ public sealed partial class Wizard
             Note(error, "可以重新检测或导出安装日志，排查后继续。");
         }
         if (step == 0) DrawCertificate();
-        else if (step == 1) DrawLocations();
+        else if (step == 1) {if(steamOnly)DrawSteamOnly();else DrawLocations();}
         else if (step == 2) DrawReview();
         else DrawResults();
         LayoutView(); SetInteractive(ready && !busy);
-        content.ResumeLayout(true);
+        }finally{
+            content.ResumeLayout(true);
+            if(window!=IntPtr.Zero){SendMessage(window,wmSetRedraw,(IntPtr)1,IntPtr.Zero);content.Invalidate(true);}
+        }
     }
     void DrawCertificate()
     {
+        DrawMaintenance();
         var operation = Section("选择操作"); Row(operation, "", mode);
         Note(operation, Flag(snapshot, "installed") ? "已检测到 " + Str(snapshot, "installedVersion") + "，更新将沿用原程序目录。" : "首次安装将使用独立程序目录。");
         var cert = Field(snapshot, "certificate");
@@ -202,40 +269,32 @@ public sealed partial class Wizard
         if (valid) Note(card, "证书名称：DeadlockTranslate localhost  ·  有效期至 " + Str(cert, "expires"));
         else Note(card, "首次安装需要本人在 Windows 弹窗确认信任，请留在电脑前完成这一步。");
         var thumb = Str(cert, "thumbprint"); if (thumb.Length > 0) Note(card, "指纹：" + thumb);
-        if (Mode != "uninstall")
-        {
-            ButtonRow(card,
-                AsyncButton(valid ? "检查现有证书" : "准备并信任证书", async () => await Work(async () =>
-                {
-                    var q = Request("certificate"); q["renew"] = renew.Checked; await runner!.Run(q); await Inspect();
-                    Log("证书检查完成。首次信任后请完整重启 Steam。");
-                }, true), valid ? ButtonKind.Secondary : ButtonKind.Primary),
-                AsyncButton("重新检测", async () => await Work(Inspect)));
-            Check(card, renew);
-        }
-        else ButtonRow(card, AsyncButton("撤销本程序证书信任…", async () =>
-        {
-            if (MessageBox.Show("只撤销本程序当前证书的信任，Windows 可能需要确认。继续？", Text, MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-            await Work(async () => { await runner!.Run(Request("remove-certificate")); await Inspect(); Log("证书信任撤销步骤完成。"); }, true);
-        }, ButtonKind.Danger));
+        certificateAction=(ActionButton)AsyncButton("撤销本程序证书信任…",RunCertificateAction);
+        certificateAction.Size=certificateAction.GetPreferredSize(Size.Empty);
+        certificateAction.AutoSize=false;
+        ButtonRow(card,certificateAction,AsyncButton("重新检测",async()=>await Work(Inspect)));
+        Check(card,renew);
         var note = Section("接下来");
-        Label(note, Mode == "install" ? "证书就绪后点击右下角“下一步”，选择游戏与程序位置。" : Mode=="repair"?"已有有效证书直接沿用；成套修复需要证书就绪，不会重复导入有效证书。":"卸载可直接点击“下一步”，无需安装证书。");
+        modeHint=Label(note,"");
+        modeHint.AutoSize=false;modeHint.AutoEllipsis=true;modeHint.Height=modeHint.Font.Height+2;modeHint.Tag="full-width";
         Note(note, "安装器使用当前 Windows 用户。目录需要写入权限时，可在“更多选项”中选择管理员重开。");
         if (Str(snapshot, "recordError").Length > 0) Label(note, Str(snapshot, "recordError"));
+        RefreshModeControls();
     }
     void DrawLocations()
     {
+        DrawRuntimeChoice();
         var paths = Section("游戏与程序", "更新会同时处理后台、设置页和游戏 VPK。");
         Row(paths, "Deadlock 游戏目录", game, Button("浏览…", () => Browse(game)), AsyncButton("深层扫描", Deep));
         Note(paths, "可粘贴游戏根目录、citadel 文件夹或 deadlock.exe。扫描最多 60 秒，支持取消。");
         Row(paths, "翻译程序目录", runtime, Button("浏览…", () => Browse(runtime)));
-        Note(paths, "更新沿用旧目录；首次安装可选择空目录。程序目录应放在游戏目录外。");
+        Note(paths, "留空会自动使用上次目录或建议目录。要换位置，可选择游戏目录之外的空文件夹。");
         var launchCard = Section("Steam 与启动方式");
         Row(launchCard, "Steam 目录", steam, Button("浏览…", () => Browse(steam)), AsyncButton("读取账号", async () => await Work(Inspect)));
-        if (Mode != "uninstall") Row(launchCard, "Steam 账号", user);
+        if (Mode != "uninstall") DrawSteamAccounts(launchCard);
         configure.Text = Mode == "uninstall" ? "清除此 Steam 目录所有账号中指向本程序的启动前缀" : "自动配置所选账号的 Deadlock 启动项";
         Check(launchCard, configure); Check(launchCard, stopSteam);
-        if (Mode != "uninstall") Check(launchCard, admin);
+        if (Mode != "uninstall") {admin.Text="游戏需要管理员权限：启用管理员兼容启动";Check(launchCard, admin);}
         else
         {
             var cleanup = Section("卸载选项");
@@ -246,16 +305,33 @@ public sealed partial class Wizard
         ButtonRow(recovery, AsyncButton("恢复安装记录…", async () =>
         {
             if (MessageBox.Show("将检测原翻译包并尝试恢复记录；旧包已经删除时会引导重新安装，不要求手动复制旧 VPK。损坏记录会先备份。继续？", Text, MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-            await Work(async () => { var q = Request("recover"); q["replaceBrokenRecord"] = true; var result=await runner!.Run(q); await Inspect();if(Flag(result,"reinstallRequired")){mode.SelectedIndex=0;step=0;Log(Str(result,"message"));}else Log("安装记录已恢复。"); }, true);
+            await Work(async () => {
+                var q= Request("recover");q["replaceBrokenRecord"]=true;
+                var result=await runner!.Run(q);
+                if(Field(result,"runtimeChoice").ValueKind==JsonValueKind.Object){ShowRuntimeChoice(result);return;}
+                await Inspect();
+                if(Flag(result,"reinstallRequired")){
+                    runtime.Text=Str(result,"runtime",runtime.Text);
+                    game.Text=Str(result,"game",game.Text);
+                    Log(Str(result,"message"));
+                }else Log("安装记录已恢复。");
+            }, true);
         }));
     }
     void DrawReview()
     {
         var summary = Section(Mode == "install" ? Flag(plan, "installed") ? "覆盖更新" : "首次安装" : Mode == "repair" ? "修复安装" : "卸载游戏组件");
         Label(summary, Mode == "install" && Flag(plan, "installed") ? "当前 " + Str(plan, "version") + "  →  " + InstallerVersion.Current : "请核对以下位置与选项。");
-        Label(summary, "游戏：" + game.Text + "\n程序：" + runtime.Text + "\n启动项：" + (configure.Checked ? "自动配置" : "手动配置") + (Mode != "uninstall" ? "\n账号：" + (user.SelectedItem?.ToString() ?? "尚未选择") : ""));
+        Label(summary, "游戏：" + game.Text + "\n程序：" + runtime.Text + "\n启动项：" + (ConfigureSelectedSteam ? "自动配置" : "手动配置") + (Mode != "uninstall" ? "\n已勾选账号：" + user.CheckedItems.Count : ""));
         var correction=Field(plan,"gameCorrection");
         if(correction.ValueKind==JsonValueKind.Object)Note(summary,Str(correction,"message")+"\n原选择："+Str(correction,"requested"));
+        if(Flag(plan,"runtimeDefaulted"))Note(summary,"程序目录留空，已选择建议位置。");
+        var runtimeMove=Field(plan,"runtimeMove");
+        if(runtimeMove.ValueKind==JsonValueKind.Object){
+            var paths=Section("本次程序位置");
+            Label(paths,"上次目录："+Str(runtimeMove,"oldRuntime","无法从旧记录确认")+"\n本次目录："+Str(runtimeMove,"runtime"));
+            Note(paths,"新目录会接收完整程序，旧目录文件保留。安装记录会在成套更新后指向新位置，请按完成页确认 Steam 启动项。");
+        }
         var migration=Field(plan,"migration");
         if(migration.ValueKind==JsonValueKind.Object){
             var recovery=Section("游戏重装 / 目录迁移",Str(migration,"message"));
@@ -285,6 +361,7 @@ public sealed partial class Wizard
         var readiness=Section("安装前检查", "此页不写入配置。开始执行前会再次检查，并测试目标目录的写入权限。");
         var checks=Items(Field(plan,"preflight")).ToArray();
         Note(readiness, "已检查 "+checks.Length+" 个目标；程序、游戏 VPK 与安装记录一起校验。");
+        DrawSteamPreview(readiness);
         foreach(var check in checks.Where(v=>Flag(v,"blocking")||Flag(v,"requiresReadOnlyConsent")||Str(v,"code") is "file-locked" or "steam-manual-fallback")){
             Label(readiness, Str(check,"message")+"\n"+Str(check,"path"));Note(readiness,Str(check,"remedy"));
         }
@@ -312,6 +389,8 @@ public sealed partial class Wizard
         result.Controls.Add(details);
         if (step == 4)
         {
+            if (Items(Field(snapshot,"pending")).Any()) DrawMaintenance();
+            else if(Items(Field(health,"checks")).Any())DrawHealthReport(Section("安装后体检"));
             if (Mode != "uninstall")
             {
                 var manual = Section("手动启动项备用"); Row(manual, "", launch, Button("复制", CopyLaunch));
@@ -338,7 +417,8 @@ public sealed partial class Wizard
         plan = JsonSerializer.SerializeToElement(new { installed = true, version = "0.6.8", conflicts = Array.Empty<object>() });
         runtime.Text = @"D:\Apps\DeadlockTranslate"; game.Text = @"D:\SteamLibrary\steamapps\common\Deadlock"; steam.Text = @"D:\Steam";
         launch.Text = "\"" + runtime.Text + "\\DeadlockTranslate.exe\" --steam-game %command%";
-        user.Items.Add(new Account("123456789", true, "Steam 玩家")); user.SelectedIndex = 0;
+        user.Items.Add(new Account("123456789", true, "Steam 玩家"), true);
+        user.Items.Add(new Account("123456790", false, "第二个账号"), true);
         ShowOffscreen();
         string Variant(string name) => Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + "-" + name + ".png");
         step = 0; Draw(); CaptureImage(path);
@@ -352,7 +432,33 @@ public sealed partial class Wizard
         base.WndProc(ref focusMessage); hoverButton.Focus(); CaptureImage(Variant("focus"));
         busy = true; Draw(); CaptureImage(Variant("busy")); busy = false;
         errorMessage = "检测未完成，请确认程序目录可访问后重新检测。"; Draw(); CaptureImage(Variant("error")); errorMessage = "";
+        var pageBeforeMode=column;
+        var modeParent=mode.Parent;
+        var modeHandle=mode.Handle;
+        var certBeforeMode=certificateAction;
+        bool KeepsModeControls()=>ReferenceEquals(pageBeforeMode,column)&&ReferenceEquals(modeParent,mode.Parent)&&
+            mode.IsHandleCreated&&mode.Handle==modeHandle&&ReferenceEquals(certBeforeMode,certificateAction);
+        mode.SelectedIndex=1;
+        if(!KeepsModeControls()||!renew.Enabled||modeHint?.Text.Contains("成套修复")!=true)throw new InvalidOperationException("Repair mode rebuilt or failed to update the existing controls.");
+        mode.SelectedIndex=2; CaptureImage(Variant("mode-uninstall"));
+        if(!KeepsModeControls()||renew.Enabled||certificateAction?.Text!="撤销本程序证书信任…")throw new InvalidOperationException("Uninstall mode rebuilt or failed to update the existing controls.");
+        mode.SelectedIndex=0;
+        if(!KeepsModeControls()||!renew.Enabled)throw new InvalidOperationException("Install mode rebuilt the current page.");
+        if(!steamManagement.Visible||steamManagement.PointToScreen(Point.Empty).Y>=content.PointToScreen(Point.Empty).Y)
+            throw new InvalidOperationException("Steam management is not available in the installer header.");
+        if(!browserSettings.Visible||!ReferenceEquals(steamManagement.Parent,browserSettings.Parent)||
+            browserSettings.Top!=steamManagement.Top||browserSettings.Left<steamManagement.Right)
+            throw new InvalidOperationException("Browser settings is not beside Steam management.");
         step = 1; Draw(); CaptureImage(Variant("locations"));
+        var previousRuntime=runtime.Text;
+        steamManagement.PerformClick();
+        if(!steamOnly||step!=1||steamManagement.Text!="返回安装器")throw new InvalidOperationException("The header button did not open Steam management.");
+        CaptureImage(Variant("steam-multi"));
+        SetSteamSelection([]);
+        steamManagement.PerformClick();
+        if(steamOnly||step!=1||runtime.Text!=previousRuntime||SelectedSteamIds().Length!=2)throw new InvalidOperationException("Returning from Steam management did not restore the installation draft.");
+        runtimeChoice=JsonSerializer.SerializeToElement(new{current=runtime.Text,previous=@"D:\Old\DeadlockTranslate",canUseCurrent=true,recordHash=new string('0',64)});
+        Draw(); CaptureImage(Variant("runtime-choice")); runtimeChoice=default;
         step = 2; Draw(); CaptureImage(Variant("review"));
         plan=JsonSerializer.SerializeToElement(new{installed=true,version="0.6.16",needsReadOnlyConsent=true,blocked=false,preflight=new[]{new{path=@"D:\SteamLibrary\steamapps\common\Deadlock\game\citadel\gameinfo.gi",code="read-only",requiresReadOnlyConsent=true,blocking=false,message="游戏配置为只读，需要明确允许临时解除只读",remedy="仅修改这一个配置文件的只读属性，操作后恢复；不会修改整个目录权限。"}}});
         Draw();CaptureImage(Variant("readonly"));

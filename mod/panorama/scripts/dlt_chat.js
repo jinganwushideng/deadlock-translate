@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.2-7216c2897ad2';
+var BUILD_ID = '0.7.3-206c47b796ac';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -1460,11 +1460,12 @@ var DLTChatInputFocused = function () {};
             root = state.previewRoot = $.CreatePanel('Panel', ROOT, 'DltDisplayPreview'); root.__dltOwnedPreview = true;
             root.hittest = false; root.hittestchildren = false; feedStyle(root, { width: '100%', height: '100%', zIndex: '300' });
             root.nativePanel = $.CreatePanel('Panel', root, 'DltPreviewNative'); root.nativePanel.hittest = false; root.nativePanel.hittestchildren = false;
-            feedStyle(root.nativePanel, { flowChildren: 'down', horizontalAlign: 'center', verticalAlign: 'top', marginTop: '28px', width: '340px', padding: '10px', backgroundColor: '#e9dec8f2', borderLeft: '2px solid #b99860' });
+            feedStyle(root.nativePanel, { flowChildren: 'down', horizontalAlign: 'center', verticalAlign: 'top', marginTop: '28px', width: 'fit-children' });
             root.nativeTitle = $.CreatePanel('Label', root.nativePanel, 'DltPreviewNativeTitle'); root.nativeTitle.html = false; root.nativeTitle.hittest = false;
-            root.nativeTitle.text = '原生气泡样式测试 · wait for my ult'; feedStyle(root.nativeTitle, { color: '#65533c', fontSize: '13px' });
+            root.nativeTitle.text = 'wait for my ult';
+            feedStyle(root.nativeTitle, { color: '#1c211d', fontSize: '15px', fontWeight: 'bold', padding: '5px 9px', backgroundColor: '#d9ffee', border: '1px solid #242722', borderRadius: '3px' });
             root.nativeText = $.CreatePanel('Label', root.nativePanel, 'DltPreviewNativeText'); root.nativeText.html = false; root.nativeText.hittest = false;
-            feedStyle(root.nativeText, { color: '#28241e', width: '100%', whiteSpace: 'normal' });
+            root.nativeText.AddClass('DltNativeBubblePreview');
             root.feedPanel = $.CreatePanel('Panel', root, 'DltPreviewFeed'); root.feedPanel.hittest = false; root.feedPanel.hittestchildren = false;
             feedStyle(root.feedPanel, { flowChildren: 'down', height: 'fit-children', maxHeight: '600px' }); root.samples = [];
             for (var i = 0; i < 10; i++) {
@@ -1480,7 +1481,7 @@ var DLTChatInputFocused = function () {};
         var options = preview.options;
         var sample = { hero: '劳什', legacyHero: '神鞭', sender: '测试玩家', displaySender: '测试玩家', channel: 'team', stage: 'quality' };
         root.nativePanel.visible = options.mode !== 'independent'; root.feedPanel.visible = options.mode !== 'native';
-        root.nativePanel.style.opacity = String(options.opacity / 100); root.nativeText.style.fontSize = options.fontSize + 'px';
+        root.nativeText.style.opacity = String(options.opacity / 100); root.nativeText.style.fontSize = options.fontSize + 'px';
         root.nativeText.text = '等我大招好了再一起推进。'; layoutFeed(root.feedPanel, options); layoutFeedDensity(root.samples, options);
         for (var i = 0; i < root.samples.length; i++) {
             var slot = root.samples[i]; slot.panel.visible = i < options.lines;

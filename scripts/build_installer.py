@@ -1,12 +1,14 @@
 """Build the standalone offline GUI, embedding the exact released runtime ZIP."""
-import hashlib,json,pathlib,subprocess,shutil
+import argparse,hashlib,json,pathlib,subprocess,shutil
 from release_history import check as check_release_history
 from build_identity import stamp
 import zipfile
 root=pathlib.Path(__file__).resolve().parents[1]
 check_release_history(root)
 version=json.loads((root/'version.json').read_text(encoding='utf-8-sig'))['version']
-release=root/'release'/version
+parser=argparse.ArgumentParser()
+parser.add_argument('--release-dir', type=pathlib.Path, help='Directory containing the verified runtime ZIP')
+release=(parser.parse_args().release_dir or root/'release'/version).resolve()
 payload=release/f'DeadlockTranslate-{version}-win-x64.zip'
 if not payload.is_file():raise SystemExit('Run package_share.py before building the GUI installer.')
 info=stamp(check=True)

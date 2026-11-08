@@ -59,7 +59,7 @@ def main():
     for name in ('data', 'wwwroot', 'LICENSES'):
         shutil.copytree(built / name, package / name)
     subprocess.run([sys.executable, str(ROOT / 'scripts/package_docs.py'), '--output', str(package)], check=True)
-    for script in ('Configure-Steam.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1','Repair-GameConfig.cmd','Export-Diagnostics.cmd'):
+    for script in ('Configure-Steam.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Installer-Transaction.ps1','Installer-Workflow.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1','Repair-GameConfig.cmd','Export-Diagnostics.cmd'):
         shutil.copyfile(ROOT / 'scripts' / script, package / script)
     for original, name in ((ROOT / 'README.md', 'README.md'), (ROOT / 'CHANGELOG.md', 'CHANGELOG.md'),
                            (ROOT / ('docs/UPDATE-'+version+'.md'), 'UPDATE-'+version+'.md'), (ROOT / 'docs/VALIDATION.md', 'VALIDATION.md'), (ROOT / 'docs/TEST-REPORT.md', 'TEST-REPORT.md')):
@@ -75,6 +75,10 @@ def main():
     manifest = dict(version=version, buildId=build_info['buildId'], featureRevision=version_info.get('featureRevision'), files=[dict(file=f.relative_to(package).as_posix(), bytes=f.stat().st_size, sha256=sha(f))
                     for f in sorted(package.rglob('*')) if f.is_file()])
     (package / 'package-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    # Fresh installs and upgrades must accept exactly the same published payload.
+    subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                    '-File', str(ROOT / 'scripts/Update-Mod.ps1'), '-PackageFolder', str(package),
+                    '-ValidatePackagePaths'], check=True)
     args.archive_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
         for file in sorted(package.rglob('*')):
@@ -90,7 +94,7 @@ def main():
     archive.with_suffix('.zip.sha256').write_text(checksum + '  ' + archive.name + '\n', encoding='ascii')
     updater = build_updater(args.archive_dir / '覆盖更新.cmd')
     updater.with_suffix('.cmd.sha256').write_text(sha(updater) + '  ' + updater.name + '\n', encoding='utf-8-sig')
-    for name in ('AI安装说明书.txt', 'AI-INSTALL-GUIDE.md', 'Configure-Steam.ps1', 'Install-Safety.ps1','Vpk-Recovery.ps1'):
+    for name in ('AI安装说明书.txt', 'AI-INSTALL-GUIDE.md', 'Configure-Steam.ps1', 'Install-Safety.ps1','Installer-Transaction.ps1','Vpk-Recovery.ps1'):
         shutil.copyfile(package / name, args.archive_dir / name)
     print(json.dumps(dict(package=str(package), archive=str(archive), sha256=checksum,
                           updater=str(updater), updaterSha256=sha(updater),

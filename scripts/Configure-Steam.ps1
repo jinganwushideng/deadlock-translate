@@ -10,7 +10,8 @@
     [switch]$RemoveTranslator,
     [string]$ResultFile,
     [string]$ErrorResultFile,
-    [switch]$PreviewRuntime
+    [switch]$PreviewRuntime,
+    [string]$ExpectedReviewHash
 )
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Install-Safety.ps1')
@@ -44,7 +45,8 @@ function Launch-Locate([string]$text){
         $taskFrames[$taskFrames.Count-1].fields.Add([pscustomobject]@{name=$taskName;token=$taskValue})
     }
     if($taskFrames.Count){throw 'Unclosed VDF block'}
-    if($taskFound.Count -ne 1){Throw-DltFault 'steam-no-game-record' 'steam-preflight' $taskFile '所选 Steam 账号没有唯一的 Deadlock（1422450）记录。' '核对所选账号；必要时在该账号启动一次游戏后重试，或复制启动项到 Steam 属性页。不要创建猜测的 Apps 区块。'}
+    if($taskFound.Count -eq 0){Throw-DltFault 'steam-no-game-record' 'steam-preflight' $taskFile '本机没有该账号的 Deadlock（1422450）记录。' '可在该账号启动游戏生成记录后重新检查。'}
+    if($taskFound.Count -gt 1){Throw-DltFault 'steam-duplicate-game-record' 'steam-preflight' $taskFile '该账号有重复的 Deadlock（1422450）记录，无法确认应写入哪一条。' '请核对 Steam 配置。安装器不会猜测或覆盖重复记录。'}
     $taskLaunch=@($taskFound[0].fields|Where-Object name -eq 'launchoptions')
     if($taskLaunch.Count -gt 1){throw 'Duplicate LaunchOptions; refusing automatic edit'}
     return [pscustomobject]@{value=if($taskLaunch.Count){$taskLaunch[0].token}else{$null};end=$taskFound[0].end}
@@ -99,8 +101,11 @@ if(-not $UserId){
 $taskFile=Join-Path $SteamPath ('userdata\'+$UserId+'\config\localconfig.vdf');Launch-NoLinks $taskFile
 if(-not(Test-Path -LiteralPath $taskFile -PathType Leaf)){throw 'This UserId has no localconfig.vdf; confirm the account'}
 $taskOriginal=Launch-Read $taskFile;$taskPlan=Launch-Plan $taskOriginal.text $taskExecutable
+if($ExpectedReviewHash -and (Launch-Hash $taskOriginal.bytes) -ne $ExpectedReviewHash){throw 'Steam 配置在预览后变化，请重新检查。'}
 $taskChanged=$taskPlan.text -cne $taskOriginal.text;$taskBackup=$null;$taskStopped=$false;$taskRestarted=$false
 if($Apply -and $taskChanged){
+    Test-DltStop
+    Send-DltJournalProgress '正在等待 Steam 正常退出'
     if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw 'Exit Deadlock before changing the launch wrapper'}
     if(Launch-SteamRunning $SteamPath){
         if(-not $StopSteam){throw 'Steam is running. Exit it normally, or supply -StopSteam to request Steam.exe -shutdown'}
@@ -125,7 +130,7 @@ if($Apply -and $taskChanged){
         try{
             if((Launch-SteamRunning $SteamPath) -or (Launch-Hash ([IO.File]::ReadAllBytes($taskFile))) -ne (Launch-Hash $taskOriginal.bytes)){throw 'Steam or configuration changed during preparation; no write performed'}
             [IO.File]::WriteAllBytes($taskTemporary,$taskEncoded)
-            [IO.File]::Replace($taskTemporary,$taskFile,[NullString]::Value)
+            Write-DltAtomic $taskFile $taskEncoded -ExpectedHash (Launch-Hash $taskOriginal.bytes) -Stage 'steam-launch-options'
             if((Launch-Hash ([IO.File]::ReadAllBytes($taskFile))) -ne (Launch-Hash $taskEncoded)){throw 'Persisted VDF hash mismatch'}
         }finally{if(Test-Path -LiteralPath $taskTemporary){Remove-Item -LiteralPath $taskTemporary}}
     }
@@ -134,7 +139,7 @@ if($Apply -and $taskChanged){
 $taskFinal=Launch-Read $taskFile;$taskFinalBlock=Launch-Locate $taskFinal.text
 $taskActual=if($taskFinalBlock.value){Launch-Decode $taskFinalBlock.value.Value}else{''}
 if($Apply -and $taskActual -cne $taskPlan.after){throw 'LaunchOptions read-back mismatch'}
-$taskResult=[ordered]@{userId=$UserId;file=$taskFile;before=$taskPlan.before;after=$taskPlan.after;actual=$taskActual;applied=[bool]$Apply;changed=([bool]$Apply -and $taskChanged);alreadyConfigured=(-not $taskChanged);backup=$taskBackup;steamStoppedNormally=$taskStopped;steamRestartRequested=$taskRestarted}
+$taskResult=[ordered]@{userId=$UserId;file=$taskFile;before=$taskPlan.before;after=$taskPlan.after;beforeHash=(Launch-Hash $taskOriginal.bytes);actual=$taskActual;applied=[bool]$Apply;changed=([bool]$Apply -and $taskChanged);alreadyConfigured=(-not $taskChanged);backup=$taskBackup;steamStoppedNormally=$taskStopped;steamRestartRequested=$taskRestarted}
 $taskJson=$taskResult|ConvertTo-Json -Depth 3
 if($ResultFile){$taskOutput=[IO.Path]::GetFullPath($ResultFile);if($taskOutput -ieq $taskFile -or $taskOutput -ieq $taskExecutable){throw 'ResultFile overlaps protected input'};[IO.File]::WriteAllText($taskOutput,$taskJson,[Text.UTF8Encoding]::new($true))}
 Write-Output $taskJson

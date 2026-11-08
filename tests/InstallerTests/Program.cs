@@ -21,7 +21,7 @@ Check(announcements.ShouldShow("0.6.24",secondRevision),"same version with chang
 announcements.MarkSeen("0.6.24",secondRevision);
 Check(!announcements.ShouldShow("0.6.24",firstRevision)&&!announcements.ShouldShow("0.6.24",secondRevision),"alternating same-version revisions keep their read state");
 Check(!announcements.ShouldShow("0.6.24"),"revision-aware marker remains compatible with version-only checks");
-Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("安装恢复")&&history.Current.Changes.Any(x=>x.Contains("迁移"))&&history.Current.Changes.Any(x=>x.Contains("Steam")),"current announcement describes automatic migration and installer recovery");
+Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("体检")&&history.Current.Changes.Any(x=>x.Contains("中断"))&&history.Current.Changes.Any(x=>x.Contains("更新")),"current announcement describes interruption recovery and update checks");
 Check(history.Entries.Any(e=>e.Version=="0.6.24"&&e.Changes.Any(x=>x.Contains("备份"))),"previous backup-cleanup update remains in history");
 Check(typeof(ReleaseNotesWindow).Assembly.GetManifestResourceNames().Contains("community-qr.png"),"feedback QR is embedded for offline display");
 using(var maintenance=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("scripts/Backup-Maintenance.ps1")){
@@ -54,6 +54,36 @@ foreach(var c in new[]{("bad-hash",true,(string?)null,false),("zip-slip",false,"
  bool failed=false;try{Package.Extract(Make(c.Item1,c.Item2,c.Item3,c.Item4),Path.Combine(temp,c.Item1),CancellationToken.None);}catch(InvalidDataException){failed=true;}Check(failed,"bad archive rejected "+c.Item1);
 }
 using(var cancel=new CancellationTokenSource()){cancel.Cancel();bool cancelled=false;try{Package.Extract(Make("cancel"),Path.Combine(temp,"cancel"),cancel.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"cancelled preparation cannot continue extracting");}
+File.WriteAllText(Path.Combine(root,"artifacts","gui-package-tests.json"),JsonSerializer.Serialize(new{passed,realInstallation=false,certificateTrustChanged=false}));
+{
+ var settingsState=Path.Combine(temp,"settings-launch-state");Directory.CreateDirectory(settingsState);
+ var runtime=Path.Combine(temp,"已安装 程序");Directory.CreateDirectory(runtime);
+ var exe=Path.Combine(runtime,"DeadlockTranslate.exe");File.WriteAllText(exe,"fixture backend executable");
+ File.WriteAllText(Path.Combine(settingsState,"install-manifest.json"),JsonSerializer.Serialize(new{runtimeFolder=runtime,version="0.7.3"}));
+ File.WriteAllText(Path.Combine(runtime,"package-manifest.json"),JsonSerializer.Serialize(new{version="0.7.3",files=new[]{new{file="DeadlockTranslate.exe",sha256=Package.Hash(exe)}}}));
+ System.Diagnostics.ProcessStartInfo? requested=null;
+ await InstalledSettingsLauncher.OpenAsync(settingsState,info=>requested=info);
+ Check(requested?.FileName==exe&&requested.WorkingDirectory==runtime&&requested.ArgumentList.SequenceEqual(new[]{"--settings"}),"browser settings uses the verified installed executable and existing settings startup argument");
+ File.AppendAllText(exe," changed");requested=null;bool rejected=false;
+ try{await InstalledSettingsLauncher.OpenAsync(settingsState,info=>requested=info);}catch(IOException){rejected=true;}
+ Check(rejected&&requested==null,"browser settings rejects an executable that differs from the installed package manifest");
+}
+using (var fixture = new Package()) {
+    Directory.CreateDirectory(fixture.Scripts);
+    var script=Path.Combine(fixture.Scripts,"Installer-Workflow.ps1");
+    var fixtureAudit=new InstallerAudit(temp);
+    async Task Expect<T>(string body,string code) where T : Exception {
+        File.WriteAllText(script,"param($RequestFile,$ResultFile)\r\n"+body);
+        var runner=new Runner(fixture,_=>{},fixtureAudit,readTimeoutMilliseconds:typeof(T)==typeof(TimeoutException)?750:60_000);
+        bool failed=false;
+        try { await runner.Run(new(){["action"]="inspect"}); }
+        catch (T) { failed=true; }
+        Check(failed&&fixtureAudit.Export().Contains(code,StringComparison.Ordinal),"worker supervision reports "+code);
+    }
+    await Expect<IOException>("exit 37","step-missing-result");
+    await Expect<IOException>("[IO.File]::WriteAllText($ResultFile,'{')","step-invalid-result");
+    await Expect<TimeoutException>("Start-Sleep -Seconds 20","step-timeout");
+}
 File.WriteAllText(Path.Combine(root,"artifacts","gui-package-tests.json"),JsonSerializer.Serialize(new{passed,realInstallation=false,certificateTrustChanged=false}));
 Exception? uiError=null;
 var uiThread=new Thread(()=>{

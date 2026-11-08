@@ -5,7 +5,7 @@ import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 names=['Installer-Workflow.ps1','Manage-Mod.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1',
-       'Install-Safety.ps1','Vpk-Recovery.ps1','Configure-Steam.ps1','Update-Mod.ps1',
+       'Install-Safety.ps1','Installer-Transaction.ps1','Vpk-Recovery.ps1','Configure-Steam.ps1','Update-Mod.ps1',
        'Update-Archive.ps1','Backup-Maintenance.ps1','Trust-Local-Https.ps1']
 passed=0
 for name in names:

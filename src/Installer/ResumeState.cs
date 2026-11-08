@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace DeadlockTranslate.Setup;
 
-public sealed record ResumeState(string Owner, string Version, DateTimeOffset Created, string Mode, string Game, string Runtime, string Steam, string UserId, bool ConfigureSteam, bool StopSteam, bool Admin, bool RestoreConflicts, bool RemoveRuntime, bool RemoveCertificate)
+public sealed record ResumeState(string Owner, string Version, DateTimeOffset Created, string Mode, string Game, string Runtime, string Steam, string UserId, bool ConfigureSteam, bool StopSteam, bool Admin, bool RestoreConflicts, bool RemoveRuntime, bool RemoveCertificate, string[]? UserIds = null, bool SteamOnly = false)
 {
     static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeadlockTranslate-Installer");
     static void NoLinks(string path)
@@ -27,6 +27,8 @@ public sealed record ResumeState(string Owner, string Version, DateTimeOffset Cr
         if (value.Owner != owner || value.Version != version || value.Created > DateTimeOffset.UtcNow.AddMinutes(1) || value.Created < DateTimeOffset.UtcNow.AddMinutes(-15) || value.Mode is not ("install" or "repair" or "uninstall")) throw new IOException("恢复选择已过期、版本不匹配或 Windows 用户不一致。");
         foreach (var p in new[] { value.Game, value.Runtime, value.Steam })
             if (p == null || p.Length > 512 || p.Contains('\0')) throw new IOException("恢复选择包含无效目录。");
+        if (value.UserIds is { } ids && (ids.Length > 32 || ids.Any(id => !uint.TryParse(id,out var account) || account == 0 || account.ToString() != id)))
+            throw new IOException("恢复选择包含无效 Steam 账号。");
         File.Delete(path); return value;
     }
 }

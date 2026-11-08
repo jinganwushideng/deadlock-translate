@@ -43,7 +43,7 @@ class WorkflowTests(unittest.TestCase):
   file.write_text('"UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps" { "'+appid+'" { '+v+' } } } } } }',encoding='utf-8');return file
  def simulate_certificate_gate(self):
   scripts=self.root/'trusted-test-scripts';scripts.mkdir()
-  for name in ('Installer-Workflow.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Vpk-Recovery.ps1','Manage-Mod.ps1','Update-Mod.ps1','Backup-Maintenance.ps1','Configure-Steam.ps1','Trust-Local-Https.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
+  for name in ('Installer-Workflow.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Installer-Transaction.ps1','Vpk-Recovery.ps1','Manage-Mod.ps1','Update-Mod.ps1','Backup-Maintenance.ps1','Configure-Steam.ps1','Trust-Local-Https.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
   self.script=scripts/'Installer-Workflow.ps1';text=self.script.read_text(encoding='utf-8-sig').replace('function CertStatus {','function UnusedRealCertStatus {',1)
   text=text.replace('function Inspect {',"function CertStatus { return @{ready=$true;state='fixture'} }\nfunction Start-Process { param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru,[switch]$Wait); return [pscustomobject]@{ExitCode=0} }\nfunction Inspect {",1)
   self.script.write_text(text,encoding='utf-8-sig')
@@ -127,7 +127,7 @@ function Write-DltAtomic {param([string]$Path,[byte[]]$Bytes,[string]$ExpectedHa
  def test_rollback_never_overwrites_external_gameinfo_change(self):
   self.inject_manifest_failure(external_change=True);gi=self.game/'game/citadel/gameinfo.gi';r=self.call('apply');self.assertFalse(r['ok']);self.assertEqual(r['failure']['code'],'fixture-denied');self.assertEqual(gi.read_text(),'EXTERNAL CHANGE');self.assertTrue(r['failure']['rollback']);self.assertFalse(self.target.exists())
  def test_steam_account_preflight_falls_back_without_blocking_core(self):
-  self.simulate_certificate_gate();file=self.account(1,'-novid',appid='777');before=file.read_bytes();r=self.call('plan',configureSteam=True)
+  self.simulate_certificate_gate();file=self.account(1,'foreign-wrapper %command%');before=file.read_bytes();r=self.call('plan',configureSteam=True)
   self.assertTrue(r['ok'],r);self.assertFalse(r['data']['blocked']);self.assertTrue(any(c['code']=='steam-manual-fallback' for c in r['data']['preflight']))
   r=self.call('apply',configureSteam=True);self.assertTrue(r['ok'],r);self.assertTrue(r['data']['coreDone']);self.assertFalse(r['data']['steamDone']);self.assertEqual(file.read_bytes(),before);self.assertEqual(self.target.read_bytes(),self.vpk)
  def test_valid_steam_preflight_is_readonly_with_missing_runtime(self):

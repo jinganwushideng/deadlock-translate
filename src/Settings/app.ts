@@ -379,6 +379,119 @@ async function copyText(value:string){
     try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable');}finally{input.remove();if(previous&&previous.focus)previous.focus();clipboardInProgress=false;}
 }
 function communityNotice(message:string,error=false){$('communityStatus').textContent=message;$('communityStatus').classList.toggle('error',error);}
+type ReleaseView={currentVersion:string;available:boolean;version?:string;summary?:string;size:number;lastChecked?:string;retryAt?:string;checkError?:string;download:string;downloaded:number;downloadError?:string;automatic:boolean};
+let updateBusy=false, updatePoll:ReturnType<typeof setTimeout>|null=null;
+function renderUpdate(view:ReleaseView){
+    $('updateNotice').hidden=!view.available;
+    $('updateNoticeText').textContent=view.available?`同频 ${view.version} 已发布 · ${(view.size/1048576).toFixed(1)} MB`:'';
+    const checked=view.lastChecked?` · 上次检查 ${new Date(view.lastChecked).toLocaleString()}`:'';
+    const progress=view.download==='downloading'?` · 已下载 ${(view.downloaded/1048576).toFixed(1)} / ${(view.size/1048576).toFixed(1)} MB`:view.download==='ready'?' · 下载完成': '';
+    $('releaseState').textContent=`当前 ${view.currentVersion}`+(view.version?` · 可更新至 ${view.version}`:' · 暂无可用新版')+checked+progress;
+    $('releaseSummary').textContent=view.summary||'';
+    $('releaseSummary').hidden=!view.summary;
+    $('releaseError').textContent=view.downloadError||view.checkError||'';
+    $<HTMLInputElement>('releaseAutomatic').checked=view.automatic;
+    $('releaseDownload').hidden=!view.version||view.download==='downloading'||view.download==='ready';
+    $('releaseCancel').hidden=view.download!=='downloading';
+    $('releaseInstall').hidden=view.download!=='ready';
+    if(updatePoll!==null)clearTimeout(updatePoll);
+    updatePoll=setTimeout(()=>void refreshUpdates(),view.download==='downloading'?750:30000);
+}
+async function refreshUpdates(){
+    if(settingsClosing||updateBusy||!document.getElementById('releaseState'))return;
+    try{const view=await api('updates');if(typeof view.currentVersion==='string')renderUpdate(view);}
+    catch{updatePoll=setTimeout(()=>void refreshUpdates(),30000);}
+}
+async function updateAction(action:string,data:unknown={}){
+    if(updateBusy)return;updateBusy=true;
+    try{
+        const view=await api('updates/'+action,'POST',data);
+        if(typeof view.currentVersion==='string')renderUpdate(view);
+        else if(action==='install')$('releaseError').textContent='已打开校验通过的安装器。';
+    }catch(e){$('releaseError').textContent=(e as Error).message;}
+    finally{updateBusy=false;}
+}
+if(document.getElementById('maintenanceHealth')){
+    bind('maintenanceHealth',async()=>{
+        $('maintenanceState').textContent='正在体检…';
+        try{
+            const result=await api('maintenance/health','POST',{});
+            const list=$('maintenanceChecks');list.replaceChildren();
+            for(const item of result.checks||[]){
+                const row=document.createElement('li');
+                const state:Record<string,string>={ok:'正常',repair:'需要修复',attention:'需要处理',verify:'待游戏验证'};
+                row.textContent=`${state[item.status]||'待确认'} · ${item.message}`;list.append(row);
+            }
+            $('maintenanceState').textContent='体检完成。可打开安装器预览并确认修复。';
+        }catch(e){$('maintenanceState').textContent=(e as Error).message;}
+    });
+    bind('maintenanceOpen',async()=>{
+        try{await api('maintenance/open','POST',{});$('maintenanceState').textContent='已打开安装器的维护页面。';}
+        catch(e){$('maintenanceState').textContent=(e as Error).message;$('maintenanceProject').hidden=false;}
+    });
+    bind('maintenanceProject',async()=>{
+        try{await api('community/github','POST',{});}
+        catch(e){$('maintenanceState').textContent=(e as Error).message;}
+    });
+    bind('releaseCheck',()=>updateAction('check'));
+    bind('releaseDownload',()=>updateAction('download'));
+    bind('releaseCancel',()=>updateAction('cancel'));
+    bind('releaseInstall',()=>{if(!inGame&&window.confirm('确认打开已校验的安装器？'))return updateAction('install');$('releaseError').textContent='请退出游戏后，在浏览器设置或安装器中打开更新。';});
+    bind('releaseDismiss',()=>updateAction('dismiss'));
+    bind('releaseOpen',()=>selectPage('diagnostics','releaseUpdateCard'));
+    $<HTMLInputElement>('releaseAutomatic').addEventListener('change',async e=>{
+        const field=e.currentTarget as HTMLInputElement;field.disabled=true;
+        try{await updateAction('automatic',{enabled:field.checked});await refreshUpdates();}finally{field.disabled=false;}
+    });
+    setTimeout(()=>void refreshUpdates(),1500);
+}
+if(document.getElementById('steamAccountLoad')){
+    const selected=()=>Array.from($('steamAccountList').querySelectorAll<HTMLInputElement>('input:checked')).map(input=>input.value);
+    let loaded=false,reviewed='';
+    const state=(message:string)=>{$('steamAccountState').textContent=message;};
+    function resetSteamReview(){reviewed='';$('steamAccountOpen').hidden=true;$('steamAccountPreview').replaceChildren();}
+    $('steamAccountList').addEventListener('change',()=>{resetSteamReview();state(`已选 ${selected().length} 个账号。请预览后继续。`);});
+    bind('steamAccountLoad',async()=>{
+        const before=new Set(selected());resetSteamReview();state('正在读取 Steam 账号…');
+        try{
+            const result=await api('maintenance/steam/accounts','POST',{});
+            const accounts=result.users||[];const list=$('steamAccountList');list.replaceChildren();
+            for(const account of accounts){
+                const label=document.createElement('label');label.className='steam-account-option';
+                const input=document.createElement('input');input.type='checkbox';input.value=account.id;
+                input.checked=loaded?before.has(account.id):account.active||accounts.length===1;
+                const title=document.createElement('span');title.textContent=(account.name?account.name+' · ':'')+account.id+(account.active?'（当前登录）':'');
+                label.append(input,title);list.append(label);
+            }
+            loaded=true;$('steamAccountReview').hidden=accounts.length===0;
+            state(accounts.length?`已读取 ${accounts.length} 个账号。可勾选多个。`:'未找到可配置的账号。可从安装器手动选择 Steam 目录。');
+        }catch(e){state((e as Error).message);}
+    });
+    bind('steamAccountReview',async()=>{
+        const accountIds=selected();resetSteamReview();
+        if(!accountIds.length){state('请至少勾选一个账号。');return;}
+        state('正在预览所选账号的启动项…');
+        try{
+            const result=await api('maintenance/steam/preview','POST',{accountIds});
+            if(accountIds.join(',')!==selected().join(',')){state('选择已变化，请重新预览。');return;}
+            const list=$('steamAccountPreview');
+            for(const account of result.accounts||[]){
+                const item=document.createElement('li');
+                item.textContent=account.id+' · '+(account.skipped?'跳过 · '+account.reason:account.error||(account.alreadyConfigured?'启动项已匹配':'将配置启动项'));
+                list.append(item);
+            }
+            if(result.blocked)state('有账号无法配置，请处理后重试，或取消勾选该账号。');
+            else if((result.accounts||[]).every((account:{skipped?:boolean})=>account.skipped))state('所选账号没有 Deadlock 本地记录，已全部跳过。');
+            else{reviewed=accountIds.join(',');$('steamAccountOpen').hidden=false;state('预览完成。可打开安装器，退出 Deadlock 后确认写入。');}
+        }catch(e){state((e as Error).message);}
+    });
+    bind('steamAccountOpen',async()=>{
+        const accountIds=selected();
+        if(!reviewed||reviewed!==accountIds.join(',')){state('请选择账号并重新预览。');return;}
+        try{await api('maintenance/steam/open','POST',{accountIds});state('已打开安装器，并带入本次勾选的账号。');}
+        catch(e){state((e as Error).message);}
+    });
+}
 async function copyCommunity(value:string,message:string){
  try{await copyText(value);communityNotice(message);}catch{communityNotice('无法自动复制，请手动复制：'+value,true);}
 }

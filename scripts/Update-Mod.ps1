@@ -10,7 +10,9 @@
     [string]$ErrorResultFile,
     [switch]$RepairGameVpk,
     [string]$RecoveryTarget,
-    [string]$TraceFile
+    [string]$TraceFile,
+    [switch]$ValidatePackagePaths,
+    [switch]$RequireEmptyRuntime
 )
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Game-SearchPaths.ps1')
@@ -47,15 +49,17 @@ function Safe-File([string]$root,[string]$relative){
     $taskPrivate=@('settings.json','secrets.dpapi','install-manifest.json','localhost-certificate.cer','localhost-certificate.dpapi')
     if($taskParts[-1].ToLowerInvariant() -in $taskPrivate -or [IO.Path]::GetExtension($relative).ToLowerInvariant() -in @('.pfx','.dpapi','.cer')){throw '安装包包含个人配置或证书文件，已停止。'}
     if($taskParts.Length -gt 1 -and $taskParts[0] -notin @('wwwroot','data','LICENSES','source')){throw '安装包包含未支持的程序目录。'}
-    if($taskParts.Length -eq 1 -and $taskParts[0] -notmatch '^(DeadlockTranslate\.(exe|pdb|staticwebassets\.endpoints\.json)|dlt_translate_dir\.vpk|pairing\.key|Manage-Mod\.ps1|Configure-Steam\.ps1|Find-Deadlock\.ps1|Game-SearchPaths\.ps1|Install-Safety\.ps1|Vpk-Recovery\.ps1|Backup-Maintenance\.ps1|Repair-GameConfig\.cmd|Export-Diagnostics\.cmd|Update-Mod\.ps1|Install\.cmd|Uninstall\.cmd|Launch(?:-Admin)?\.cmd|Settings\.cmd|Update\.cmd|覆盖更新\.cmd|Trust-Local-Https\.(ps1|cmd)|Renew-Local-Https\.cmd|LICENSE|NOTICE|SOURCE\.txt|web\.config|.*\.(md|txt|json))$'){throw '安装包包含未支持的程序文件。'}
+    if($taskParts.Length -eq 1 -and $taskParts[0] -notmatch '^(DeadlockTranslate\.(exe|pdb|staticwebassets\.endpoints\.json)|dlt_translate_dir\.vpk|pairing\.key|Manage-Mod\.ps1|Configure-Steam\.ps1|Find-Deadlock\.ps1|Game-SearchPaths\.ps1|Install-Safety\.ps1|Installer-Workflow\.ps1|Installer-Transaction\.ps1|Vpk-Recovery\.ps1|Backup-Maintenance\.ps1|Repair-GameConfig\.cmd|Export-Diagnostics\.cmd|Update-Mod\.ps1|Install\.cmd|Uninstall\.cmd|Launch(?:-Admin)?\.cmd|Settings\.cmd|Update\.cmd|覆盖更新\.cmd|Trust-Local-Https\.(ps1|cmd)|Renew-Local-Https\.cmd|LICENSE|NOTICE|SOURCE\.txt|web\.config|.*\.(md|txt|json))$'){
+        Throw-DltFault 'package-file-unsupported' 'package-validation' $relative ('安装包包含未支持的程序文件：'+$relative) '请使用配套的完整安装包，或导出日志联系维护者。'
+    }
     $taskPath=Join-Path $root ($taskParts -join [IO.Path]::DirectorySeparatorChar)
     if(-not(Is-Inside $taskPath $root)){throw '安装包文件超出程序目录。'}
     No-Links $taskPath
     return $taskPath
 }
-function Replace-Bytes([string]$path,[byte[]]$bytes){
+function Replace-Bytes([string]$path,[byte[]]$bytes,[string]$ExpectedHash=''){
     Write-DltInstallTrace 'update-file' $path 'prepare'
-    Write-DltAtomic $path $bytes -AllowReadOnly:($AllowReadOnlyGameinfo -and $path -ieq $taskGameinfo) -Stage 'update-file'
+    Write-DltAtomic $path $bytes -ExpectedHash $ExpectedHash -AllowReadOnly:($AllowReadOnlyGameinfo -and $path -ieq $taskGameinfo) -Stage 'update-file'
     Write-DltInstallTrace 'update-file' $path 'committed' '' (Get-DltHash $path)
 }
 function Vdf-String([string]$token){if(-not $token.StartsWith('"')){return $token};[regex]::Replace($token.Substring(1,$token.Length-2),'\\([\\"])',{param($taskMatch)$taskMatch.Groups[1].Value})}
@@ -132,8 +136,20 @@ function Merge-Terms($old,$updated,$saved){
 
 try{
     $PackageFolder=Full-Path $PackageFolder;$StateDirectory=Full-Path $StateDirectory
+    if($ValidatePackagePaths){
+        No-Links $PackageFolder
+        $entries=@((Read-Json (Join-Path $PackageFolder 'package-manifest.json')).files)
+        if(-not $entries.Count -or $entries.Count -gt 2000){throw '新包文件清单无效。'}
+        foreach($entry in $entries){$null=Safe-File $PackageFolder ([string]$entry.file)}
+        Write-Output ('Update package paths accepted: '+$entries.Count)
+        return
+    }
     if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '请先退出 Deadlock，再双击覆盖更新；不会强制关闭游戏。'}
     No-Links $PackageFolder;No-Links $StateDirectory
+    if($env:DLT_INSTALL_CHILD -ne '1'){
+        $taskOperationGuard=Enter-DltOperation $StateDirectory
+        if(@(Get-DltPendingTransactions $StateDirectory).Count){throw '请先用图形安装器恢复未完成的操作。'}
+    }
     $taskManifestPath=Join-Path $StateDirectory 'install-manifest.json'
     if(-not(Test-Path -LiteralPath $taskManifestPath)){Throw-DltFault 'record-missing-reinstall' 'record-inspection' $taskManifestPath '安装记录已丢失，需要使用完整安装器重装。' '直接运行新版完整安装器，选择安装或修复。它会保留个人设置、检查残留目录并自动重装，不必先卸载或手动恢复旧 VPK。'}
     No-Links $taskManifestPath
@@ -197,8 +213,10 @@ try{
         }
     }
     $RuntimeFolder=Full-Path $RuntimeFolder;No-Links $RuntimeFolder
+    if($RequireEmptyRuntime -and (([IO.File]::Exists($RuntimeFolder)) -or ([IO.Directory]::Exists($RuntimeFolder) -and @(Get-ChildItem -LiteralPath $RuntimeFolder -Force).Count))){Throw-DltFault 'file-changed' 'runtime-preflight' $RuntimeFolder '新的程序目录已出现文件，请重新预览。'}
     if(-not(Runtime-Matches $RuntimeFolder -AllowInPlace)){
-        $taskRecorded=$taskInstall.runtimeFolder -and (Full-Path $taskInstall.runtimeFolder) -ieq $RuntimeFolder
+        $taskRecorded=$false
+        try{if([IO.Path]::IsPathRooted($taskInstall.runtimeFolder)){$taskRecorded=(Full-Path $taskInstall.runtimeFolder) -ieq $RuntimeFolder}}catch{}
         $taskEmpty=-not(Test-Path -LiteralPath $RuntimeFolder) -or @(Get-ChildItem -LiteralPath $RuntimeFolder -Force).Count -eq 0
         if($taskRecorded){$RepairMissingRuntime=$true}
         elseif(-not $RepairMissingRuntime -or -not $taskEmpty){Throw-DltFault 'runtime-location-unconfirmed' 'runtime-preflight' $RuntimeFolder '所选目录不能确认为原翻译程序目录。' '选择安装记录中的原程序位置，或原目录已丢失时选择空目录；安装器可以打开原目录供核对。'}
@@ -241,7 +259,7 @@ try{
     $taskHashes[(Split-Path $taskPackageManifest -Leaf)]=Hash-File $taskPackageManifest
     foreach($taskRelative in $taskFiles.Keys){
         $taskDestination=Safe-File $RuntimeFolder $taskRelative;$taskBeforeHash=$null;$taskSaved=Join-Path $taskBackup ('runtime/'+$taskRelative)
-        if(Test-Path -LiteralPath $taskDestination){$taskBeforeHash=Hash-File $taskDestination;New-Item -ItemType Directory -Force -Path (Split-Path $taskSaved -Parent)|Out-Null;Copy-Item -LiteralPath $taskDestination -Destination $taskSaved;if((Hash-File $taskSaved) -ne $taskBeforeHash){throw '旧程序备份校验失败。'}}
+        if(Test-Path -LiteralPath $taskDestination){if($RequireEmptyRuntime){Throw-DltFault 'file-changed' 'runtime-preflight' $taskDestination '新的程序目录已出现同名文件，请重新预览。'};$taskBeforeHash=Hash-File $taskDestination;New-Item -ItemType Directory -Force -Path (Split-Path $taskSaved -Parent)|Out-Null;Copy-Item -LiteralPath $taskDestination -Destination $taskSaved;if((Hash-File $taskSaved) -ne $taskBeforeHash){throw '旧程序备份校验失败。'}}
         $taskPlan+=[pscustomobject]@{relative=$taskRelative;source=$taskFiles[$taskRelative];destination=$taskDestination;backup=$taskSaved;beforeHash=$taskBeforeHash;newHash=$taskHashes[$taskRelative]}
     }
     if(Test-Path -LiteralPath $taskUserTerms){$taskUserRaw=[IO.File]::ReadAllBytes($taskUserTerms);[IO.File]::WriteAllBytes((Join-Path $taskBackup 'user-terms-before.json'),$taskUserRaw)}
@@ -250,7 +268,7 @@ try{
         foreach($duplicate in @($taskGameState.duplicates)){
             if(-not $duplicate){continue};No-Links $duplicate
             if((Hash-File $duplicate) -ne $taskInstall.vpkHash.ToLowerInvariant()){Throw-DltFault 'file-changed' 'duplicate-repair' $duplicate '重复翻译包在检测后变化，请重新检查。'}
-            $saved=Join-Path $taskBackup ('duplicate-'+[IO.Path]::GetFileName($duplicate)+'.bak');[IO.File]::Move($duplicate,$saved);$taskDuplicateBackups+=@{original=$duplicate;backup=$saved;hash=$taskInstall.vpkHash.ToLowerInvariant()};Write-DltInstallTrace 'duplicate-repair' $duplicate 'backed-up-and-disabled' $taskInstall.vpkHash
+            $saved=Join-Path $taskBackup ('duplicate-'+[IO.Path]::GetFileName($duplicate)+'.bak');Move-DltTrackedFile $duplicate $saved 'duplicate-repair';$taskDuplicateBackups+=@{original=$duplicate;backup=$saved;hash=$taskInstall.vpkHash.ToLowerInvariant()};Write-DltInstallTrace 'duplicate-repair' $duplicate 'backed-up-and-disabled' $taskInstall.vpkHash
         }
         if($taskGameState.state -eq 'duplicate'){Assert-DltRecoveryConflicts $taskAddons $taskFiles['dlt_translate_dir.vpk'] $taskTarget}
         if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '游戏在更新前重新启动，已停止。'}
@@ -263,7 +281,7 @@ try{
             New-Item -ItemType Directory -Force -Path (Split-Path $taskStep.destination -Parent)|Out-Null
             $taskBytes=[IO.File]::ReadAllBytes($taskStep.source)
             if((Hash-Bytes $taskBytes) -ne $taskStep.newHash){throw '新包在更新期间变化，已停止。'}
-            Replace-Bytes $taskStep.destination $taskBytes;$taskCommitted.Add($taskStep)
+            Replace-Bytes $taskStep.destination $taskBytes $(if($taskStep.beforeHash){$taskStep.beforeHash}else{'-'});$taskCommitted.Add($taskStep)
             if((Hash-File $taskStep.destination) -ne $taskStep.newHash){throw '程序替换后校验失败。'}
         }
         No-Links $taskAddons;[IO.Directory]::CreateDirectory($taskAddons)|Out-Null
@@ -283,12 +301,12 @@ try{
         Replace-Bytes $taskManifestPath ([Text.UTF8Encoding]::new($false).GetBytes(($taskInstall|ConvertTo-Json -Depth 6)))
         $taskManifestCommitted=$true
         Write-Output ('覆盖更新完成：'+$taskMetadata.version)
-        Write-Output ('程序目录保持不变：'+$RuntimeFolder)
+        if($RequireEmptyRuntime){Write-Output ('程序已恢复到本次选择的目录：'+$RuntimeFolder)}else{Write-Output ('程序目录保持不变：'+$RuntimeFolder)}
         Write-Output ('备份：'+$taskBackup)
         if($taskGameinfoPlan.Changed){Write-Output ('已修复默认按键配置的搜索路径：'+($taskGameinfoPlan.Added -join ', '))}
         Write-Output '原配置、密钥和证书保留，无需重新安装证书或改 Steam 启动路径。按原方式启动即可。'
     }catch{
-        $taskFailure=$_;$taskRollbackErrors=@()
+        $taskFailure=$_;$taskRollbackErrors=@();$script:DltRestoring=$true
         foreach($taskStep in @($taskCommitted.ToArray())|Sort-Object -Property relative -Descending){try{if((Hash-File $taskStep.destination) -ne $taskStep.newHash){throw 'File changed after commit'};if($taskStep.beforeHash){Replace-Bytes $taskStep.destination ([IO.File]::ReadAllBytes($taskStep.backup))}elseif(Test-Path -LiteralPath $taskStep.destination){Remove-Item -LiteralPath $taskStep.destination}}catch{$taskRollbackErrors+=$taskStep.relative}}
         if($taskVpkCommitted){try{if((Hash-File $taskTarget) -ne $taskNewVpkHash){throw 'VPK changed after commit'};if($taskVpkExisted){Replace-Bytes $taskTarget $taskOriginalVpk}else{Remove-Item -LiteralPath $taskTarget};Write-DltInstallTrace 'rollback-vpk' $taskTarget 'restored'}catch{$taskRollbackErrors+='game-vpk';Write-DltInstallTrace 'rollback-vpk' $taskTarget 'failed'}}
         if($taskGameinfoCommitted){try{if((Hash-File $taskGameinfo) -ne (Hash-Bytes $taskGameinfoPlan.Bytes)){throw 'gameinfo changed after repair'};Replace-Bytes $taskGameinfo $taskOriginalGameinfo}catch{$taskRollbackErrors+='gameinfo'}}
@@ -310,4 +328,5 @@ try{
 finally{
     if($taskBackup -and -not $taskUpdateSucceeded -and (Test-Path -LiteralPath $taskBackup)){try{Set-DltBackupState $taskBackup 'failed'}catch{}}
     if($taskBackupLock){$taskBackupLock.Dispose()}
+    if($taskOperationGuard){$taskOperationGuard.Dispose()}
 }

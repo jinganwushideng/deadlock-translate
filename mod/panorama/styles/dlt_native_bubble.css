@@ -15,14 +15,6 @@
     max-height: 0px;
     margin: 0px;
     padding: 0px;
-    color: #28241e;
-    background-color: #e9dec8f2;
-    border-left: 2px solid #b99860;
-    border-radius: 2px;
-    font-size: 17px;
-    font-weight: normal;
-    white-space: normal;
-    text-overflow: shrink;
 }
 
 .DltNativeBubbleTemplate.DltNativeReady
@@ -30,7 +22,43 @@
     visibility: visible;
     height: fit-children;
     max-height: 100px;
-    margin: 3px 12px 8px 12px;
+    margin: 3px 4px 8px 20px;
+    horizontal-align: left;
+}
+
+/* Match the original bubble's right-aligned layout on the opposite team. */
+.enemy .ChatMessage .DltNativeBubbleTemplate.DltNativeReady,
+.team2:not(.friend) .ChatMessage .DltNativeBubbleTemplate.DltNativeReady
+{
+    horizontal-align: right;
+    margin: 3px 20px 8px 4px;
+}
+
+.DltNativeBubblePreview
+{
+    width: fit-children;
+    max-width: 220px;
+    height: fit-children;
+    max-height: 100px;
+    margin-top: 3px;
+}
+
+/* The same label paints text and paper. Keeping the frame off the idle
+   label preserves its zero footprint and the existing native layout path. */
+.DltNativeBubbleTemplate.DltNativeReady,
+.DltNativeBubblePreview
+{
+    background-color: gradient( linear, 0% 0%, 0% 100%, from( #fff4dc ), to( #dfc69f ) );
+    background-image: url("s2r://panorama/images/hud/top_bar/chat_texture_png.vtex");
+    background-size: 100% 100%;
+    border: 1px solid #34291e;
+    border-radius: 3px;
+    box-shadow: 2px 2px 0px #140f0c;
+    color: #1b130e;
+    font-size: 17px;
+    font-weight: bold;
+    white-space: normal;
+    text-overflow: shrink;
     padding: 3px 7px;
 }
 

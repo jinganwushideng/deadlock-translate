@@ -1,4 +1,5 @@
 ﻿# Shared by the GUI, command-line installer and updater. Never logs config contents.
+. (Join-Path $PSScriptRoot 'Installer-Transaction.ps1')
 function Assert-DltNoLinks([string]$Path) {
     for($cursor=[IO.Path]::GetFullPath($Path);$cursor;$cursor=[IO.Path]::GetDirectoryName($cursor)) {
         if((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -76,6 +77,11 @@ function Assert-DltWritableDirectory([string]$Path,[string]$Stage) {
     }
 }
 function Write-DltAtomic([string]$Path,[byte[]]$Bytes,[string]$ExpectedHash='', [string]$Backup='',[switch]$AllowReadOnly,[string]$Stage='commit') {
+    if(-not $Stage.StartsWith('rollback')){Test-DltStop}
+    if($env:DLT_INSTALL_JOURNAL -and -not $script:DltRestoring -and -not $Stage.StartsWith('rollback')){
+        if(-not $ExpectedHash){$ExpectedHash=Get-DltJournalHash $Path}
+        Add-DltJournalOperation @(@{path=$Path;expected=$ExpectedHash;after=(Get-DltBytesHash $Bytes)}) $Stage
+    }
     if(Get-Command Write-DltInstallTrace -ErrorAction SilentlyContinue){Write-DltInstallTrace $Stage $Path 'prepare' $ExpectedHash}
     $temporary=$Path+'.dlt-write-'+[Guid]::NewGuid().ToString('N')+'.tmp';$attributes=$null;$changedAttribute=$false
     try {
@@ -88,7 +94,14 @@ function Write-DltAtomic([string]$Path,[byte[]]$Bytes,[string]$ExpectedHash='', 
             }
         }
         $stream=[IO.FileStream]::new($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
-        try{$stream.Write($Bytes,0,$Bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+        try{
+            for($offset=0;$offset -lt $Bytes.Length;$offset+=$count){
+                if(-not $Stage.StartsWith('rollback')){Test-DltStop}
+                $count=[Math]::Min(1048576,$Bytes.Length-$offset)
+                $stream.Write($Bytes,$offset,$count)
+            }
+            $stream.Flush($true)
+        }finally{$stream.Dispose()}
         if($ExpectedHash -eq '-') {if(Test-Path -LiteralPath $Path){Throw-DltFault 'file-changed' $Stage $Path '目标文件在检查后出现，未覆盖。'}}
         elseif($ExpectedHash -and (-not(Test-Path -LiteralPath $Path) -or (Get-DltHash $Path) -ne $ExpectedHash.ToLowerInvariant())) {Throw-DltFault 'file-changed' $Stage $Path '文件在检查后发生变化，未覆盖。'}
         if(Test-Path -LiteralPath $Path) {
@@ -117,4 +130,9 @@ function Move-DltStagedDirectory([string]$Source,[string]$Destination) {
             $ex=[IO.IOException]::new('程序目录提交失败。',$_.Exception);$ex.Data['dltFault']=$fault;throw $ex
         }
     }
+}
+
+# Held until the child PowerShell process exits, including if the GUI or parent script dies.
+if($env:DLT_INSTALL_JOURNAL -and $env:DLT_INSTALL_CHILD -eq '1'){
+    $script:DltChildWorkerLock=Enter-DltJournalWorker $env:DLT_INSTALL_JOURNAL
 }

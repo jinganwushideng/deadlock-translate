@@ -35,13 +35,13 @@ class RecoveryTests(unittest.TestCase):
  def test_late_failure_removes_new_vpk_and_restores_runtime_record(self):
   self.f.target.unlink();before=update.snapshot(self.f.runtime);record=(self.f.state/'install-manifest.json').read_bytes()
   scripts=self.f.root/'fixture-scripts';scripts.mkdir()
-  for name in ('Install-Safety.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
+  for name in ('Install-Safety.ps1','Installer-Transaction.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
   self.f.script=scripts/'Update-Mod.ps1';text=(ROOT/'scripts/Update-Mod.ps1').read_text(encoding='utf-8-sig');text=text.replace('        Replace-Bytes $taskManifestPath',"        Throw-DltFault 'fixture-record-failed' 'update-record' $taskManifestPath 'Fixture failure'\n        Replace-Bytes $taskManifestPath");self.f.script.write_text(text,encoding='utf-8-sig')
   self.assertNotEqual(self.run_update('-RepairGameVpk'),0);self.assertFalse(self.f.target.exists());self.assertEqual(update.snapshot(self.f.runtime),before);self.assertEqual((self.f.state/'install-manifest.json').read_bytes(),record)
  def test_duplicate_consolidation_failure_restores_all_original_copies(self):
   extra=self.f.target.with_name('pak91_dir.vpk');extra.write_bytes(self.old);before=update.snapshot(self.f.game)
   scripts=self.f.root/'fixture-scripts';scripts.mkdir()
-  for name in ('Install-Safety.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
+  for name in ('Install-Safety.ps1','Installer-Transaction.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):shutil.copy2(ROOT/'scripts'/name,scripts/name)
   self.f.script=scripts/'Update-Mod.ps1';text=(ROOT/'scripts/Update-Mod.ps1').read_text(encoding='utf-8-sig');text=text.replace('        Replace-Bytes $taskManifestPath',"        Throw-DltFault 'fixture-record-failed' 'update-record' $taskManifestPath 'Fixture failure'\n        Replace-Bytes $taskManifestPath");self.f.script.write_text(text,encoding='utf-8-sig')
   self.assertNotEqual(self.run_update(),0);self.assertEqual(update.snapshot(self.f.game),before)
  def test_mixed_runtime_and_pairing_are_repaired_together(self):

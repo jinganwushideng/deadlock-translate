@@ -172,6 +172,12 @@ function Invoke-DltBackupCleanup([string]$State,[switch]$Legacy,[string]$Expecte
 if($MyInvocation.InvocationName -ne '.'){
     $ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$held=$null
     try{
+        if($Action -eq 'Clean'){
+            $operation=Join-Path $StateDirectory 'installation-operation.lock'
+            $null=Assert-DltBackupPath $operation
+            [IO.Directory]::CreateDirectory($StateDirectory)|Out-Null
+            $operationGuard=[IO.File]::Open($operation,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+        }
         $held=Enter-DltBackupLock $StateDirectory
         if($Action -eq 'Inspect'){$result=Get-DltBackupInventory $StateDirectory -Legacy:$IncludeLegacy}
         else{
@@ -180,5 +186,5 @@ if($MyInvocation.InvocationName -ne '.'){
         }
         $result|ConvertTo-Json -Depth 8 -Compress|Write-Output
     }catch{@{error=$_.Exception.Message}|ConvertTo-Json -Compress|Write-Output;exit 1}
-    finally{if($held){$held.Dispose()}}
+    finally{if($held){$held.Dispose()};if($operationGuard){$operationGuard.Dispose()}}
 }

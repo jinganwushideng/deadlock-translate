@@ -1,7 +1,7 @@
 {
-  "version": "0.7.2",
-  "buildId": "0.7.2-7216c2897ad2",
-  "featureRevision": "installer-game-migration-and-recoverable-preflight",
+  "version": "0.7.3",
+  "buildId": "0.7.3-206c47b796ac",
+  "featureRevision": "durable-install-recovery-maintenance-and-release-updates",
   "files": [
     {
       "file": ".gitattributes",
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "691da3972c0d6cd89133937a33c3a971e5e6460b822debc80c8bc8c6077d3be2"
+      "sha256": "f64285e3f1f50e0700a5712a5b9d9b99bf845069a8b8f64e03145a6d6d177927"
     },
     {
       "file": ".gitignore",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "554cf5aea4c5bbf3bb019173a10764e0977ef316c3b4cad263dd4963fc4344df"
+      "sha256": "921cf53b072d81c5924f67febdd861782e491fb742d347769f50c16dbfe2d2d7"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "60485f37c8fef46a19c064e3eaee8a8af0b5089fb080b58e726cc1660cbc0b91"
+      "sha256": "fce9aa94541a4906929c209d675df68063e6140f653989d03bd6a494caf536a1"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -37,7 +37,7 @@
     },
     {
       "file": "docs/AI-INSTALL-GUIDE.md",
-      "sha256": "ab716c165f65876bc41568967d133bb748adac67beae2d76d620be37e1c8c12b"
+      "sha256": "9e581d64bade19f59acaceaaff6fc3abe394c3a44d0da25e32e231841964d87d"
     },
     {
       "file": "docs/BACKUP-MAINTENANCE.md",
@@ -65,7 +65,7 @@
     },
     {
       "file": "docs/GUI-INSTALLER.md",
-      "sha256": "cace33ca347045bad379959f5d4f5971921153f55546e88ba7ddd451149d034a"
+      "sha256": "f64366ef58fa99e771dd544f1e676d4553d859719bcbd479e6c41e1b327423e5"
     },
     {
       "file": "docs/images/chat-bilingual.png",
@@ -89,7 +89,7 @@
     },
     {
       "file": "docs/README.md",
-      "sha256": "056c52aff5306a1d99cb5e663b1e1761cd3ac31fb31db942e5a5c1ee100673e4"
+      "sha256": "04f05463681b21bf49b5b50a4fb05e76a594ad69e694c3e5aa86e66f093c83b5"
     },
     {
       "file": "docs/SOURCE-AUDIT.md",
@@ -128,12 +128,16 @@
       "sha256": "9b92502fabe7481ec7c98a1dc8e1261a39fbfac26abe6d6b11f7bcdb9a09bc2e"
     },
     {
+      "file": "docs/UPDATE-0.7.3.md",
+      "sha256": "e24ae1e746e1c55fb94e0f62226e4d6b84fb86bcc30d8782a94348b88622c8c8"
+    },
+    {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "1db51d72b97629b0600f3564f2d51aeede651a26e56987fcf1dc6e3ec1777929"
+      "sha256": "706d85469f035bf9cba572f14e7055221d04dbd78c7f106bde3c610eac26bc2e"
     },
     {
       "file": "docs/USER-GUIDE.md",
-      "sha256": "01ce10d39532e2f726e14b06ad53eaa4f882cd880a0033fecdeb64d3890d5178"
+      "sha256": "9ab35bae6a0255307447c3a73c915de42f05adc24e89674f2adf282e8ae20cc1"
     },
     {
       "file": "docs/VALIDATION.md",
@@ -181,7 +185,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "786511e8d44277f805152b57278b97040a034102250c6090be0668d7467967bb"
+      "sha256": "8b3c79ea3d32b0ac5678a5759109320e3778b1f71419c2e5058735613f1f32bc"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -197,7 +201,7 @@
     },
     {
       "file": "mod/panorama/styles/dlt_chat.css",
-      "sha256": "da65d653813983f01e814b6eee1b623406ee416b975f8572840c81cfa006944f"
+      "sha256": "720fe48dff688b194585827bfd2f0325b60c77b904f4633830d226d1815eceb2"
     },
     {
       "file": "mod/panorama/styles/dlt_menu.css",
@@ -205,7 +209,7 @@
     },
     {
       "file": "mod/panorama/styles/dlt_native_bubble.css",
-      "sha256": "b7238f0aee9768a0d23a88ef8b3d21978ef4b806b5164a8d2cf0e1713f44f7c0"
+      "sha256": "80a716594e9915326b1710c9f367791b92325a913a33ed858e6311e96643e094"
     },
     {
       "file": "mod/panorama/styles/dlt_settings_window.css",
@@ -217,19 +221,19 @@
     },
     {
       "file": "README.md",
-      "sha256": "329c2acacfd8b942a6c7037be21c17d4115747689c6e94df3bc0327589e08d52"
+      "sha256": "ac23fcaf07390fc367619bce5a6fe245c79978e5f445521752ebc9847459c799"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
-      "sha256": "580e82bee664c2d8e2d6dcdb809e5081424dec3c035bf52a89fb927dc44cd169"
+      "sha256": "f7326ac08b148bf4ac08eab563a7913a48f0b02c540f7621c7a6596f015e1f0e"
     },
     {
       "file": "scripts/build.ps1",
-      "sha256": "442c46f88027b87bcf80cf2118d57ae9fbdbeb1e6c377f79c64c478cfef568ba"
+      "sha256": "2be4dc9e2fa8448bf09e4fd53339d786c3d91405de78b55fb6ec8b230b440043"
     },
     {
       "file": "scripts/build_external_updater.py",
-      "sha256": "cd0403a0713bd1cbe9ea0aba6e9af82b7e078421f3d1411df60c649883136905"
+      "sha256": "42b89d34024c71eaaf83ff21e1213bb301a744a7c5612cfab3efbd55433f0309"
     },
     {
       "file": "scripts/build_hero_labels.py",
@@ -241,7 +245,7 @@
     },
     {
       "file": "scripts/build_installer.py",
-      "sha256": "cccbdda556d37148378bd856199412b75efc98068bfa02d90d3cd1207a2c41fd"
+      "sha256": "678e5cce2bd797f226fd93dab1704a075a1f761e431594a91f7a22ec63c062ee"
     },
     {
       "file": "scripts/build_terms.py",
@@ -253,7 +257,7 @@
     },
     {
       "file": "scripts/Configure-Steam.ps1",
-      "sha256": "79afaa68a1f855f80ccace92948664e704fe4edf842bf5bb935855d0bf767590"
+      "sha256": "99901dab3402a61ccca7dad66211724cd8f128d3f2f140c7c9a1e78fbcdc46d0"
     },
     {
       "file": "scripts/Export-Diagnostics.cmd",
@@ -261,7 +265,7 @@
     },
     {
       "file": "scripts/export_source.py",
-      "sha256": "91ad8db17cd1050d92271f345c485cd1c7580c32b58606eb7b3dfb35ce28b660"
+      "sha256": "6d437abaf979b1d20a2adb292ca582365a31376853520a8117a5b038a4d5d5cb"
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
@@ -273,15 +277,19 @@
     },
     {
       "file": "scripts/Install-Safety.ps1",
-      "sha256": "daf85ae5241a4f452ea861681a4d49f355fc037bab6445f8bcafe7f78ec0e608"
+      "sha256": "a852509c24895c87c02fcdd38561b0dbcd6f11aca9ec231b9de03458b244f7bb"
     },
     {
       "file": "scripts/Install.cmd",
       "sha256": "342bbad462c50b78f269d0753051db119501ba092635ede3cc481675fbc408f4"
     },
     {
+      "file": "scripts/Installer-Transaction.ps1",
+      "sha256": "22db3b8c992d6d5d5b8db04f766ab7da93dc96cb2cc32a2f561981d4a7147d89"
+    },
+    {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "95ec2c7a65c49f5ffb977c6bb5aa7aa629868076454753456473243332394d8e"
+      "sha256": "43ba8eb73c96b9f1315c56e2a2cbde7850fcbbaefaed0e63c84eea51b621472d"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
@@ -293,7 +301,7 @@
     },
     {
       "file": "scripts/Manage-Mod.ps1",
-      "sha256": "32daa2591d47eca5578af8e5a8af8fc8c5f487aae26230687e5734d6829dafcb"
+      "sha256": "ebadb44aafb9d17e4af0c599336cfa447eff14386c5fd04fe399f453ec05d0a7"
     },
     {
       "file": "scripts/merge_term_defaults.py",
@@ -309,11 +317,11 @@
     },
     {
       "file": "scripts/package_share.py",
-      "sha256": "92121cb686b90a6d0e2b4740560c242e3ea2c9352ef91269ce4fa03704ff38b3"
+      "sha256": "c569e1e48c879f6aca8c1e7042d6a36f15ea6c139aebd6874b842c73612a5ec7"
     },
     {
       "file": "scripts/prepare_mod.py",
-      "sha256": "e56068694e92afee144dbb09e46bd941b3c1bb2ef6e26bd000effe99bf8b2550"
+      "sha256": "83f3eef780516bfbe5576cd4886a5b53152e27a25d1422a9d126ced6e5e4c269"
     },
     {
       "file": "scripts/release_history.py",
@@ -357,11 +365,11 @@
     },
     {
       "file": "scripts/Update-Mod.ps1",
-      "sha256": "60526677eaf50386788ca3d222c77938fe490741edfdcacc74a7cc29a7381396"
+      "sha256": "152b3ebe644579590e42fe8425f322ffe84391eea11bb992916823d13e5d8434"
     },
     {
       "file": "scripts/Vpk-Recovery.ps1",
-      "sha256": "162469c8ee262f7d72e9bb52ebde42bfc49bfe4e8366a099b2d6109a75764f0c"
+      "sha256": "0b8fde5e73b71e6d40bbc7dc1a9842f3016449e286ede259af62a97118a79083"
     },
     {
       "file": "scripts/vpk.py",
@@ -385,11 +393,11 @@
     },
     {
       "file": "src/Bridge/Bridge.csproj",
-      "sha256": "2b2af28d516b807bafb81bf5c86c08201c10ae118cc99b4717349d9bb96153e7"
+      "sha256": "001b756fa9a4f2f9d8b2ea75364835ee63c402783bbc4ba14e4604e3b59b1670"
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "752669d0562f9ab75c9ed13d863e4d64b5c47e989991330751e1a2a36bf5865c"
+      "sha256": "04d3de65be564e92ab285830ff99702a8b9f14c435ce1ac81f4ac6eb7b84fa92"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -488,6 +496,10 @@
       "sha256": "09212ce41db658ad66b228ce4f719db6ac63b9232b1af8112a0d38969126fa2c"
     },
     {
+      "file": "src/Bridge/MaintenanceInspection.cs",
+      "sha256": "3b74888b8fe88a69a44f8876407ea86b7f857e70fc888d3994d048c59fef0c1d"
+    },
+    {
       "file": "src/Bridge/NativeHotkey.cs",
       "sha256": "68b599bed5887488f12e2104561d75781be19a953a0eefd0a29a3789a0bde737"
     },
@@ -517,7 +529,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "a0c5a0d75d9c56124571ef3b003656e128162c02d80cda7a9305fab1a3f3d6e5"
+      "sha256": "0cc43752adc5ddd98a2d3ca1b12fe975c634a03cad4f8578554fe7aeffcde326"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -538,6 +550,10 @@
     {
       "file": "src/Bridge/QuickMessages.cs",
       "sha256": "d3ea7758da3932183dbfb9e5e7d363ed9d4bdd40460ca88412f6800935a38b49"
+    },
+    {
+      "file": "src/Bridge/ReleaseUpdates.cs",
+      "sha256": "86520164628147e573c21929772fcbb965c5592600d61c7ccf6897bf5a653691"
     },
     {
       "file": "src/Bridge/SecretClipboard.cs",
@@ -593,7 +609,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "05a4384c737caf1ea13f234c6f5bfbe611f0eecf1469c3331176b0b453a06ae5"
+      "sha256": "c524d81c6fc35b1be75ff6223660fa35bd39f0b1fb724f855fc0d000677be2fa"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -613,7 +629,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/style.css",
-      "sha256": "df39d0de6d48f5cfc14ca1315776a5d7254914d040f64c0b829f350320b99efe"
+      "sha256": "23ddb369fa218434a106e3002c702cf81a3c65526f371099698159cf181b57d9"
     },
     {
       "file": "src/Installer/app.manifest",
@@ -621,7 +637,7 @@
     },
     {
       "file": "src/Installer/Installer.csproj",
-      "sha256": "d2ff3a2e2039c2aac5e6341bd4947e397bcf35475fed08f05b43e94e1a640395"
+      "sha256": "b32b39a6e203693f5f3f125de00085b4173f5481ef429955f30517e722815d91"
     },
     {
       "file": "src/Installer/InstallerAnnouncement.cs",
@@ -641,7 +657,7 @@
     },
     {
       "file": "src/Installer/Program.cs",
-      "sha256": "bf32a95a5027df3e54636783ed26c9d8c261d293c5c55cbafdd4a7464519fcf0"
+      "sha256": "ef0f81d8d9395589b14c0959a40b89661ccb703f2c6fbe25515f5dfffb753bb3"
     },
     {
       "file": "src/Installer/ReleaseHistory.cs",
@@ -653,27 +669,43 @@
     },
     {
       "file": "src/Installer/ResumeState.cs",
-      "sha256": "4e24ece3e1e1a4a960c009f8e714c28ef5e2c42389b18190c84f163705758814"
+      "sha256": "b41d82f7e1049a086c628990ec11eb0aa05884faddf8699cf93fc30a4cfcd5e2"
     },
     {
       "file": "src/Installer/Runner.cs",
-      "sha256": "60a722274ed7a471abfc9400b2485dce879ded5d4453594fede7153b779283ed"
+      "sha256": "97e16c9362acf1110682f996890363f068febf19af522f6553caf5a079a2b933"
     },
     {
       "file": "src/Installer/UiControls.cs",
       "sha256": "e7dab9956a726e45bbd47d9c496a28620286abd4622ac4113870bfab731730a9"
     },
     {
+      "file": "src/Installer/Wizard.BrowserSettings.cs",
+      "sha256": "ac3b598fbca5428dde7478d681b59d30882ac4510d9933d891ee7dfec28a2ce4"
+    },
+    {
       "file": "src/Installer/Wizard.cs",
-      "sha256": "0e8ade26f99f08b920160f03ef3690fc0b59ba55f56927b74afe4f6882cdb36f"
+      "sha256": "7c508e703ea13735eede6d52e04f63c1b86701c5e6b78382387ea6fb4fa100d2"
+    },
+    {
+      "file": "src/Installer/Wizard.Maintenance.cs",
+      "sha256": "b1312276ee1c128858f5779d46e6df1a0d290032395bb4064e39ab789a8a6aa5"
+    },
+    {
+      "file": "src/Installer/Wizard.RuntimeChoice.cs",
+      "sha256": "a866f449b69e621fb0e16ec3200d9e9f69cc8291f250a89c23c36a00d70262f7"
+    },
+    {
+      "file": "src/Installer/Wizard.SteamSelection.cs",
+      "sha256": "35f2201eb01214d2e92a234583e7fbc22883f0bb45f578e7bde8a3aa357deb91"
     },
     {
       "file": "src/Installer/Wizard.Views.cs",
-      "sha256": "b6752a2ef4fa2d35a68c4404f2139b704014b556c2b7d545b2c982d263e0d518"
+      "sha256": "673d1e91cb13e1ca641b38800c6bc9137a2e7a2cedebaec053b729c412b82de9"
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "50fadd71a364380e2bd57b57cd9ac0c28026d590cb6b2faff129a89e0596fd08"
+      "sha256": "952c9bab1902e6455222154b899db2df4a67d9900f890707685afc6ab8d76992"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -817,7 +849,7 @@
     },
     {
       "file": "tests/display-customization.test.cjs",
-      "sha256": "cbead4da3980a7a9edfb3baf95554e15dd4b3cce12ad6866e40e659759841e8a"
+      "sha256": "a5590011abc619f6a2a4f8015f7e9a23fa40d7f6022f16ad2a61886c7362bb58"
     },
     {
       "file": "tests/display-reliability.test.cjs",
@@ -928,8 +960,20 @@
       "sha256": "8f66eedeff23ebf341a5b33efd7a3d1d70a28fd447365a6f14de3ed35e0f0eb5"
     },
     {
+      "file": "tests/installer-runtime-choice.test.py",
+      "sha256": "1973f73b33f4aa624fc84078a041858d477990c86faa6aa10fd4e85b73805338"
+    },
+    {
+      "file": "tests/installer-steam-batch.test.py",
+      "sha256": "502cbecd9a5fa8438625fc180730bc5ce42730f704266d3b697c80cc95dd1d5e"
+    },
+    {
+      "file": "tests/installer-transaction.test.py",
+      "sha256": "fa4bf7e9cda2ada7224121eed4143cc8f16920e87e2db728056ab03bbbc4d17b"
+    },
+    {
       "file": "tests/installer-workflow.test.py",
-      "sha256": "5e971cd38c4764b00b7532541f220f34854bb1bb1d46b2bed9d452abd07f081b"
+      "sha256": "fca7259ffb1a982fd491a2ebe19e0816017421425d15fd9a03f6d5228ea562ac"
     },
     {
       "file": "tests/installer.test.ps1",
@@ -941,7 +985,7 @@
     },
     {
       "file": "tests/InstallerTests/Program.cs",
-      "sha256": "75ee300ccb0e7974394fa146ffa5f68df494926d326440f32a59c09f6dd3dd3a"
+      "sha256": "b746302579cdd4f5ba3865799a0dd8985557703f74807f19d55a919b03f63bf8"
     },
     {
       "file": "tests/keepalive-http-ui.test.cjs",
@@ -1133,7 +1177,7 @@
     },
     {
       "file": "tests/powershell-source.test.py",
-      "sha256": "183bff99b10c745ebe5817b48f2c48cd779eebb22aaf21c08d20b5304b5baa4b"
+      "sha256": "d1bb88780d4124232cf6a824611e524d185edafa491033c87170f123b170f4ed"
     },
     {
       "file": "tests/providers.test.cjs",
@@ -1174,6 +1218,14 @@
     {
       "file": "tests/release-smoke.cjs",
       "sha256": "b034229b0ed6c67e9ae0d2bf9986182951b9e060a60ceb08f3a64cd0a7385ef3"
+    },
+    {
+      "file": "tests/ReleaseUpdateTests/Program.cs",
+      "sha256": "26e6f288b459844bea5608f565e04a42961ce79a7b3be49ce791f32f8f4a6a75"
+    },
+    {
+      "file": "tests/ReleaseUpdateTests/ReleaseUpdateTests.csproj",
+      "sha256": "13a60f52e7a746298851b903718068789b582f1ebb0ce9308a4838428eb82a14"
     },
     {
       "file": "tests/runtime-alert-ui.test.cjs",
@@ -1260,6 +1312,10 @@
       "sha256": "ec9a2eb7a9ed104c0ad60d66a1d84798708b157e25a3f38513be5bbe5168eacb"
     },
     {
+      "file": "tests/steam-account-ui.test.cjs",
+      "sha256": "4cb86871f080157378a58b4f822509a609b1d1f5b71c1400cef8dcaca3404138"
+    },
+    {
       "file": "tests/steam-launch.test.cjs",
       "sha256": "0c69958ce15f306dcdd77dd2c416663ffc4ad703f4c9d58dbbd8da04d1a3a217"
     },
@@ -1313,7 +1369,7 @@
     },
     {
       "file": "tests/update.test.py",
-      "sha256": "c522e135587090c69a12510ea699d1d86e086fbc4f95a1e0bb8df57459ecd6f9"
+      "sha256": "5bb339a9b5ebd8868d2b65dcd468e8fa821aac82b68d033f2231a4ead26b50f0"
     },
     {
       "file": "tests/upgrade-0623-http.test.cjs",
@@ -1329,7 +1385,7 @@
     },
     {
       "file": "tests/vpk-recovery.test.py",
-      "sha256": "9e3208b3c0120f591908797cbac6f10c32c19e37a875eed94739614e343ff57d"
+      "sha256": "c3104cf760a13852608921795eb3a3d5ebf6d4945874ff58f9db2207b71c1522"
     },
     {
       "file": "THIRD-PARTY-NOTICES.md",
@@ -1337,7 +1393,7 @@
     },
     {
       "file": "version.json",
-      "sha256": "7ff9be2e3b5d1db95cbd92897e8f7e7de76ee6f7e4c61d1c2b64d2dafa283a06"
+      "sha256": "46619d1b55f8f0359fa7641b9c4eb6b171449bd8adb19083e94736597891c479"
     }
   ],
   "lineEndings": "Git-normalized LF for text; binary bytes unchanged. Runtime source ZIP retains its own byte-exact manifest."

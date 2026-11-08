@@ -120,6 +120,13 @@ function Get-DltRuntimeIntegrity([string]$Runtime,$Record) {
     if($pairValid -and (Test-Path -LiteralPath $vpk -PathType Leaf)){$pairingMatch=Test-DltVpkPairing $vpk $pair;if($pairingMatch -eq $false){$issues+=@{file='pairing.key';code='pairing-vpk-mismatch'}}}
     if(-not $recordMatch){$issues+=@{file='dlt_translate_dir.vpk';code='record-runtime-mismatch'}}
     if($metadata.version -and $Record.version -and $metadata.version -ne $Record.version){$issues+=@{file='package-manifest.json';code='version-mismatch'}}
+    if($metadata.buildId){
+        try{
+            $identity=Join-Path $Runtime 'build-info.json';Assert-DltNoLinks $identity
+            $build=Get-Content -LiteralPath $identity -Raw -Encoding UTF8|ConvertFrom-Json
+            if($build.buildId -cne $metadata.buildId -or $build.version -cne $metadata.version){throw 'Build mismatch'}
+        }catch{$issues+=@{file='build-info.json';code='build-mismatch'}}
+    }
     return @{healthy=($issues.Count -eq 0);requiresRepair=($issues.Count -gt 0);recordVersion=if($Record.version -match '^\d+\.\d+\.\d+(?:\.\d+)?$'){$Record.version}else{$null};runtimeVersion=if($metadata.version -match '^\d+\.\d+\.\d+(?:\.\d+)?$'){$metadata.version}else{$null};pairingFormatValid=$pairValid;pairingMatchesVpk=$pairingMatch;recordVpkMatches=[bool]$recordMatch;issues=@($issues)}
 }
 function Test-DltVpkPairing([string]$Vpk,[string]$PairFile) {

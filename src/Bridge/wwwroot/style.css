@@ -63,3 +63,6 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 .community-project{margin-top:22px;padding-top:16px;border-top:1px solid rgba(217,207,181,.24)}
 .community-project h4{margin:0 0 7px}
 .community-project code{overflow-wrap:anywhere;user-select:text}
+#releaseSummary{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;max-height:12em;overflow:auto} #maintenanceChecks{padding-inline-start:1.3em} #maintenanceChecks li{margin:.4em 0}
+
+.steam-account-list:empty,#steamAccountPreview:empty{display:none}.steam-account-list{display:grid;gap:8px;margin:14px 0}.steam-account-option{display:flex;gap:10px;align-items:center;overflow-wrap:anywhere}.steam-account-option input{flex:none;margin:0}#steamAccountPreview{padding-inline-start:1.3em}

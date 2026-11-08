@@ -1,6 +1,6 @@
 import argparse, hashlib, json, pathlib, re, secrets, subprocess, shutil, os
 from vpk import Vpk
-from native_bubble_layout import patch_native_bubble
+from native_bubble_layout import STYLE as NATIVE_BUBBLE_STYLE, patch_native_bubble
 root = pathlib.Path(__file__).resolve().parents[1]
 game = pathlib.Path(os.environ['DEADLOCK_TRANSLATE_GAME'])/'game/citadel'
 
@@ -17,7 +17,8 @@ def prepare():
     for anchor in ('</styles>', '<snippets>', '<Panel id="ChatControls">'):
         if xml.count(anchor) != 1:
             raise ValueError('Game chat layout changed: expected exactly one ' + anchor)
-    xml = xml.replace('</styles>', '\t<include src="s2r://panorama/styles/dlt_chat.vcss_c" />\n\t</styles>')
+    xml = xml.replace('</styles>', '\t<include src="s2r://panorama/styles/dlt_chat.vcss_c" />\n'
+                      f'\t\t<include src="{NATIVE_BUBBLE_STYLE}" />\n\t</styles>')
     xml = xml.replace('<snippets>', '<scripts><include src="s2r://panorama/scripts/dlt_chat.vjs_c" /></scripts>\n\t<snippets>')
     xml = xml.replace('<Panel id="ChatControls">','<HTML id="DltBridge" class="DltBridge" hittest="false" hittestchildren="false" acceptsinput="false" acceptsfocus="false" />\n\t\t<Panel id="ChatControls">')
     def native_focus(match):

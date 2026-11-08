@@ -21,11 +21,19 @@ internal static class Program {
         if(shot>=0&&shot+1<args.Length){using var preview=new Wizard(preview:true);preview.SavePreview(args[shot+1]);return;}
         Mutex mutex;try{mutex=new Mutex(false,"Local\\DeadlockTranslate-Setup-"+identity.User?.Value);}catch(UnauthorizedAccessException){MessageBox.Show("另一个权限级别的安装器可能仍在运行，请先关闭它后重试。","同频安装器");return;}
         using var mutexScope=mutex;
-        var first=false;try{first=mutex.WaitOne(ownerIndex>=0?10000:0);}catch(AbandonedMutexException){first=true;}
+        var first=false;try{first=mutex.WaitOne(ownerIndex>=0||args.Contains("--wait-previous")?10000:0);}catch(AbandonedMutexException){first=true;}
         if(!first){MessageBox.Show("已有一个安装器窗口，请先完成或关闭它。","同频安装器");return;}
         var smoke=Array.IndexOf(args,"--startup-check");
-        using var form=new Wizard(shot>=0||smoke>=0,resume);
-        if(smoke<0){form.Shown+=(_,_)=>form.ShowFirstVersionNotes();}
+        var steamIndex=Array.IndexOf(args,"--steam-users");
+        string[]? steamIds=null;
+        if(steamIndex>=0){
+            steamIds=steamIndex+1<args.Length?args[steamIndex+1].Split(','):[];
+            if(steamIds.Length is <1 or >32||steamIds.Any(id=>!uint.TryParse(id,out var parsed)||parsed==0||parsed.ToString()!=id)){
+                MessageBox.Show("Steam 账号选择无效，请在游戏设置中重新选择。","同频安装器");mutex.ReleaseMutex();return;
+            }
+        }
+        using var form=new Wizard(shot>=0||smoke>=0,resume,args.Contains("--maintenance"),steamIds);
+        if(smoke<0&&steamIds==null){form.Shown+=(_,_)=>form.ShowFirstVersionNotes();}
         try{
             if(shot>=0&&shot+1<args.Length){form.SavePreview(args[shot+1]);return;}
             if(smoke>=0&&smoke+1<args.Length){

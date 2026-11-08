@@ -95,6 +95,9 @@ using var nativeEditor=new NativeSettingsEditor();
 await using var outgoing=new OutgoingService(config,translators.TranslateOutgoing,log:audit,context:engine.OutgoingContext,translateContext:translators.TranslateOutgoing);
 using var hotkey=args.Contains("--no-hotkey")?null:new NativeHotkey(config,audit);
 await using var app=builder.Build();
+using var releaseUpdates=new ReleaseUpdates(dataDir,BuildInfo.Version);
+var maintenance=new MaintenanceInspection(dataDir,AppContext.BaseDirectory,port);
+if(!noShell)app.Lifetime.ApplicationStarted.Register(()=>_ = releaseUpdates.RunDaily(app.Lifetime.ApplicationStopping));
 await using var llmKeepAlive=new LlmKeepAlive(config,translators,()=>engine.Connected,audit,app.Lifetime.ApplicationStopping);
 if(gameExecutable.Length==0)gameExecutable=SafeGamePath();
 await using var gameLifecycle=new GameLifecycle(gameExecutable,()=>app.Lifetime.StopApplication());
@@ -185,6 +188,37 @@ IResult OpenCommunityLink(string url, string linkName)
 app.MapPost("/api/community/bilibili",()=>OpenCommunityLink("https://space.bilibili.com/332089385", "主页链接"));
 app.MapPost("/api/community/github",()=>OpenCommunityLink(CommunityLinks.GitHubProject, "项目地址"));
 app.MapGet("/api/config",()=>config.Public());
+async Task<IResult> MaintenanceResult(Func<Task<object?>> work){
+    try{return Results.Ok(await work());}
+    catch(Exception e) when(e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception){
+        return Results.Conflict(new{error=e.Message});
+    }
+}
+app.MapPost("/api/maintenance/health",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>await maintenance.Inspect(ctx.RequestAborted)));
+app.MapPost("/api/maintenance/steam/accounts",(CancellationToken ct)=>MaintenanceResult(async()=>await maintenance.SteamAccounts(ct)));
+app.MapPost("/api/maintenance/steam/preview",(SteamAccountSelection selection,CancellationToken ct)=>MaintenanceResult(async()=>{
+    var result=await maintenance.SteamPreview(MaintenanceInspection.ValidateSteamSelection(selection.AccountIds),ct);
+    return new{accounts=result.GetProperty("accounts"),blocked=result.GetProperty("blocked")};
+}));
+app.MapPost("/api/maintenance/steam/open",(SteamAccountSelection selection,CancellationToken ct)=>MaintenanceResult(async()=>{
+    var ids=MaintenanceInspection.ValidateSteamSelection(selection.AccountIds);
+    if(noShell||backendElevated)throw new IOException("请从资源管理器打开安装器，在安装位置页勾选要配置的账号。");
+    await maintenance.OpenInstaller(ct,ids);return new{opened=true};
+}));
+app.MapPost("/api/maintenance/open",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>{
+    if(noShell||backendElevated)throw new IOException("请从资源管理器打开已验证的安装器，再选择一键体检。");
+    await maintenance.OpenInstaller(ctx.RequestAborted);return new{opened=true};
+}));
+app.MapGet("/api/updates",()=>releaseUpdates.Status());
+app.MapPost("/api/updates/check",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>await releaseUpdates.Check(false,ctx.RequestAborted)));
+app.MapPost("/api/updates/dismiss",()=>MaintenanceResult(()=>{releaseUpdates.Dismiss();return Task.FromResult<object?>(releaseUpdates.Status());}));
+app.MapPost("/api/updates/automatic",(UpdatePreference value)=>MaintenanceResult(()=>{releaseUpdates.SetAutomatic(value.Enabled);return Task.FromResult<object?>(releaseUpdates.Status());}));
+app.MapPost("/api/updates/download",()=>MaintenanceResult(()=>{releaseUpdates.StartDownload();return Task.FromResult<object?>(releaseUpdates.Status());}));
+app.MapPost("/api/updates/cancel",()=>{releaseUpdates.CancelDownload();return Results.Ok(releaseUpdates.Status());});
+app.MapPost("/api/updates/install",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>{
+    if(noShell||backendElevated)throw new IOException("请退出游戏后从本机更新缓存手动打开已下载的安装器。");
+    await releaseUpdates.StartInstaller(ctx.RequestAborted);return new{opened=true};
+}));
 app.MapPost("/api/settings/paste-secret",(SecretPasteRequest request)=>{
     if(!SecretClipboard.ValidField(request.Field))return Results.BadRequest(new{error="只允许粘贴大模型或 Azure 密钥。",code="clipboard-field"});
     try{return Results.Ok(new{value=SecretClipboard.ReadKey()});}

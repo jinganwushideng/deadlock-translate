@@ -7,6 +7,10 @@ Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft
 $script:DltTraceFile=$TraceFile
 try {
 if(-not $StateDirectory){$StateDirectory=Join-Path $env:LOCALAPPDATA 'DeadlockTranslate'}
+if($Action -ne 'Inspect' -and $env:DLT_INSTALL_CHILD -ne '1'){
+    $taskOperationGuard=Enter-DltOperation $StateDirectory
+    if(@(Get-DltPendingTransactions $StateDirectory).Count){throw '请先用图形安装器恢复未完成的操作。'}
+}
 if($Action -eq 'Uninstall' -and -not $GamePath -and (Test-Path -LiteralPath (Join-Path $StateDirectory 'install-manifest.json'))){$taskPrevious=Get-Content -LiteralPath (Join-Path $StateDirectory 'install-manifest.json') -Raw -Encoding UTF8|ConvertFrom-Json;$GamePath=Split-Path (Split-Path (Split-Path (Split-Path $taskPrevious.target -Parent) -Parent) -Parent) -Parent}
 if($Action -ne 'Uninstall'){
     . (Join-Path $PSScriptRoot 'Find-Deadlock.ps1')
@@ -61,8 +65,8 @@ if($Action -eq 'Uninstall'){
     try{
         if($taskRestore){Write-DltAtomic $taskGameinfo ([Convert]::FromBase64String($taskState.gameinfoBefore)) -ExpectedHash $taskState.gameinfoAfterHash -AllowReadOnly:$AllowReadOnlyGameinfo -Stage 'uninstall-gameinfo';$taskRestored=$true}
         elseif($taskState.gameinfoChanged){Write-Warning 'Gameinfo changed after installation; preserved.'}
-        if(Test-Path -LiteralPath $taskTarget){[IO.File]::Move($taskTarget,$taskSaved);$taskMoved=$true}
-        Move-Item -LiteralPath $taskManifest -Destination (Join-Path $StateDirectory ('uninstalled-'+[Guid]::NewGuid().ToString('N')+'.json'))
+        if(Test-Path -LiteralPath $taskTarget){Move-DltTrackedFile $taskTarget $taskSaved 'uninstall-vpk';$taskMoved=$true}
+        Move-DltTrackedFile $taskManifest (Join-Path $StateDirectory ('uninstalled-'+[Guid]::NewGuid().ToString('N')+'.json')) 'uninstall-record'
     }catch{
         $taskFailure=$_;$taskRollback=@()
         if($taskMoved){try{if(Test-Path -LiteralPath $taskTarget){throw 'Target changed'};[IO.File]::Move($taskSaved,$taskTarget)}catch{$taskRollback+='VPK 恢复未完成：'+$taskSaved}}
@@ -91,7 +95,7 @@ if($Action -eq 'Repair'){
                     $taskMetadataTemp=$taskManifest+'.repair-'+[Guid]::NewGuid().ToString('N')+'.tmp'
                     try{
                         [IO.File]::WriteAllText($taskMetadataTemp,($taskState|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
-                        [IO.File]::Replace($taskMetadataTemp,$taskManifest,$taskManifest+'.before-repair-'+[Guid]::NewGuid().ToString('N')+'.bak')
+                        Write-DltAtomic $taskManifest ([IO.File]::ReadAllBytes($taskMetadataTemp)) -Backup ($taskManifest+'.before-repair-'+[Guid]::NewGuid().ToString('N')+'.bak') -Stage 'repair-record'
                     }finally{if(Test-Path -LiteralPath $taskMetadataTemp){Remove-Item -LiteralPath $taskMetadataTemp}}
                 }
             }catch{Write-Warning 'SearchPaths repaired; metadata update failed. The gameinfo backup is retained.'}
@@ -158,3 +162,4 @@ Write-Output "Installed: $taskTarget"
 Write-Output 'Use Launch.cmd to start the translator and Deadlock, or Settings.cmd for browser settings.'
 
 }catch{Save-DltFailure $_ $ErrorResultFile;throw}
+finally{if($taskOperationGuard){$taskOperationGuard.Dispose()}}

@@ -14,7 +14,9 @@ def bundle():
     core = core.replace(include, helper)
     safety_include = ". (Join-Path $PSScriptRoot 'Install-Safety.ps1')"
     assert core.count(safety_include) == 1
-    core = core.replace(safety_include, (ROOT / 'scripts/Install-Safety.ps1').read_text(encoding='utf-8-sig'))
+    safety = (ROOT / 'scripts/Install-Safety.ps1').read_text(encoding='utf-8-sig')
+    safety = safety.replace(". (Join-Path $PSScriptRoot 'Installer-Transaction.ps1')", (ROOT / 'scripts/Installer-Transaction.ps1').read_text(encoding='utf-8-sig'))
+    core = core.replace(safety_include, safety)
     recovery_include = ". (Join-Path $PSScriptRoot 'Vpk-Recovery.ps1')"
     assert core.count(recovery_include) == 1
     core = core.replace(recovery_include, (ROOT / 'scripts/Vpk-Recovery.ps1').read_text(encoding='utf-8-sig'))

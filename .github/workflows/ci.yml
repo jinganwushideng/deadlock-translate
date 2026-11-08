@@ -41,6 +41,14 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/installer-migration.test.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/installer-transaction.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/installer-runtime-choice.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/installer-steam-batch.test.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/ReleaseUpdateTests -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/vpk-recovery.test.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compile settings
@@ -56,7 +64,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --prefix tests
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          foreach ($test in @('client-version.test.cjs', 'runtime-alert-ui.test.cjs', 'settings-reload.test.cjs', 'game-window.test.cjs', 'native-editor-window.test.cjs', 'native-scene-background.test.cjs', 'send-isolation.test.cjs', 'settings-reload-ui.test.cjs', 'native-editor-ui.test.cjs', 'input-recovery-ui.test.cjs', 'secret-clipboard-ui.test.cjs', 'settings-surface-alpha.test.cjs')) {
+          foreach ($test in @('client-version.test.cjs', 'runtime-alert-ui.test.cjs', 'settings-reload.test.cjs', 'game-window.test.cjs', 'native-editor-window.test.cjs', 'native-scene-background.test.cjs', 'send-isolation.test.cjs', 'settings-reload-ui.test.cjs', 'native-editor-ui.test.cjs', 'input-recovery-ui.test.cjs', 'secret-clipboard-ui.test.cjs', 'settings-surface-alpha.test.cjs', 'steam-account-ui.test.cjs')) {
             node (Join-Path tests $test)
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }

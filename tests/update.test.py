@@ -77,6 +77,8 @@ class UpdateTests(unittest.TestCase):
                             version='0.6.1', runtimeFolder=str(self.runtime), gameinfoChanged=False,
                             gameinfoBefore='', gameinfoAfterHash=digest(self.gameinfo.read_bytes()))
         write_json(self.state / 'install-manifest.json', self.install)
+        # An existing installation can already have the shared operation lock file.
+        (self.state / 'installation-operation.lock').touch()
         write_json(self.state / 'terms.json', self.user_terms)
         for name in ('settings.json', 'secrets.dpapi', 'localhost-certificate.dpapi', 'localhost-certificate.cer'):
             (self.state / name).write_bytes(b'PRIVATE bytes preserved: ' + name.encode())
@@ -299,7 +301,7 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue((ROOT / 'scripts/build_external_updater.py').is_file())
     def test_failure_after_runtime_commit_rolls_back(self):
         scripts=self.root/'fixture-scripts';scripts.mkdir()
-        for name in ('Install-Safety.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):
+        for name in ('Install-Safety.ps1','Installer-Transaction.ps1','Game-SearchPaths.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1'):
             (scripts/name).write_bytes((ROOT/'scripts'/name).read_bytes())
         self.script=scripts/'Update-Mod.ps1'
         text=SCRIPT.read_text(encoding='utf-8-sig')
