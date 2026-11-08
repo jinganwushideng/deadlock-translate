@@ -1,6 +1,6 @@
 {
   "version": "0.7.3",
-  "buildId": "0.7.3-206c47b796ac",
+  "buildId": "0.7.3-0cdbdfbf30c8",
   "featureRevision": "durable-install-recovery-maintenance-and-release-updates",
   "files": [
     {
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "921cf53b072d81c5924f67febdd861782e491fb742d347769f50c16dbfe2d2d7"
+      "sha256": "c9c1d82bb984d5b2424dd3b645b60f76918d780b92cd5a639cb6ec510b905c44"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "fce9aa94541a4906929c209d675df68063e6140f653989d03bd6a494caf536a1"
+      "sha256": "2b700d09eb5d3233c0a0fab9cfd28e1b93daf97f438234ce647447d2d1b766cf"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -65,7 +65,7 @@
     },
     {
       "file": "docs/GUI-INSTALLER.md",
-      "sha256": "f64366ef58fa99e771dd544f1e676d4553d859719bcbd479e6c41e1b327423e5"
+      "sha256": "877fc280293674758d3b85faa07c6850ebc905cee95d5a8d203aa88e29038070"
     },
     {
       "file": "docs/images/chat-bilingual.png",
@@ -129,11 +129,11 @@
     },
     {
       "file": "docs/UPDATE-0.7.3.md",
-      "sha256": "e24ae1e746e1c55fb94e0f62226e4d6b84fb86bcc30d8782a94348b88622c8c8"
+      "sha256": "8a039288a1f1382afe0c2642ca4c97b558fd1f02fcb33e9b6e2a629f97ca4ad0"
     },
     {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "706d85469f035bf9cba572f14e7055221d04dbd78c7f106bde3c610eac26bc2e"
+      "sha256": "8b12d01ea5c62f61839f79317df24d81fd4d97b94b73e0d0e82a97717cc9c99f"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -185,7 +185,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "8b3c79ea3d32b0ac5678a5759109320e3778b1f71419c2e5058735613f1f32bc"
+      "sha256": "9b6f5a570d6d6311dc0c0078b2efac30a3a5f81a02828de9a60b32ce1fdf9a17"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -221,7 +221,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "ac23fcaf07390fc367619bce5a6fe245c79978e5f445521752ebc9847459c799"
+      "sha256": "dd39176f09877e2e09def9c441389ad54f613d791aa046f46e69dc769040b251"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
@@ -397,7 +397,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "04d3de65be564e92ab285830ff99702a8b9f14c435ce1ac81f4ac6eb7b84fa92"
+      "sha256": "c75fad8d94c2e925de839266cd1f48b6111444314c7f143834d18f2e5eb7b69d"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -529,7 +529,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "0cc43752adc5ddd98a2d3ca1b12fe975c634a03cad4f8578554fe7aeffcde326"
+      "sha256": "cf80fe7a3f65a6c0af9805f3ae5dc3918f285652f6b4f5be2a8e1f8fa921252e"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -553,7 +553,7 @@
     },
     {
       "file": "src/Bridge/ReleaseUpdates.cs",
-      "sha256": "86520164628147e573c21929772fcbb965c5592600d61c7ccf6897bf5a653691"
+      "sha256": "5f9e66dfe18f85d6f22b539a6597b08f4887c42f99d9649ce53f272916618767"
     },
     {
       "file": "src/Bridge/SecretClipboard.cs",
@@ -609,7 +609,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "c524d81c6fc35b1be75ff6223660fa35bd39f0b1fb724f855fc0d000677be2fa"
+      "sha256": "3f1d66aa0629e704d629e04dbd272a26af83a708a94b496864c5b6121b6a6f10"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -689,7 +689,7 @@
     },
     {
       "file": "src/Installer/Wizard.Maintenance.cs",
-      "sha256": "b1312276ee1c128858f5779d46e6df1a0d290032395bb4064e39ab789a8a6aa5"
+      "sha256": "c33fb1f5977bd20a5d8701ffc4b5ecca4b0158e9a800ab8ce099578137016d39"
     },
     {
       "file": "src/Installer/Wizard.RuntimeChoice.cs",
@@ -705,7 +705,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "952c9bab1902e6455222154b899db2df4a67d9900f890707685afc6ab8d76992"
+      "sha256": "7b70a4bc1dcc16b8f97b9c33ed45a7690ed21afd18c3d003944025e78e82c06e"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -1221,7 +1221,7 @@
     },
     {
       "file": "tests/ReleaseUpdateTests/Program.cs",
-      "sha256": "26e6f288b459844bea5608f565e04a42961ce79a7b3be49ce791f32f8f4a6a75"
+      "sha256": "c06009d8dc7b0b4e474b467550f5ab24f3096621ccdab811984b9f67f6dd0af6"
     },
     {
       "file": "tests/ReleaseUpdateTests/ReleaseUpdateTests.csproj",

@@ -4,7 +4,7 @@
 
 技术结构：Panorama 游戏界面＋本地 .NET 后台＋TypeScript 设置页。翻译调用云端服务，本地不运行翻译模型。
 
-当前源码和安装包版本 **0.7.3**。本版新增安装中断恢复、一键体检及正式版本检查。设置界面采用贴近游戏的分组导航与自动保存，提供静态、半透明及实时模糊背景，并改善翻译发送关框确认和新草稿隔离；具体变化见 [本版更新说明](docs/UPDATE-0.7.3.md)。保留接收/发送独立模型与思考、双语分条、快捷短语、API 保活和备份清理。后台、设置页、游戏 VPK 与安装器使用统一构建编号。QQ 反馈群 **923443423**。
+当前源码和安装包版本 **0.7.3**。本版新增安装中断恢复、一键体检和正式版本检查。GitHub 检查失败时可通过夸克和百度网盘确认新版。后台、设置页、游戏 VPK 与安装器使用统一构建编号。QQ 反馈群 **923443423**。[本版更新说明](docs/UPDATE-0.7.3.md)
 
 翻译服务推荐、费用参考和模型 ID 填写要求见[使用说明](docs/USER-GUIDE.md)。
 
@@ -18,9 +18,13 @@
 
 ## 直接下载安装
 
-[已发布版本与下载文件](https://github.com/jinganwushideng/deadlock-translate/releases)。源码中的版本号不代表该版本已上传；请以 Release 附件为准。
+- [GitHub Releases](https://github.com/jinganwushideng/deadlock-translate/releases)
+- [夸克网盘](https://pan.quark.cn/s/edde8867941a)
+- [百度网盘](https://pan.baidu.com/s/5vlaAkKuSSR2eTMtVUgCWdQ)
 
-**0.6.8 起提供图形安装器 `DeadlockTranslate-Setup-0.7.3.exe`，首次安装和更新使用同一个文件。** 完整离线包已内置，无需单独解压或安装 .NET。
+网盘以分享文件夹标注的版本为准。下载 `DeadlockTranslate-Setup-版本号.exe` 完整安装器即可安装或覆盖更新。
+
+首次安装和覆盖更新都使用 `DeadlockTranslate-Setup-0.7.3.exe`。完整离线包已内置，无需单独解压或安装 .NET。
 
 1. 退出 Deadlock，运行安装器；第 1 步先处理本机证书，请本人在电脑前确认 Windows 弹窗。已有有效证书自动跳过重复安装。
 2. 选择“安装 / 覆盖更新”。自动检测游戏、原程序目录和 Steam 账号；找不到时可手动选择或限时深层扫描。

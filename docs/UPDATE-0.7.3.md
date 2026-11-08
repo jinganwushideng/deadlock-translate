@@ -1,5 +1,8 @@
 # 同频 0.7.3
 
+- GitHub 检查失败或限流时，尝试读取夸克和百度网盘分享的最新版文件夹名。版本高于本机时在概览提醒。
+- 游戏翻译设置和安装器的更新页提供三个入口。[GitHub Releases](https://github.com/jinganwushideng/deadlock-translate/releases) · [夸克网盘](https://pan.quark.cn/s/edde8867941a) · [百度网盘](https://pan.baidu.com/s/5vlaAkKuSSR2eTMtVUgCWdQ)
+
 - 安装器显示步骤进度、已等待时间与 Windows 确认状态，检测超时后可以重试，写入阶段可请求安全停止。
 - 安装、更新、迁移和卸载记录逐项写入。中断后重开安装器可继续修复或恢复，保留期间被改动的文件。
 - 新增一键体检，修复前预览影响范围。安装已完成时可单独重试 Steam 启动项。

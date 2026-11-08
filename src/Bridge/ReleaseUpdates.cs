@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -8,15 +9,29 @@ namespace DeadlockTranslate;
 
 internal sealed record ReleaseAsset(string Url, long Bytes, string? Digest);
 internal sealed record UpdateRelease(string Version, string Summary, ReleaseAsset Installer, ReleaseAsset Checksum);
+internal sealed record UpdateMirrors(string? QuarkVersion, string? BaiduVersion)
+{
+    internal string? LatestVersion => ReleaseUpdates.NewerVersion(QuarkVersion, BaiduVersion);
+}
 internal sealed record UpdateCache(DateTimeOffset? LastAttempt = null, DateTimeOffset? LastSuccess = null,
-    DateTimeOffset? RetryAt = null, UpdateRelease? Release = null, string? Dismissed = null, string? Error = null, bool Automatic = true);
+    DateTimeOffset? RetryAt = null, UpdateRelease? Release = null, string? Dismissed = null, string? Error = null, bool Automatic = true,
+    UpdateMirrors? Mirrors = null);
 internal sealed record UpdateStatus(string CurrentVersion, bool Available, string? Version, string? Summary, long Size,
-    DateTimeOffset? LastChecked, DateTimeOffset? RetryAt, string? CheckError, string Download, long Downloaded, string? DownloadError, bool Automatic);
+    DateTimeOffset? LastChecked, DateTimeOffset? RetryAt, string? CheckError, string Download, long Downloaded, string? DownloadError, bool Automatic,
+    UpdateMirrors? Mirrors, string? MirrorVersion, bool MirrorAvailable);
 
 internal sealed class ReleaseUpdates : IDisposable
 {
     internal const long MaxInstallerBytes = 512L * 1024 * 1024;
     private const string Repository = "jinganwushideng/deadlock-translate";
+    internal const string GitHubReleases = "https://github.com/" + Repository + "/releases";
+    internal const string QuarkShare = "https://pan.quark.cn/s/" + QuarkShareId;
+    internal const string BaiduShare = "https://pan.baidu.com/s/5vlaAkKuSSR2eTMtVUgCWdQ";
+    private const string QuarkShareId = "edde8867941a";
+    private const string QuarkApi = "https://drive-h.quark.cn/1/clouddrive/share/sharepage/";
+    private const string QuarkQuery = "?pr=ucpro&fr=pc&uc_param_str=";
+    private static readonly Regex FolderVersion = new(@"(?:最新版本|最新版)\s*[:：]?\s*(v?[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*$",
+        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Uri Latest = new($"https://api.github.com/repos/{Repository}/releases/latest");
     private readonly string root;
     private readonly string current;
@@ -34,7 +49,7 @@ internal sealed class ReleaseUpdates : IDisposable
         root = Path.Combine(stateRoot, "release-updates");
         this.current = current;
         now = clock ?? (() => DateTimeOffset.UtcNow);
-        http = new HttpClient(transport ?? new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
+        http = new HttpClient(transport ?? new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = Timeout.InfiniteTimeSpan };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("DeadlockTranslate/" + current);
     }
 
@@ -43,6 +58,13 @@ internal sealed class ReleaseUpdates : IDisposable
         if (value is null || !Regex.IsMatch(value, @"^v?\d+\.\d+\.\d+(?:\.\d+)?$", RegexOptions.CultureInvariant)) return null;
         return Version.TryParse(value.TrimStart('v'), out var version)
             ? new Version(version.Major, version.Minor, version.Build, Math.Max(0, version.Revision)) : null;
+    }
+
+    internal static string? NewerVersion(string? first, string? second)
+    {
+        var a = ParseVersion(first);
+        var b = ParseVersion(second);
+        return b > a ? second : a != null ? first : null;
     }
 
     private static void NoLinks(string path)
@@ -89,12 +111,17 @@ internal sealed class ReleaseUpdates : IDisposable
     {
         var cache = Read();
         var release = IsNew(cache.Release) ? cache.Release : null;
+        var mirrors = cache.Error == null ? null : cache.Mirrors;
+        var mirrorVersion = mirrors?.LatestVersion;
+        if (!(ParseVersion(mirrorVersion) > ParseVersion(current))) mirrorVersion = null;
         lock (gate) {
             var state = downloadVersion == release?.Version ? download : "idle";
             if (release != null && state == "idle" && File.Exists(PackagePath(release.Version)) && File.Exists(HashPath(release.Version))) state = "ready";
-            return new(current, release != null && cache.Dismissed != release.Version, release?.Version, release?.Summary,
+            return new(current, ParseVersion(release?.Version) > ParseVersion(cache.Dismissed), release?.Version, release?.Summary,
                 release?.Installer.Bytes ?? 0, cache.LastSuccess, cache.RetryAt, cache.Error,
-                state, downloadVersion == release?.Version ? downloaded : 0, downloadVersion == release?.Version ? downloadError : null, cache.Automatic);
+                state, downloadVersion == release?.Version ? downloaded : 0, downloadVersion == release?.Version ? downloadError : null, cache.Automatic,
+                mirrors, mirrorVersion, ParseVersion(mirrorVersion) > ParseVersion(cache.Dismissed) &&
+                    ParseVersion(mirrorVersion) > ParseVersion(release?.Version));
         }
     }
 
@@ -110,21 +137,104 @@ internal sealed class ReleaseUpdates : IDisposable
         Save(cache = cache with { LastAttempt = utc });
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
+        UpdateCache result;
         try {
             using var response = await http.GetAsync(Latest, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.Forbidden) {
                 var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - utc) ?? TimeSpan.FromMinutes(30);
-                Save(cache with { Error = "GitHub 暂时限制检查频率。", RetryAt = utc.AddSeconds(Math.Clamp(retry.TotalSeconds, 60, 86400)) });
-                return Status();
+                result = cache with { Error = "GitHub 暂时限制检查频率。", RetryAt = utc.AddSeconds(Math.Clamp(retry.TotalSeconds, 60, 86400)) };
+            } else {
+                response.EnsureSuccessStatusCode();
+                using var doc = JsonDocument.Parse(await ReadLimited(response.Content, 256 * 1024, timeout.Token));
+                var release = ReadRelease(doc.RootElement);
+                result = cache with { LastSuccess = utc, RetryAt = null, Release = release, Error = null, Mirrors = null };
             }
-            response.EnsureSuccessStatusCode();
-            using var doc = JsonDocument.Parse(await ReadLimited(response.Content, 256 * 1024, timeout.Token));
-            var release = ReadRelease(doc.RootElement);
-            Save(cache with { LastSuccess = utc, RetryAt = null, Release = release, Error = null });
         } catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or IOException or JsonException or OperationCanceledException) {
-            Save(cache with { Error = "无法读取 GitHub 更新，可以稍后重试。", RetryAt = utc.AddMinutes(2) });
+            result = cache with { Error = "无法读取 GitHub 更新，可以稍后重试。", RetryAt = utc.AddMinutes(2) };
         }
+        if (result.Error != null) {
+            var versions = await Task.WhenAll(TryReadMirror(ReadQuark, token), TryReadMirror(ReadBaidu, token));
+            result = result with { Mirrors = new(versions[0], versions[1]) };
+        }
+        token.ThrowIfCancellationRequested();
+        Save(result);
         return Status();
+    }
+
+    private static async Task<string?> TryReadMirror(Func<CancellationToken, Task<string?>> read, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(6));
+        try { return await read(timeout.Token); }
+        catch (Exception e) when (!ct.IsCancellationRequested &&
+            e is HttpRequestException or IOException or JsonException or OperationCanceledException or RegexMatchTimeoutException) { return null; }
+    }
+
+    private async Task<JsonDocument> ReadQuarkResponse(HttpRequestMessage request, CancellationToken ct)
+    {
+        request.Headers.Referrer = new Uri("https://pan.quark.cn/");
+        request.Headers.Add("Origin", "https://pan.quark.cn");
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        return JsonDocument.Parse(await ReadLimited(response.Content, 256 * 1024, ct));
+    }
+
+    private static bool TryQuarkData(JsonElement root, out JsonElement data)
+    {
+        data = default;
+        return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("code", out var code) &&
+            code.ValueKind == JsonValueKind.Number && code.TryGetInt32(out var status) && status == 0 &&
+            root.TryGetProperty("data", out data) && data.ValueKind == JsonValueKind.Object;
+    }
+
+    private async Task<string?> ReadQuark(CancellationToken ct)
+    {
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, QuarkApi + "token" + QuarkQuery) {
+            Content = new StringContent(JsonSerializer.Serialize(new { pwd_id = QuarkShareId, passcode = "", support_visit_limit_private_share = true }),
+                Encoding.UTF8, "application/json")
+        };
+        using var tokenResponse = await ReadQuarkResponse(tokenRequest, ct);
+        if (!TryQuarkData(tokenResponse.RootElement, out var tokenData) || !tokenData.TryGetProperty("stoken", out var token) ||
+            token.ValueKind != JsonValueKind.String || token.GetString() is not { Length: > 0 and <= 2048 } value) return null;
+        using var detailRequest = new HttpRequestMessage(HttpMethod.Get, QuarkApi + "detail" + QuarkQuery +
+            "&ver=2&pwd_id=" + QuarkShareId + "&stoken=" + Uri.EscapeDataString(value) + "&pdir_fid=0&_page=1&_size=50&_fetch_share=1");
+        using var detailResponse = await ReadQuarkResponse(detailRequest, ct);
+        return TryQuarkData(detailResponse.RootElement, out var data) && data.TryGetProperty("list", out var list)
+            ? LatestFolder(list, "dir", "file_name", JsonValueKind.True) : null;
+    }
+
+    private async Task<string?> ReadBaidu(CancellationToken ct)
+    {
+        using var response = await http.GetAsync(BaiduShare, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        return ReadBaiduFolders(await ReadLimited(response.Content, 512 * 1024, ct));
+    }
+
+    internal static string? ReadBaiduFolders(byte[] html)
+    {
+        // The public share page embeds directory metadata in its first-party JSON bootstrap.
+        var marker = "locals.mset("u8;
+        var start = html.AsSpan().IndexOf(marker);
+        if (start < 0) return null;
+        var reader = new Utf8JsonReader(html.AsSpan(start + marker.Length));
+        using var metadata = JsonDocument.ParseValue(ref reader);
+        return metadata.RootElement.ValueKind == JsonValueKind.Object && metadata.RootElement.TryGetProperty("file_list", out var list)
+            ? LatestFolder(list, "isdir", "server_filename", JsonValueKind.Number) : null;
+    }
+
+    private static string? LatestFolder(JsonElement list, string directoryKey, string nameKey, JsonValueKind directoryKind)
+    {
+        if (list.ValueKind != JsonValueKind.Array) return null;
+        string? latest = null;
+        foreach (var item in list.EnumerateArray()) {
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(directoryKey, out var directory) ||
+                directory.ValueKind != directoryKind || (directoryKind == JsonValueKind.Number && (!directory.TryGetInt32(out var flag) || flag != 1)) ||
+                !item.TryGetProperty(nameKey, out var name) || name.ValueKind != JsonValueKind.String ||
+                name.GetString() is not { Length: > 0 and <= 512 } folder) continue;
+            var match = FolderVersion.Match(folder);
+            if (match.Success) latest = NewerVersion(latest, match.Groups[1].Value.TrimStart('v'));
+        }
+        return latest;
     }
 
     private static async Task<byte[]> ReadLimited(HttpContent content, int limit, CancellationToken ct)
@@ -191,7 +301,8 @@ internal sealed class ReleaseUpdates : IDisposable
     public void Dismiss()
     {
         using var held = TryLock("check.lock") ?? throw new IOException("正在检查更新，请稍后重试。");
-        var cache = Read();Save(cache with { Dismissed = cache.Release?.Version });
+        var cache = Read();
+        Save(cache with { Dismissed = NewerVersion(cache.Release?.Version, cache.Error == null ? null : cache.Mirrors?.LatestVersion) });
     }
 
     public void SetAutomatic(bool enabled)

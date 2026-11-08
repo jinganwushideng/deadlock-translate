@@ -142,19 +142,39 @@ public sealed partial class Wizard
     {
         using var dialog=new Form{Text="同频 · 检查更新",StartPosition=FormStartPosition.CenterParent,ClientSize=new Size(540,320),BackColor=bg,ForeColor=ink,Font=Font};
         using var lifetime=new CancellationTokenSource();
-        var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(16)};
+        var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(16)};
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var label=new Label{AutoSize=true,MaximumSize=new Size(500,0)};
         var notes=new TextBox{Dock=DockStyle.Fill,ReadOnly=true,Multiline=true,ScrollBars=ScrollBars.Vertical,BackColor=card,ForeColor=ink};
         var buttons=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
         var check=Button("检查更新",()=>{});var download=Button("下载安装包",()=>{});var cancel=Button("取消下载",releaseUpdates.CancelDownload);var start=Button("打开安装器",()=>{});
-        buttons.Controls.AddRange([check,download,cancel,start]);layout.Controls.Add(label);layout.Controls.Add(notes);layout.Controls.Add(buttons);dialog.Controls.Add(layout);
+        var channels=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
+        channels.Controls.AddRange([
+            Button("GitHub 发布页 ↗",()=>OpenChannel(ReleaseUpdates.GitHubReleases)),
+            Button("夸克网盘 ↗",()=>OpenChannel(ReleaseUpdates.QuarkShare)),
+            Button("百度网盘 ↗",()=>OpenChannel(ReleaseUpdates.BaiduShare))
+        ]);
+        buttons.Controls.AddRange([check,download,cancel,start]);
+        layout.Controls.Add(label);layout.Controls.Add(notes);layout.Controls.Add(buttons);layout.Controls.Add(channels);dialog.Controls.Add(layout);
         string? error=null;bool checking=false;
+        void OpenChannel(string url){
+            try{using var browser=Process.Start(new ProcessStartInfo(url){UseShellExecute=true});}
+            catch(Exception ex)when(ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException){
+                MessageBox.Show(dialog,"无法打开系统浏览器，请手动访问："+Environment.NewLine+url,Text);
+            }
+        }
         void Render(){
             var result=releaseUpdates.Status();
-            label.Text=$"当前 {result.CurrentVersion}"+(result.Version==null?" · 暂无可用新版":$" · 最新 {result.Version} · {result.Size/1048576.0:F1} MB")+
+            var version=result.MirrorAvailable?$" · 网盘文件夹标记新版 {result.MirrorVersion}":
+                result.Version!=null?$" · GitHub {result.Version} · {result.Size/1048576.0:F1} MB":
+                result.CheckError!=null?" · GitHub 版本暂无法确认":result.LastChecked!=null?" · GitHub 暂无新版":" · 尚未检查更新";
+            label.Text=$"当前 {result.CurrentVersion}"+version+
                 (checking?" · 正在检查":result.Download=="downloading"?$" · {result.Downloaded/1048576.0:F1} MB 已下载":"");
-            var description=string.Join(Environment.NewLine,new[]{error,result.CheckError,result.DownloadError,result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
+            var mirrorDetails=result.Mirrors is { } mirrors?
+                $"网盘文件夹标记 · 夸克 {mirrors.QuarkVersion??"暂无法确认"} · 百度 {mirrors.BaiduVersion??"暂无法确认"}":null;
+            var description=string.Join(Environment.NewLine,new[]{error,result.CheckError,result.DownloadError,mirrorDetails,
+                "网盘打开后，请按标有「最新版」的文件夹名确认版本，下载完整安装器。",result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
             if(notes.Text!=description)notes.Text=description;
             check.Enabled=!checking;download.Enabled=result.Version!=null&&result.Download!="downloading";cancel.Enabled=result.Download=="downloading";start.Enabled=result.Download=="ready";
         }

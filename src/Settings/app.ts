@@ -379,17 +379,21 @@ async function copyText(value:string){
     try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable');}finally{input.remove();if(previous&&previous.focus)previous.focus();clipboardInProgress=false;}
 }
 function communityNotice(message:string,error=false){$('communityStatus').textContent=message;$('communityStatus').classList.toggle('error',error);}
-type ReleaseView={currentVersion:string;available:boolean;version?:string;summary?:string;size:number;lastChecked?:string;retryAt?:string;checkError?:string;download:string;downloaded:number;downloadError?:string;automatic:boolean};
+type ReleaseView={currentVersion:string;available:boolean;version?:string;summary?:string;size:number;lastChecked?:string;retryAt?:string;checkError?:string;download:string;downloaded:number;downloadError?:string;automatic:boolean;mirrorVersion?:string;mirrorAvailable?:boolean;mirrors?:{quarkVersion?:string;baiduVersion?:string}};
 let updateBusy=false, updatePoll:ReturnType<typeof setTimeout>|null=null;
 function renderUpdate(view:ReleaseView){
-    $('updateNotice').hidden=!view.available;
-    $('updateNoticeText').textContent=view.available?`同频 ${view.version} 已发布 · ${(view.size/1048576).toFixed(1)} MB`:'';
-    const checked=view.lastChecked?` · 上次检查 ${new Date(view.lastChecked).toLocaleString()}`:'';
+    $('updateNotice').hidden=!view.available&&!view.mirrorAvailable;
+    $('updateNoticeText').textContent=view.mirrorAvailable?`网盘文件夹标记新版 ${view.mirrorVersion}，可查看下载渠道。`:
+        view.available?`同频 ${view.version} 已发布 · ${(view.size/1048576).toFixed(1)} MB`:'';
+    const checked=view.lastChecked?` · 上次成功检查 GitHub ${new Date(view.lastChecked).toLocaleString()}`:'';
     const progress=view.download==='downloading'?` · 已下载 ${(view.downloaded/1048576).toFixed(1)} / ${(view.size/1048576).toFixed(1)} MB`:view.download==='ready'?' · 下载完成': '';
-    $('releaseState').textContent=`当前 ${view.currentVersion}`+(view.version?` · 可更新至 ${view.version}`:' · 暂无可用新版')+checked+progress;
+    const github=view.version?` · GitHub ${view.version}`:view.checkError?' · GitHub 版本暂无法确认':view.lastChecked?' · GitHub 暂无新版':' · 尚未检查更新';
+    $('releaseState').textContent=`当前 ${view.currentVersion}`+github+checked+progress;
     $('releaseSummary').textContent=view.summary||'';
     $('releaseSummary').hidden=!view.summary;
-    $('releaseError').textContent=view.downloadError||view.checkError||'';
+    $('releaseError').textContent=[view.checkError,view.downloadError].filter(Boolean).join(' ');
+    $('releaseMirrors').hidden=!view.mirrors;
+    $('releaseMirrors').textContent=view.mirrors?`网盘文件夹标记 · 夸克 ${view.mirrors.quarkVersion||'暂无法确认'} · 百度 ${view.mirrors.baiduVersion||'暂无法确认'}`:'';
     $<HTMLInputElement>('releaseAutomatic').checked=view.automatic;
     $('releaseDownload').hidden=!view.version||view.download==='downloading'||view.download==='ready';
     $('releaseCancel').hidden=view.download!=='downloading';
@@ -439,6 +443,14 @@ if(document.getElementById('maintenanceHealth')){
     bind('releaseInstall',()=>{if(!inGame&&window.confirm('确认打开已校验的安装器？'))return updateAction('install');$('releaseError').textContent='请退出游戏后，在浏览器设置或安装器中打开更新。';});
     bind('releaseDismiss',()=>updateAction('dismiss'));
     bind('releaseOpen',()=>selectPage('diagnostics','releaseUpdateCard'));
+    for(const [id, source] of [['releaseOpenGitHub','github'],['releaseOpenQuark','quark'],['releaseOpenBaidu','baidu']]){
+        bind(id,async()=>{
+            const status=$('releaseLinkStatus');
+            status.textContent='';
+            try{await api('updates/open/'+source,'POST',{});status.textContent='已在系统浏览器打开。';}
+            catch(e){status.textContent=(e as Error).message;}
+        });
+    }
     $<HTMLInputElement>('releaseAutomatic').addEventListener('change',async e=>{
         const field=e.currentTarget as HTMLInputElement;field.disabled=true;
         try{await updateAction('automatic',{enabled:field.checked});await refreshUpdates();}finally{field.disabled=false;}

@@ -173,16 +173,17 @@ app.MapPost("/api/native-editor",(NativeEditorDraft request)=>{
 app.MapGet("/api/native-editor/{id}",(string id,string owner)=>nativeEditor.Read(id,owner) is {} value?Results.Ok(value):Results.NotFound(new{error="原生编辑已过期，请重新点击输入框。"}));
 app.MapDelete("/api/native-editor/{id}",(string id,string owner)=>{nativeEditor.Cancel(id,owner);return Results.Ok();});
 app.MapGet("/community-qq.png",()=>Results.File(Path.Combine(staticRoot,"community-qq.png"),"image/png"));
-IResult OpenCommunityLink(string url, string linkName)
+IResult OpenCommunityLink(string url, string linkName, bool showAddress = false)
 {
-    if(noShell)return Results.Conflict(new{error=$"本次后台禁止打开外部窗口，请复制{linkName}后手动打开。"});
+    var address = showAddress ? $" {url}" : "";
+    if(noShell)return Results.Conflict(new{error=$"本次后台禁止打开外部窗口，请复制{linkName}后手动打开。{address}"});
     try{
         // Fixed destination, user-initiated, with the existing session and Origin checks.
         // Do not navigate the game's embedded settings panel to an external website.
         using var browser=Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
         return Results.Ok(new{opened=true});
     }catch(Exception ex)when(ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException){
-        return Results.Json(new{error=$"无法打开系统默认浏览器，请复制{linkName}后手动打开。"},statusCode:502);
+        return Results.Json(new{error=$"无法打开系统默认浏览器，请复制{linkName}后手动打开。{address}"},statusCode:502);
     }
 }
 app.MapPost("/api/community/bilibili",()=>OpenCommunityLink("https://space.bilibili.com/332089385", "主页链接"));
@@ -210,6 +211,9 @@ app.MapPost("/api/maintenance/open",(HttpContext ctx,CancellationToken cancellat
     await maintenance.OpenInstaller(ctx.RequestAborted);return new{opened=true};
 }));
 app.MapGet("/api/updates",()=>releaseUpdates.Status());
+app.MapPost("/api/updates/open/github",()=>OpenCommunityLink(ReleaseUpdates.GitHubReleases, "GitHub 发布页链接", true));
+app.MapPost("/api/updates/open/quark",()=>OpenCommunityLink(ReleaseUpdates.QuarkShare, "夸克网盘链接", true));
+app.MapPost("/api/updates/open/baidu",()=>OpenCommunityLink(ReleaseUpdates.BaiduShare, "百度网盘链接", true));
 app.MapPost("/api/updates/check",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>await releaseUpdates.Check(false,ctx.RequestAborted)));
 app.MapPost("/api/updates/dismiss",()=>MaintenanceResult(()=>{releaseUpdates.Dismiss();return Task.FromResult<object?>(releaseUpdates.Status());}));
 app.MapPost("/api/updates/automatic",(UpdatePreference value)=>MaintenanceResult(()=>{releaseUpdates.SetAutomatic(value.Enabled);return Task.FromResult<object?>(releaseUpdates.Status());}));
