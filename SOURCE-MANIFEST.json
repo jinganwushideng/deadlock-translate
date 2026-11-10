@@ -1,6 +1,6 @@
 {
   "version": "0.7.3",
-  "buildId": "0.7.3-0cdbdfbf30c8",
+  "buildId": "0.7.3-f3c77c3faa0c",
   "featureRevision": "durable-install-recovery-maintenance-and-release-updates",
   "files": [
     {
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "c9c1d82bb984d5b2424dd3b645b60f76918d780b92cd5a639cb6ec510b905c44"
+      "sha256": "d29634a250df73e0ddb7777796711f9aed08d600e12ac38e87d5320c48355682"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "2b700d09eb5d3233c0a0fab9cfd28e1b93daf97f438234ce647447d2d1b766cf"
+      "sha256": "a06047326497ec15743584d9f1934c49e68d5f884b0ae7d05f38d1e497b46c5e"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -129,11 +129,11 @@
     },
     {
       "file": "docs/UPDATE-0.7.3.md",
-      "sha256": "8a039288a1f1382afe0c2642ca4c97b558fd1f02fcb33e9b6e2a629f97ca4ad0"
+      "sha256": "ee76121e7736730f94cd19ccc66e9876aa9d5e0959d6cf03b6b4aae1bd10c240"
     },
     {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "8b12d01ea5c62f61839f79317df24d81fd4d97b94b73e0d0e82a97717cc9c99f"
+      "sha256": "27fb919fe38e9dc54c4e3756b7ed06f31485d91a8a53fbf3261a53880d43da18"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -185,7 +185,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "9b6f5a570d6d6311dc0c0078b2efac30a3a5f81a02828de9a60b32ce1fdf9a17"
+      "sha256": "b3e723d05b1eda96801e895cf4021cbcee6472b7e7cc313f8bf066382cf84a72"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -269,7 +269,7 @@
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
-      "sha256": "7082351b353e6132c5a5bec956b8e4743f1c90b6dfb27351c0e5b38ebc4f63d4"
+      "sha256": "b1ff8a168a2594f891862d3ee94eb43a93790677041c2ec85cd011fd8b0d2db8"
     },
     {
       "file": "scripts/Game-SearchPaths.ps1",
@@ -289,7 +289,7 @@
     },
     {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "43ba8eb73c96b9f1315c56e2a2cbde7850fcbbaefaed0e63c84eea51b621472d"
+      "sha256": "7355905a7ad4e417434c46b1d429080f82a529830345fa7f3bef0ace95ddf794"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
@@ -397,7 +397,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "c75fad8d94c2e925de839266cd1f48b6111444314c7f143834d18f2e5eb7b69d"
+      "sha256": "b5360d1f7f42691310ce38cc02eafa356184f354ab4d781d8a15735960bef78b"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -973,7 +973,7 @@
     },
     {
       "file": "tests/installer-workflow.test.py",
-      "sha256": "fca7259ffb1a982fd491a2ebe19e0816017421425d15fd9a03f6d5228ea562ac"
+      "sha256": "87cb1e52231db72c28e8c2da20f9c09ba72f8ff437f9d3d630bb701a34d6614f"
     },
     {
       "file": "tests/installer.test.ps1",

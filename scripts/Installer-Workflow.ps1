@@ -210,8 +210,19 @@ function Inspect {
     if(-not $steam){$steam=(Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath}
     $active=0;try{$active=[long](Get-ItemProperty 'HKCU:\Software\Valve\Steam\ActiveProcess' -ErrorAction Stop).ActiveUser;if($active -lt 0){$active+=4294967296}}catch{}
     $names=@{}
-    if($steam -and (Test-Path -LiteralPath (Join-Path $steam 'config\loginusers.vdf'))){try{$logins=[IO.File]::ReadAllText((Join-Path $steam 'config\loginusers.vdf'),[Text.Encoding]::UTF8);foreach($match in [regex]::Matches($logins,'"(\d{17})"\s*\{([^{}]*)\}')){$id=[uint64]$match.Groups[1].Value-[uint64]76561197960265728;if($id -le [uint32]::MaxValue){$nick=[regex]::Match($match.Groups[2].Value,'"PersonaName"\s+"((?:\\.|[^"\\])*)"',[Text.RegularExpressions.RegexOptions]::IgnoreCase);if($nick.Success){$names[[string]$id]=[regex]::Replace($nick.Groups[1].Value,'\\([\\"])',{param($m)$m.Groups[1].Value})}}}}catch{}}
-    $users=@();if($steam -and (Test-Path -LiteralPath (Join-Path $steam 'userdata'))){foreach($d in Get-ChildItem -LiteralPath (Join-Path $steam 'userdata') -Directory){if($d.Name -match '^\d+$' -and [long]$d.Name -gt 0 -and [long]$d.Name -le [uint32]::MaxValue -and (Test-Path -LiteralPath (Join-Path $d.FullName 'config\localconfig.vdf'))){$users+=@{id=$d.Name;name=$names[$d.Name];active=([string]$active -eq $d.Name)}}}}
+    $users=@()
+    if([IO.Directory]::Exists($steam)){
+        $loginFile=[IO.Path]::Combine($steam,'config\loginusers.vdf')
+        if([IO.File]::Exists($loginFile)){try{$logins=[IO.File]::ReadAllText($loginFile,[Text.Encoding]::UTF8);foreach($match in [regex]::Matches($logins,'"(\d{17})"\s*\{([^{}]*)\}')){$id=[uint64]$match.Groups[1].Value-[uint64]76561197960265728;if($id -le [uint32]::MaxValue){$nick=[regex]::Match($match.Groups[2].Value,'"PersonaName"\s+"((?:\\.|[^"\\])*)"',[Text.RegularExpressions.RegexOptions]::IgnoreCase);if($nick.Success){$names[[string]$id]=[regex]::Replace($nick.Groups[1].Value,'\\([\\"])',{param($m)$m.Groups[1].Value})}}}}catch{}}
+        $userData=[IO.Path]::Combine($steam,'userdata')
+        if([IO.Directory]::Exists($userData)){
+            foreach($d in Get-ChildItem -LiteralPath $userData -Directory -ErrorAction SilentlyContinue){
+                if($d.Name -match '^\d+$' -and [long]$d.Name -gt 0 -and [long]$d.Name -le [uint32]::MaxValue -and [IO.File]::Exists([IO.Path]::Combine($d.FullName,'config\localconfig.vdf'))){
+                    $users+=@{id=$d.Name;name=$names[$d.Name];active=([string]$active -eq $d.Name)}
+                }
+            }
+        }
+    }
     $runtime=Get-DltSuggestedRuntime $install $q.game
     $game=if($install){Split-Path (Split-Path (Split-Path (Split-Path $install.target -Parent) -Parent) -Parent) -Parent}elseif($games.Count -eq 1){$games[0]}else{''}
     if($q.mode -ne 'uninstall' -and -not (Normalize-DeadlockPath $game) -and $games.Count -eq 1){$game=$games[0]}
@@ -222,7 +233,7 @@ function Get-ReviewedFingerprint([string]$Game,[string]$Runtime,[string]$Target)
     if($Target){$paths+=$Target}
     if($q.configureSteam -and $q.steam){
         foreach($id in @(Get-SelectedSteamUsers|Sort-Object)){
-            $paths+=Join-Path (Full $q.steam) ('userdata\'+$id+'\config\localconfig.vdf')
+            $paths+=[IO.Path]::Combine((Full $q.steam),('userdata\'+$id+'\config\localconfig.vdf'))
         }
     }
     $facts=@($paths|ForEach-Object {
@@ -296,7 +307,9 @@ function Get-MaintenanceHealth {
     }catch{Check 'backend' 'attention' '无法检查本机端口。'}
     $steam=$view.steam
     $selected=if($q.userId){[string]$q.userId}else{[string]$view.activeUser}
-    if($steam -and $selected -match '^[1-9]\d*$'){
+    if($steam -and -not [IO.Directory]::Exists($steam)){
+        Check 'steam' 'attention' '所选 Steam 目录当前不可用，请重新选择 Steam 目录。' 'steam-retry'
+    }elseif($steam -and $selected -match '^[1-9]\d*$'){
         try{
             $steamFile=Join-Path ([IO.Path]::GetDirectoryName($ResultFile)) ('health-steam-'+[Guid]::NewGuid().ToString('N')+'.json')
             try{

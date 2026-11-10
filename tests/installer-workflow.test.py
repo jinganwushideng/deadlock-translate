@@ -33,6 +33,39 @@ class WorkflowTests(unittest.TestCase):
   request=self.root/('request-'+uuid.uuid4().hex+'.json');result=request.with_suffix('.result.json');request.write_text(json.dumps(dict(self.q,action=action,**values)),encoding='utf-8-sig')
   p=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(self.script),'-RequestFile',str(request),'-ResultFile',str(result)],capture_output=True,env=self.env,timeout=45)
   self.assertTrue(result.exists(),(p.stdout+p.stderr).decode(errors='replace'));return json.loads(result.read_text(encoding='utf-8-sig'))
+ def test_inspect_and_health_skip_disconnected_steam_library(self):
+  drives=ctypes.windll.kernel32.GetLogicalDrives()
+  letter=next((chr(ord('A')+i) for i in range(25,2,-1) if not drives & (1 << i)),None)
+  if not letter:self.skipTest('No unused drive letter for the disconnected library fixture')
+  offline=letter+':\\Removed Drive\\SteamLibrary'
+  library=self.root/'Mounted Library'
+  game=library/'steamapps/common/Deadlock'
+  game.parent.mkdir(parents=True)
+  self.game.rename(game)
+  vdf=self.steam/'steamapps/libraryfolders.vdf'
+  vdf.parent.mkdir()
+  vdf.write_text('"libraryfolders" { "0" { "path" '+json.dumps(offline)+' } "1" { "path" '+json.dumps(str(library))+' } }',encoding='utf-8')
+  before=vdf.read_bytes()
+  account=self.account(1)
+  account_before=account.read_bytes()
+  inspected=self.call('inspect',game='')
+  self.assertTrue(inspected['ok'],inspected)
+  self.assertIn(str(game),inspected['data']['games'])
+  self.assertFalse(any(path.startswith(letter+':') for path in inspected['data']['games']))
+  self.assertIn('1',[entry['id'] for entry in inspected['data']['users']])
+  health=self.call('health',game=str(game))
+  self.assertTrue(health['ok'],health)
+  self.assertEqual(next(x['status'] for x in health['data']['checks'] if x['id']=='game'),'ok')
+  stale_steam=self.call('inspect',game='',steam=offline)
+  self.assertTrue(stale_steam['ok'],stale_steam)
+  self.assertEqual(stale_steam['data']['users'],[])
+  missing=self.call('health',steam=offline,game=offline)
+  self.assertTrue(missing['ok'],missing)
+  checks={item['id']:item for item in missing['data']['checks']}
+  self.assertEqual(checks['game']['action'],'choose-game')
+  self.assertEqual(checks['steam']['action'],'steam-retry')
+  self.assertEqual(vdf.read_bytes(),before)
+  self.assertEqual(account.read_bytes(),account_before)
  def installed(self):
   self.target.write_bytes(self.vpk);(self.runtime/'dlt_translate_dir.vpk').write_bytes(self.vpk);(self.runtime/'DeadlockTranslate.exe').write_bytes(b'never run');pairing=__import__('re').search(rb'/bridge/([0-9a-fA-F]{48})',self.vpk);(self.runtime/'pairing.key').write_bytes(pairing.group(1) if pairing else b'0'*48);(self.runtime/'data').mkdir();(self.runtime/'data/terms.json').write_text('[]');(self.runtime/'package-manifest.json').write_text(json.dumps(dict(version='0.6.7')))
   record=dict(target=str(self.target),vpkHash=hashlib.sha256(self.vpk).hexdigest(),runtimeFolder=str(self.runtime),version='0.6.7',gameinfoChanged=False,gameinfoBefore='',gameinfoAfterHash='unused')

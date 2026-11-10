@@ -2,13 +2,15 @@
 function Normalize-DeadlockPath([string]$Path){
     if([string]::IsNullOrWhiteSpace($Path)){return $null}
     $taskInput=[Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))
-    try{$taskFull=[IO.Path]::GetFullPath($taskInput).TrimEnd('\','/')}catch{return $null}
-    $taskCandidates=@($taskFull)
-    if(Test-Path -LiteralPath $taskFull -PathType Leaf){$taskCandidates+=Split-Path $taskFull -Parent}
-    $taskParent=$taskFull
-    for($taskLevel=0;$taskLevel -lt 4;$taskLevel++){$taskParent=Split-Path $taskParent -Parent;if(-not $taskParent){break};$taskCandidates+=$taskParent}
-    foreach($taskCandidate in $taskCandidates){
-        if((Test-Path -LiteralPath (Join-Path $taskCandidate 'game\citadel\gameinfo.gi') -PathType Leaf) -and (Test-Path -LiteralPath (Join-Path $taskCandidate 'game\citadel\pak01_dir.vpk') -PathType Leaf) -and (Test-Path -LiteralPath (Join-Path $taskCandidate 'game\bin\win64\deadlock.exe') -PathType Leaf)){return [IO.Path]::GetFullPath($taskCandidate).TrimEnd('\','/')}
+    try{$taskCandidate=[IO.Path]::GetFullPath($taskInput)}catch{return $null}
+    if($taskCandidate.Length -gt [IO.Path]::GetPathRoot($taskCandidate).Length){$taskCandidate=$taskCandidate.TrimEnd('\','/')}
+    # A remembered path can point to a removed drive. Filesystem probes return false
+    # without asking the PowerShell provider to resolve that drive.
+    for($taskLevel=0;$taskCandidate -and $taskLevel -le 4;$taskLevel++){
+        if([IO.File]::Exists([IO.Path]::Combine($taskCandidate,'game\citadel\gameinfo.gi')) -and
+           [IO.File]::Exists([IO.Path]::Combine($taskCandidate,'game\citadel\pak01_dir.vpk')) -and
+           [IO.File]::Exists([IO.Path]::Combine($taskCandidate,'game\bin\win64\deadlock.exe'))){return $taskCandidate}
+        $taskCandidate=[IO.Path]::GetDirectoryName($taskCandidate)
     }
     return $null
 }
@@ -21,12 +23,14 @@ function Find-DeadlockQuick([string[]]$Libraries){
         if($taskRecord.SteamPath){$taskRoots+=$taskRecord.SteamPath};if($taskRecord.InstallPath){$taskRoots+=$taskRecord.InstallPath}
     }
     foreach($taskSteam in @($taskRoots|Where-Object {$_}|Select-Object -Unique)){
-        $taskVdf=Join-Path $taskSteam 'steamapps\libraryfolders.vdf'
-        if(Test-Path -LiteralPath $taskVdf){try{$taskLibraryText=[IO.File]::ReadAllText($taskVdf,[Text.Encoding]::UTF8);$taskRoots+=@([regex]::Matches($taskLibraryText,'"path"\s+"((?:\\.|[^"\\])*)"',[Text.RegularExpressions.RegexOptions]::IgnoreCase)|ForEach-Object {[regex]::Replace($_.Groups[1].Value,'\\([\\"])',{param($m)$m.Groups[1].Value})})}catch{}}
+        if(-not [IO.Directory]::Exists($taskSteam)){continue}
+        $taskVdf=[IO.Path]::Combine($taskSteam,'steamapps\libraryfolders.vdf')
+        if([IO.File]::Exists($taskVdf)){try{$taskLibraryText=[IO.File]::ReadAllText($taskVdf,[Text.Encoding]::UTF8);$taskRoots+=@([regex]::Matches($taskLibraryText,'"path"\s+"((?:\\.|[^"\\])*)"',[Text.RegularExpressions.RegexOptions]::IgnoreCase)|ForEach-Object {[regex]::Replace($_.Groups[1].Value,'\\([\\"])',{param($m)$m.Groups[1].Value})})}catch{}}
     }
     $taskFound=@()
     foreach($taskRoot in @($taskRoots|Where-Object {$_}|Select-Object -Unique)){
-        foreach($taskCandidate in @($taskRoot,(Join-Path $taskRoot 'steamapps\common\Deadlock'))){$taskValid=Normalize-DeadlockPath $taskCandidate;if($taskValid){$taskFound+=$taskValid}}
+        if(-not [IO.Directory]::Exists($taskRoot)){continue}
+        foreach($taskCandidate in @($taskRoot,[IO.Path]::Combine($taskRoot,'steamapps\common\Deadlock'))){$taskValid=Normalize-DeadlockPath $taskCandidate;if($taskValid){$taskFound+=$taskValid}}
     }
     return @($taskFound|Select-Object -Unique)
 }

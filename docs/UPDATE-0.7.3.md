@@ -1,5 +1,6 @@
 # 同频 0.7.3
 
+- Steam 库所在硬盘断开后，安装器会跳过失效库路径并继续检测其他库。体检不需要先清理 Steam 的库记录。
 - GitHub 检查失败或限流时，尝试读取夸克和百度网盘分享的最新版文件夹名。版本高于本机时在概览提醒。
 - 游戏翻译设置和安装器的更新页提供三个入口。[GitHub Releases](https://github.com/jinganwushideng/deadlock-translate/releases) · [夸克网盘](https://pan.quark.cn/s/edde8867941a) · [百度网盘](https://pan.baidu.com/s/5vlaAkKuSSR2eTMtVUgCWdQ)
 
