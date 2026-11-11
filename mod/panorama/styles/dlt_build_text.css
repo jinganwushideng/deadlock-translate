@@ -1,0 +1,27 @@
+.DltBuildTranslation {
+    color: #e8dbb8;
+    font-size: 16px;
+    max-width: 100%;
+    text-overflow: clip;
+}
+
+.DltBuildBridge {
+    ignore-parent-flow: true;
+    position: -4096px -4096px 0px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.DltBuildTranslateButton {
+    horizontal-align: left;
+    background-color: #171f29;
+    border: 1px solid #8f9ba8;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    color: #fff1d8;
+    font-size: 16px;
+}
+.DltBuildTranslateButton:hover {
+    background-color: #33485d;
+}

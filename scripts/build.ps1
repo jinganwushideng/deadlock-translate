@@ -38,7 +38,7 @@ try {
         $taskActualLink = Get-Item -LiteralPath $taskLinkPath
         if ($taskActualLink.LinkType -ne 'Junction' -or $taskActualLink.Target -ne $taskLink.Target) { throw "Unexpected tool junction: $taskLinkPath" }
     }
-    foreach ($taskSource in @('scripts\dlt_native_bubble.js','styles\dlt_native_bubble.css','layout\citadel_hud_top_bar_chat.xml','scripts\dlt_chat.js','styles\dlt_chat.css','layout\chat.xml','scripts\dlt_menu.js','styles\dlt_menu.css','layout\dlt_menu.xml','scripts\dlt_settings_window.js','styles\dlt_settings_window.css','layout\dlt_settings_window.xml')) {
+    foreach ($taskSource in @('scripts\dlt_build_text.js','styles\dlt_build_text.css','layout\citadel_ui_build_details.xml','layout\citadel_shop_mods_build.xml','layout\citadel_shop_mods_build_category.xml','layout\tooltips\citadel_tooltip_mod_details.xml','scripts\dlt_native_bubble.js','styles\dlt_native_bubble.css','layout\citadel_hud_top_bar_chat.xml','scripts\dlt_chat.js','styles\dlt_chat.css','layout\chat.xml','scripts\dlt_menu.js','styles\dlt_menu.css','layout\dlt_menu.xml','scripts\dlt_settings_window.js','styles\dlt_settings_window.css','layout\dlt_settings_window.xml')) {
         & $Compiler -i (Join-Path $taskRoot ('artifacts\addon\content\citadel\panorama\'+$taskSource)) -game (Join-Path $taskStage 'citadel') -f -nop4
         if ($LASTEXITCODE) { throw "Resource compilation failed: $taskSource" }
     }
@@ -57,7 +57,7 @@ try {
     Copy-Item -LiteralPath artifacts\pairing.key -Destination (Join-Path $taskDist 'pairing.key') -Force
     $taskPackRoot=Join-Path $taskRoot ('artifacts\pack-'+$taskVersion)
     New-Item -ItemType Directory -Force -Path (Join-Path $taskPackRoot 'panorama') | Out-Null
-    foreach($taskResource in @('scripts/dlt_native_bubble.vjs_c','layout/citadel_hud_top_bar_chat.vxml_c','styles/dlt_native_bubble.vcss_c','layout/chat.vxml_c','layout/dlt_menu.vxml_c','scripts/dlt_chat.vjs_c','scripts/dlt_menu.vjs_c','styles/dlt_chat.vcss_c','styles/dlt_menu.vcss_c','layout/dlt_settings_window.vxml_c','scripts/dlt_settings_window.vjs_c','styles/dlt_settings_window.vcss_c')) {
+    foreach($taskResource in @('scripts/dlt_build_text.vjs_c','styles/dlt_build_text.vcss_c','layout/citadel_ui_build_details.vxml_c','layout/citadel_shop_mods_build.vxml_c','layout/citadel_shop_mods_build_category.vxml_c','layout/tooltips/citadel_tooltip_mod_details.vxml_c','scripts/dlt_native_bubble.vjs_c','layout/citadel_hud_top_bar_chat.vxml_c','styles/dlt_native_bubble.vcss_c','layout/chat.vxml_c','layout/dlt_menu.vxml_c','scripts/dlt_chat.vjs_c','scripts/dlt_menu.vjs_c','styles/dlt_chat.vcss_c','styles/dlt_menu.vcss_c','layout/dlt_settings_window.vxml_c','scripts/dlt_settings_window.vjs_c','styles/dlt_settings_window.vcss_c')) {
         $taskDestination=Join-Path $taskPackRoot ('panorama/'+$taskResource)
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $taskDestination)|Out-Null
         Copy-Item -LiteralPath (Join-Path $taskStage ('citadel/panorama/'+$taskResource)) -Destination $taskDestination -Force

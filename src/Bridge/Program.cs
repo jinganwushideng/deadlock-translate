@@ -325,6 +325,51 @@ app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
     return Results.Json(new{seq=req.Seq,session=req.Session,serverId=audit.RunId,logAck,nativeEditor=nativeEditorResult,displayPreview=displayPreview.Snapshot(),results=result,outgoing=outgoingResults,translationProgress=translators.Telemetry.Summary,hotkey=hotkey?.PendingSequence(req.ServerId==audit.RunId?req.HotkeySeen:0)??0,hotkeyAvailable=hotkey?.Available??false,capabilities=new[]{"outgoing-status-v1","native-settings-editor","multipart-send","preset-messages","outgoing-display-mode","incoming-scope-all-players","outgoing-party-channel","multilingual-targets","diagnostic-logs","custom-hotkey"},config=new{quickMessagesEnabled=config.Current.OutgoingEnabled&&config.Current.QuickMessages.Any(q=>q.Enabled)&&req.ClientBuildId==BuildInfo.Id,config.Current.Enabled,config.Current.TranslateOwn,config.Current.IncomingScope,config.Current.IncomingShowOwnTranslations,config.Current.IncomingDisplayMode,config.Current.IncomingFeedSeconds,config.Current.IncomingFeedLines,config.Current.IncomingShowHeroName,config.Current.IncomingShowAccountName,config.Current.IncomingHeroNamePosition,config.Current.IncomingOpacity,config.Current.IncomingFeedWidth,config.Current.IncomingFeedPosition,config.Current.IncomingFeedOffsetX,config.Current.IncomingFeedOffsetY,config.Current.FontSize,config.Current.SettingsBackgroundMode,config.Current.Transport,config.Current.ScanIntervalMs,config.Current.OutgoingEnabled,config.Current.OutgoingHotkey,outgoingHotkeyLabel=HotkeyChord.Parse(config.Current.OutgoingHotkey).Label,config.Current.OutgoingTimeoutSeconds,config.Current.OutgoingDisplayMode,config.Current.OutgoingSeparateBilingual,config.Current.OutgoingSplitLong,config.Current.OutgoingQueueLimit,config.Current.OutgoingUseContext,config.Current.IncomingTargetLanguage,config.Current.IncomingCustomLanguage,config.Current.IncomingCustomLanguageCode,config.Current.OutgoingTargetLanguage,config.Current.OutgoingCustomLanguage,config.Current.OutgoingCustomLanguageCode},configuredLlm=config.Secret("llm").Length>0});
     }
 });
+// Separate from the chat queue so a build description cannot delay chat polling.
+app.MapGet("/build-text/{key}",(string key)=>{
+    if(!Same(key,pairing)) return Results.NotFound();
+    return Results.Content("""
+<!doctype html><meta charset="utf-8"><style>html,body{background:transparent}</style><script>
+let latest=0;
+async function translate(){
+    const generation=++latest;
+    try{
+        const input=JSON.parse(decodeURIComponent(location.hash.slice(1)));
+        const response=await fetch(location.pathname,{
+            method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)
+        });
+        if(response.ok && generation===latest){
+            const result=await response.json();
+            if(generation===latest)document.title='DLTBUILD:'+JSON.stringify(result);
+        }
+    }catch{}
+}
+addEventListener('hashchange',translate);
+if(location.hash)translate();
+</script>
+""","text/html; charset=utf-8");
+});
+app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpContext ctx)=>{
+    if(!Same(key,pairing)||ctx.Request.Headers.Origin!=Origin(ctx))return Results.Unauthorized();
+    if(input.Title is null || input.Note is null || input.Title.Length>240 || input.Note.Length>2000)
+        return Results.BadRequest();
+    var settings=config.Current;
+    if(!settings.Enabled)return Results.StatusCode(409);
+    using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+    timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(25,settings.FastTimeoutSeconds)));
+    async Task<string> TranslateField(string text){
+        if(string.IsNullOrWhiteSpace(text))return "";
+        var translated=await translators.Fast(text,settings,timeout.Token);
+        if(string.IsNullOrWhiteSpace(translated))throw new InvalidOperationException("Empty translation");
+        return string.Equals(text,translated,StringComparison.Ordinal)? "":translated;
+    }
+    try{
+        var translations=await Task.WhenAll(TranslateField(input.Title),TranslateField(input.Note));
+        return Results.Json(new{id=input.Id,translations});
+    }catch(Exception ex) when(ex is not OutOfMemoryException){
+        return Results.StatusCode(502);
+    }
+});
 app.MapGet("/bridge/{key}",(string key)=>{
     if(!Same(key,pairing)) return Results.NotFound();
     // Fragment navigation reuses one document; navigation mode remains available for engine compatibility.
@@ -392,6 +437,7 @@ try {
 }
 
 } catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
+public record BuildTextRequest(int Id,string Title,string Note);
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
 public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0,int HudContainers=0,int HudRebinds=0,int HudRendered=0,int HudRecovered=0,int HudHostRepairs=0,int HudHiddenRepairs=0,int HudBindings=0,int HudExpiredResults=0,int HudDeferredScans=0,int GameLogDrops=0,int HudWaits=0,int HudRetryRecovered=0,int HudNativeExpired=0,int HudPanelGone=0,int HudRetryDropped=0,int FeedRendered=0,int FeedExpired=0,int FeedDropped=0,PerformanceSample? Performance=null);
