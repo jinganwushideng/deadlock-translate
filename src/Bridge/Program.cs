@@ -390,6 +390,8 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         var context=input.Context??"";
         if(context.Length>settings.BuildTextContextChars)context=context[..settings.BuildTextContextChars];
         var scope=BuildTextCache.Scope(input.Build??"",context)+":"+settings.BuildTextContextChars;
+        var fastPlan=BuildTextCache.PlanKey(scope,profile,false,glossary);
+        var qualityPlan=BuildTextCache.PlanKey(scope,profile,true,glossary);
         var legacyContext=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context)));
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
         timeout.CancelAfter(TimeSpan.FromSeconds(quality?settings.LlmTimeoutSeconds:settings.FastTimeoutSeconds));
@@ -400,11 +402,14 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         var migrated=false;
         bool ReadCached(string text,bool refined,out string? value){
             var key=BuildTextCache.Key(text,profile,refined,glossary,refined?scope:null);
-            if(buildTextCache.TryGet(key,out value))return true;
+            if(buildTextCache.TryGet(key,out value)){
+                migrated|=buildTextCache.Remember(refined?qualityPlan:fastPlan,text,key);return true;
+            }
             // Old cache entries have no source metadata. Reuse them when the
             // original context still matches, then add the stable namespace.
             if(!refined||!buildTextCache.TryGet(BuildTextCache.Key(text,profile,true,glossary,legacyContext),out value))return false;
-            buildTextCache.Store(key,value!);migrated=true;return true;
+            buildTextCache.Store(key,value!);
+            buildTextCache.Remember(qualityPlan,text,key);migrated=true;return true;
         }
         foreach(var text in input.Texts.Select(text=>text.Trim()).Distinct(StringComparer.Ordinal)){
             if(!text.Any(char.IsLetter)){values[text]="";continue;}
@@ -420,9 +425,14 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         if(input.CacheOnly){
             if(migrated)buildTextCache.Flush();
             completedBatch=true;
+            var snapshot=new Dictionary<string,BuildTextCached>(StringComparer.Ordinal);
+            if(profile.Mode!="quality")
+                foreach(var (text,value) in buildTextCache.Snapshot(fastPlan))snapshot[text]=new(value,profile.Mode=="hybrid"&&hasLlm);
+            if(profile.Mode!="fast")
+                foreach(var (text,value) in buildTextCache.Snapshot(qualityPlan))snapshot[text]=new(value,false);
             return Results.Json(new{id=input.Id,revision,
                 translations=input.Texts.Select(text=>values.TryGetValue(text.Trim(),out var value)?value:null).ToArray(),
-                cacheHits,translated=0,refine=false,
+                cacheHits,translated=0,refine=false,snapshot,
                 refineIndices=input.Texts.Select((text,index)=>(text,index))
                     .Where(item=>hasLlm&&values.ContainsKey(item.text.Trim())&&refineTexts.Contains(item.text.Trim())).Select(item=>item.index).ToArray()});
         }
@@ -437,6 +447,7 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
                 var value=results[i].Trim();
                 values[source[i]]=value==source[i]?"":value;
                 buildTextCache.Store(misses[i].Key,values[source[i]]);
+                buildTextCache.Remember(quality?qualityPlan:fastPlan,source[i],misses[i].Key);
             }
             buildTextCache.Flush();
         }else if(migrated){

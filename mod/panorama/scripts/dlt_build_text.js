@@ -103,7 +103,7 @@ function DLTBuildTextAction(showOriginal) {
             if (!toggle && !category && (!texts[1] || texts[0] === texts[1])) texts[0] = '';
             return texts;
         }
-        var view = { root: root, visible: isVisible, read: readView, render: render };
+        var view = { root: root, category: !!category, visible: isVisible, read: readView, render: render };
         state.readers.push(view);
         state.forceCollect = true;
         if (toggle) {
@@ -121,13 +121,15 @@ function DLTBuildTextAction(showOriginal) {
                     original.visible = state.enabled;
                     original.text = running ? '取消翻译' : '显示原文';
                     var now = Date.now();
-                    progress.visible = state.enabled && (!job || !job.total || running || job.failed || !job.finishedAt || now - job.finishedAt < 3500);
+                    var confirmation = job && (job.translated ? !job.finishedAt || now - job.finishedAt < 3500 :
+                        state.clickAt && now - state.clickAt < 1200);
+                    progress.visible = state.enabled && (!job || !job.total || running || !!job.failed || !!confirmation);
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
                     var looking = job && (job.pending && job.pending.batch.lookup || job.queue.some(function (batch) { return batch.lookup; }));
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' :
-                        !online ? '后台翻译已停用' : !job ? '正在读取出装' : !job.total ?
+                        !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : !job.total ?
                         '未读到出装文本' : running ?
                         (looking ? '读取本地译文 ' : job.refining ? '精翻 ' : '云端翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
@@ -139,17 +141,17 @@ function DLTBuildTextAction(showOriginal) {
             state.controls.push(control);
             root.__dltBuildTextAction = function (showOriginal) {
                 var config = syncSettings();
-                state.clicks++;
                 state.error = false;
                 if (!showOriginal && state.enabled && state.owner === control && state.job &&
                     (state.job.pending || state.job.queue.length)) {
                     control.status(state.job, !config || config.enabled);
                     return;
                 }
+                state.clicks++;
                 restartJob();
                 state.enabled = !showOriginal;
                 state.owner = control;
-                state.clickAt = Date.now();
+                state.clickAt = showOriginal ? 0 : Date.now();
                 state.collectDelayMs = null;
                 state.dispatchDelayMs = null;
                 control.status(null, !config || config.enabled);
@@ -242,6 +244,14 @@ function DLTBuildTextAction(showOriginal) {
                         });
                         job.cacheHits += result.cacheHits || 0;
                         job.translated += result.translated || 0;
+                        if(pending.batch.lookup && result.snapshot && typeof result.snapshot === 'object'){
+                            Object.keys(result.snapshot).slice(0,96).forEach(function (text) {
+                                var saved = result.snapshot[text];
+                                if(saved && typeof saved.value === 'string' && saved.value.length<=4096 &&
+                                    (!job.memo[text] || !saved.refine || job.memo[text].refine))
+                                    job.memo[text] = { value: saved.value, refine: !!saved.refine };
+                            });
+                        }
                         addBatches(job.queue, misses);
                         if (refinement.length) job.refine.push(refinement);
                     } else retry(job, pending.batch, now, result.error === 'busy');
@@ -285,7 +295,7 @@ function DLTBuildTextAction(showOriginal) {
                     state.controls = state.controls.filter(function (item) { return item.root.IsValid(); });
                     state.readers = state.readers.filter(function (item) { return item.root.IsValid(); });
                     var views = state.readers.filter(function (item) {
-                        return item.visible() && !state.controls.some(function (control) {
+                        return (item.visible() || item.category && attached(item.root, root)) && !state.controls.some(function (control) {
                             return control !== state.owner && attached(item.root, control.root) &&
                                 !attached(control.root, root) && !attached(root, control.root);
                         });
@@ -293,48 +303,54 @@ function DLTBuildTextAction(showOriginal) {
                     state.pairs = views.map(function (item) { return { view: item, texts: item.read() }; });
                     var pairs = state.pairs;
                     if (active) {
-                        var base = pairs.filter(function (entry) { return attached(entry.view.root, root); });
-                        var distinct = function (entries) {
-                            return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
-                        };
-                        var baseTexts = distinct(base), texts = distinct(pairs);
-                        var title = read(0);
-                        var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
-                        var signature = build || JSON.stringify(baseTexts.slice().sort());
-                        if (signature !== state.signature) {
-                            restartJob();
-                            state.signature = signature;
-                            var memo = state.completed[signature];
-                            if (!memo) {
-                                if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
-                                state.completedOrder.push(signature);
-                                memo = state.completed[signature] = Object.create(null);
+                        state.awaitingBuild = !read(0);
+                        if (state.awaitingBuild && state.job) restartJob();
+                        if (!state.awaitingBuild) {
+                            var base = pairs.filter(function (entry) { return attached(entry.view.root, root); });
+                            var distinct = function (entries) {
+                                return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
+                            };
+                            var baseTexts = distinct(base), texts = distinct(pairs);
+                            var title = read(0);
+                            var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
+                            var signature = build || JSON.stringify(baseTexts.slice().sort());
+                            if (signature !== state.signature) {
+                                restartJob();
+                                state.signature = signature;
+                                var memo = state.completed[signature];
+                                if (!memo) {
+                                    if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
+                                    state.completedOrder.push(signature);
+                                    memo = state.completed[signature] = Object.create(null);
+                                }
+                                state.job = { context: '', build: build, memo: memo,
+                                    known: Object.create(null), values: Object.create(null), queue: [], pending: null,
+                                    refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
                             }
-                            state.job = { context: '', build: build, memo: memo,
-                                known: Object.create(null), values: Object.create(null), queue: [], pending: null,
-                                refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                            var job = state.job;
+                            job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
+                            var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
+                            var unseen = [];
+                            fresh.forEach(function (value) {
+                                job.known[value] = true;
+                                var saved = job.memo[value];
+                                if (!saved) { unseen.push(value); return; }
+                                job.values[value] = saved.value; job.done++; job.cacheHits++;
+                                if (saved.refine) job.refine.push([value]);
+                            });
+                            job.total += fresh.length;
+                            if (fresh.length) job.finishedAt = 0;
+                            addBatches(job.queue, unseen, true);
                         }
-                        var job = state.job;
-                        job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
-                        var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
-                        var unseen = [];
-                        fresh.forEach(function (value) {
-                            job.known[value] = true;
-                            var saved = job.memo[value];
-                            if (!saved) { unseen.push(value); return; }
-                            job.values[value] = saved.value; job.done++; job.cacheHits++;
-                            if (saved.refine) job.refine.push([value]);
-                        });
-                        job.total += fresh.length;
-                        if (fresh.length) job.finishedAt = 0;
-                        addBatches(job.queue, unseen, true);
                     }
                     state.forceCollect = false;
-                    state.nextCollectAt = Date.now() + 500;
+                    state.nextCollectAt = Date.now() + (state.awaitingBuild ? 50 : 500);
                     state.collectionMs = Date.now() - started;
                     state.collections++;
-                    if (state.clickAt && state.collectDelayMs === null) state.collectDelayMs = Date.now() - state.clickAt;
-                    state.readers.forEach(function (item) { if (!item.visible()) item.render([], null); });
+                    if (!state.awaitingBuild && state.clickAt && state.collectDelayMs === null) state.collectDelayMs = Date.now() - state.clickAt;
+                    state.readers.forEach(function (item) {
+                        if (!item.visible() && !(item.category && attached(item.root, root))) item.render([], null);
+                    });
                 }
                 if (active && state.job) advance(state.job, config);
                 else if (state.job) restartJob();
@@ -360,7 +376,7 @@ function DLTBuildTextAction(showOriginal) {
         function tick() {
             if (!root.IsValid()) return;
             refresh();
-            $.Schedule(toggle && state.job && state.job.pending ? 0.05 : toggle ? 0.15 : 0.4, tick);
+            $.Schedule(toggle && (state.awaitingBuild || state.job && state.job.pending) ? 0.05 : toggle ? 0.15 : 0.4, tick);
         }
         $.Schedule(0, tick);
     }

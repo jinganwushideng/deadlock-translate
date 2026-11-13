@@ -23,21 +23,34 @@ internal sealed record BuildTextProfile(string Mode, Settings Fast, Settings Qua
 
 // Only the build-text worker writes this cache. Text is keyed per field so a
 // repeated title can be reused even when the annotation or panel changes.
+internal sealed record BuildTextCached(string Value,bool Refine);
 internal sealed class BuildTextCache {
     private const int Limit=1024;
     private const int MaxResultLength=4096;
     private readonly string path;
     private readonly Dictionary<string,string> entries=new(StringComparer.Ordinal);
+    private readonly string indexPath;
+    private readonly Dictionary<string,Dictionary<string,string>> plans=new(StringComparer.Ordinal);
 
     internal BuildTextCache(string directory) {
         path=Path.Combine(directory,"build-text-cache-v1.json");
+        indexPath=Path.Combine(directory,"build-text-plans-v1.json");
         try{
             var file=new FileInfo(path);
-            if(!file.Exists||file.Length>32L*1024*1024)return;
-            var stored=JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllBytes(path));
-            if(stored==null)return;
-            foreach(var (key,value) in stored.TakeLast(Limit)){
+            var stored=file.Exists&&file.Length<=32L*1024*1024
+                ?JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllBytes(path)):null;
+            foreach(var (key,value) in stored?.TakeLast(Limit)??[]){
                 if(key.Length==64&&key.All(Uri.IsHexDigit)&&value is {Length:<=MaxResultLength})entries[key]=value;
+            }
+        }catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException){}
+        try{
+            var file=new FileInfo(indexPath);
+            var index=file.Exists&&file.Length<=16L*1024*1024
+                ?JsonSerializer.Deserialize<Dictionary<string,Dictionary<string,string>>>(File.ReadAllBytes(indexPath)):null;
+            foreach(var (key,fields) in index?.TakeLast(16)??[]){
+                if(key.Length!=64||!key.All(Uri.IsHexDigit)||fields==null)continue;
+                var valid=fields.Where(item=>item.Key.Length<=6000&&item.Value is {Length:64}&&item.Value.All(Uri.IsHexDigit)).TakeLast(96);
+                plans[key]=valid.ToDictionary(item=>item.Key,item=>item.Value,StringComparer.Ordinal);
             }
         }catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException){}
     }
@@ -67,6 +80,32 @@ internal sealed class BuildTextCache {
 
     internal bool TryGet(string key, out string? translation)=>entries.TryGetValue(key,out translation);
 
+    internal static string PlanKey(string scope, BuildTextProfile profile, bool quality, string glossary)=>
+        Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(scope+"\0"+Key("",profile,quality,glossary,quality?scope:null))));
+
+    internal bool Remember(string plan, string text, string key) {
+        if(!plans.TryGetValue(plan,out var fields)){
+            if(plans.Count>=16)plans.Remove(plans.Keys.First());
+            fields=new(StringComparer.Ordinal);plans.Add(plan,fields);
+        }
+        if(fields.TryGetValue(text,out var existing)&&existing==key)return false;
+        fields[text]=key;
+        if(fields.Count>96)fields.Remove(fields.Keys.First());
+        return true;
+    }
+
+    internal Dictionary<string,string> Snapshot(string plan) {
+        var result=new Dictionary<string,string>(StringComparer.Ordinal);
+        if(!plans.TryGetValue(plan,out var fields))return result;
+        var size=0;
+        foreach(var (text,key) in fields){
+            if(!entries.TryGetValue(key,out var value))continue;
+            if(size+text.Length+value.Length>24000)break;
+            result[text]=value;size+=text.Length+value.Length;
+        }
+        return result;
+    }
+
     internal void Store(string key, string translation) {
         if(translation.Length>MaxResultLength)return;
         entries[key]=translation;
@@ -79,7 +118,10 @@ internal sealed class BuildTextCache {
         }
     }
     internal void Flush() {
-        try{ConfigStore.WriteAtomic(path,JsonSerializer.SerializeToUtf8Bytes(entries));}
+        try{
+            ConfigStore.WriteAtomic(path,JsonSerializer.SerializeToUtf8Bytes(entries));
+            ConfigStore.WriteAtomic(indexPath,JsonSerializer.SerializeToUtf8Bytes(plans));
+        }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){}
     }
 }

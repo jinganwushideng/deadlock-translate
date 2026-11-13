@@ -99,8 +99,13 @@ empty.click();
 empty.frame();
 assert.equal(empty.sent.length, 0);
 assert.equal(empty.progress.visible, true);
-assert.match(empty.status.text, /未读到/);
-console.log('PASS missing text is visible as a status instead of silent inactivity');
+assert.match(empty.status.text, /等待游戏加载/);
+assert.equal(empty.scene.__dltBuildText.collectDelayMs, null);
+empty.title.text = 'Loaded title';
+empty.frame(50);
+assert.equal(empty.sent.length, 1);
+assert.equal(empty.scene.__dltBuildText.collectDelayMs, 200);
+console.log('PASS a loading build name cannot start an unidentified translation task');
 
 const recover = fixture(false);
 let throwOnce = true;
@@ -162,3 +167,19 @@ for (let i = 0; i < 8; i++) collection.frame(50);
 assert.equal(evidence.collections, scans);
 assert.equal(collection.sent.length, 1);
 console.log('PASS all 61 loaded fields are collected immediately; result polling does not repeat collection');
+
+const snapshot = fixture(false);
+snapshot.click(); snapshot.frame(0);
+snapshot.bridge.title = 'DLTBUILD:' + JSON.stringify({
+    id: snapshot.sent[0].id, revision: 'r1', translations: ['标题'], cacheHits: 1,
+    snapshot: { 'Later group': { value: '后续分组', refine: false }, 'Later note': { value: '后续说明', refine: false } }
+});
+snapshot.frame(50);
+const later = snapshot.category('Later group', 'Later note');
+later.first.GetParent().visible = false;
+snapshot.frame(50); snapshot.frame(50);
+assert.equal(snapshot.sent.length, 1);
+assert.equal(later.first.text, '后续分组');
+assert.equal(later.second.text, '后续说明');
+assert.equal(snapshot.scene.__dltBuildText.job.cacheHits, 3);
+console.log('PASS persisted plan snapshot supplies late-created and collapsed groups without another request');
