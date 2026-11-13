@@ -12,6 +12,7 @@ function DLTBuildTextAction(showOriginal) {
     $.Schedule(0, initialize);
     function initialize() {
         if (!root || !root.IsValid()) return;
+        if (root.__dltBuildTextInitialized) return;
         var button = root.FindChildTraverse('DltBuildTranslate');
         var shop = !button && root.FindChildTraverse('DltShopBridge');
         var toggle = button || (shop && root.FindChildTraverse('DltShopTranslate'));
@@ -24,13 +25,14 @@ function DLTBuildTextAction(showOriginal) {
         var outputs = [root.FindChildTraverse(prefix + 'TitleTranslation'), root.FindChildTraverse(prefix + 'NoteTranslation')];
         if ((toggle && !bridge) || originals.some(function (label) { return !label; }) ||
             (!shop && !category && outputs.some(function (label) { return !label; }))) return;
+        root.__dltBuildTextInitialized = true;
 
         var scene = root;
         while (scene.GetParent()) scene = scene.GetParent();
         var state = scene.__dltBuildText;
         if (!state) {
             state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
-                revision: '', seq: 0, job: null, signature: null };
+                revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [] };
             scene.__dltBuildText = state;
         }
         var eventTitle = '';
@@ -53,7 +55,7 @@ function DLTBuildTextAction(showOriginal) {
             var label = originals[index];
             if (!label || !label.IsValid()) return '';
             var text = String(label.text || '');
-            var last = applied[index];
+            var last = label.__dltBuildOriginal || applied[index];
             if (last && last.panel === label && last.translation === text) text = last.source;
             text = text.trim();
             return text.length <= 6000 && !/^[#{]/.test(text) && /[\p{L}]/u.test(text) ? text : '';
@@ -64,16 +66,18 @@ function DLTBuildTextAction(showOriginal) {
                 if (!label || !label.IsValid()) continue;
                 var translation = values && values[texts[i]] || '';
                 if (category || shop) {
-                    var last = applied[i];
+                    var last = label.__dltBuildOriginal || applied[i];
                     if (translation) {
                         var originalHtml = last && last.panel === label ? last.html : label.html;
                         label.html = false;
                         if (label.text !== translation) label.text = translation;
                         applied[i] = { panel: label, source: texts[i], translation: translation, html: originalHtml };
+                        label.__dltBuildOriginal = applied[i];
                     } else if (last && last.panel === label) {
                         if (typeof last.html === 'boolean') label.html = last.html;
                         if (label.text === last.translation) label.text = last.source;
                         applied[i] = null;
+                        label.__dltBuildOriginal = null;
                     }
                 } else {
                     if (outputs[i].text !== translation) outputs[i].text = translation;
@@ -104,29 +108,38 @@ function DLTBuildTextAction(showOriginal) {
                 root: root, visible: isVisible, request: send, receive: receive,
                 cancel: function () { if (bridge.IsValid()) bridge.SetURL('about:blank'); },
                 status: function (job, online) {
-                    var running = job && (job.pending || job.queue.length);
+                    var running = !!(job && (job.pending || job.queue.length));
                     var label = job && job.failed && !running ? '重试翻译' : '翻译当前出装';
                     if (toggle.text !== label) toggle.text = label;
                     original.visible = state.enabled;
                     original.text = running ? '取消翻译' : '显示原文';
-                    progress.visible = state.enabled;
+                    var now = Date.now();
+                    progress.visible = state.enabled && (!job || !job.total || running || job.failed || !job.finishedAt || now - job.finishedAt < 3500);
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
+                    var looking = job && (job.pending && job.pending.batch.lookup || job.queue.some(function (batch) { return batch.lookup; }));
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' :
                         !online ? '后台翻译已停用' : !job ? '正在读取出装' : !job.total ?
                         '未读到出装文本' : running ?
-                        (job.refining ? '精翻 ' : '翻译 ') + job.done + '/' + job.total :
-                        job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' : '已翻译 ' + job.done + '/' + job.total;
+                        (looking ? '读取本地译文 ' : job.refining ? '精翻 ' : '云端翻译 ') + job.done + '/' + job.total :
+                        job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
+                        (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
+                    if (job && job.total) caption += ' · 本地 ' + job.cacheHits + ' · 新译 ' + job.translated;
                     if (status.text !== caption) status.text = caption;
                 }
             };
             state.controls.push(control);
             root.__dltBuildTextAction = function (showOriginal) {
                 var config = syncSettings();
-                restartJob();
                 state.clicks++;
                 state.error = false;
+                if (!showOriginal && state.enabled && state.owner === control && state.job &&
+                    (state.job.pending || state.job.queue.length)) {
+                    control.status(state.job, !config || config.enabled);
+                    return;
+                }
+                restartJob();
                 state.enabled = !showOriginal;
                 state.owner = control;
                 control.status(null, !config || config.enabled);
@@ -143,7 +156,8 @@ function DLTBuildTextAction(showOriginal) {
             eventTitle = '';
             try {
                 bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encodeURIComponent(JSON.stringify({
-                    id: id, texts: batch.texts, context: job.context, revision: state.revision, refine: job.refining
+                    id: id, texts: batch.texts, context: job.context, revision: state.revision, refine: job.refining,
+                    build: job.build, cacheOnly: !!batch.lookup
                 })));
             } catch (_) { job.pending.deadline = 0; }
         }
@@ -165,7 +179,10 @@ function DLTBuildTextAction(showOriginal) {
         function syncSettings() {
             var config = scene.__dltBuildTextConfig;
             if (!config) return null;
-            if (config.revision !== state.revision) { state.revision = config.revision; restartJob(); }
+            if (config.revision !== state.revision) {
+                state.revision = config.revision; restartJob();
+                state.completed = Object.create(null); state.completedOrder = [];
+            }
             if (state.autoEnabled !== config.autoEnabled) {
                 state.autoEnabled = config.autoEnabled;
                 state.enabled = config.autoEnabled === true;
@@ -177,15 +194,15 @@ function DLTBuildTextAction(showOriginal) {
             for (var p = panel; p; p = p.GetParent()) if (p === parent) return true;
             return false;
         }
-        function addBatches(queue, texts) {
+        function addBatches(queue, texts, lookup) {
             var batch = [], chars = 0;
             texts.forEach(function (text) {
-                if (batch.length && (batch.length === 12 || chars + text.length > 3500)) {
-                    queue.push({ texts: batch, attempts: 0, after: 0 }); batch = []; chars = 0;
+                if (batch.length && (batch.length === (lookup ? 48 : 12) || chars + text.length > (lookup ? 10000 : 3500))) {
+                    queue.push({ texts: batch, attempts: 0, after: 0, lookup: !!lookup }); batch = []; chars = 0;
                 }
                 batch.push(text); chars += text.length;
             });
-            if (batch.length) queue.push({ texts: batch, attempts: 0, after: 0 });
+            if (batch.length) queue.push({ texts: batch, attempts: 0, after: 0, lookup: !!lookup });
         }
         function advance(job, config) {
             var now = Date.now();
@@ -196,12 +213,22 @@ function DLTBuildTextAction(showOriginal) {
                     job.pending = null;
                     if (result.error === 'settings-changed') { restartJob(); return; }
                     if (result.revision === state.revision && Array.isArray(result.translations) &&
-                        result.translations.length === pending.batch.texts.length) {
+                        result.translations.length === pending.batch.texts.length &&
+                        result.translations.every(function (text) { return typeof text === 'string' || pending.batch.lookup && text === null; })) {
+                        var misses = [], refinement = [];
                         pending.batch.texts.forEach(function (text, index) {
-                            job.values[text] = result.translations[index];
+                            var value = result.translations[index];
+                            if (value === null) { misses.push(text); return; }
+                            job.values[text] = value;
+                            job.done++;
+                            var refine = result.refine || result.refineIndices && result.refineIndices.indexOf(index) >= 0;
+                            job.memo[text] = { value: value, refine: !!refine };
+                            if (refine && !job.refining) refinement.push(text);
                         });
-                        job.done += pending.batch.texts.length;
-                        if (result.refine && !job.refining) job.refine.push(pending.batch.texts);
+                        job.cacheHits += result.cacheHits || 0;
+                        job.translated += result.translated || 0;
+                        addBatches(job.queue, misses);
+                        if (refinement.length) job.refine.push(refinement);
                     } else retry(job, pending.batch, now, result.error === 'busy');
                 } else if (now >= pending.deadline) {
                     state.owner.cancel();
@@ -219,6 +246,7 @@ function DLTBuildTextAction(showOriginal) {
             }
             var next = job.queue.findIndex(function (batch) { return batch.after <= now; });
             if (next >= 0) state.owner.request(job, job.queue.splice(next, 1)[0], config);
+            if (!job.pending && !job.queue.length && !job.refine.length && !job.finishedAt) job.finishedAt = now;
         }
         function retry(job, batch, now, busy) {
             batch.attempts++;
@@ -251,19 +279,36 @@ function DLTBuildTextAction(showOriginal) {
                         return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
                     };
                     var baseTexts = distinct(base), texts = distinct(pairs);
-                    var signature = JSON.stringify(baseTexts);
+                    var title = read(0);
+                    var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
+                    var signature = build || JSON.stringify(baseTexts.slice().sort());
                     if (signature !== state.signature) {
                         restartJob();
                         state.signature = signature;
-                        state.job = { context: baseTexts.join('\n').slice(0, config && config.contextChars || 6000),
+                        var memo = state.completed[signature];
+                        if (!memo) {
+                            if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
+                            state.completedOrder.push(signature);
+                            memo = state.completed[signature] = Object.create(null);
+                        }
+                        state.job = { context: '', build: build, memo: memo,
                             known: Object.create(null), values: Object.create(null), queue: [], pending: null,
-                            refine: [], refining: false, done: 0, total: 0, failed: 0 };
+                            refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
                     }
                     var job = state.job;
+                    job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
                     var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
-                    fresh.forEach(function (value) { job.known[value] = true; });
+                    var unseen = [];
+                    fresh.forEach(function (value) {
+                        job.known[value] = true;
+                        var saved = job.memo[value];
+                        if (!saved) { unseen.push(value); return; }
+                        job.values[value] = saved.value; job.done++; job.cacheHits++;
+                        if (saved.refine) job.refine.push([value]);
+                    });
                     job.total += fresh.length;
-                    addBatches(job.queue, fresh);
+                    if (fresh.length) job.finishedAt = 0;
+                    addBatches(job.queue, unseen, true);
                     advance(job, config);
                 } else if (state.job) restartJob();
                 pairs.forEach(function (entry) { entry.view.render(entry.texts, active && state.job ? state.job.values : null); });

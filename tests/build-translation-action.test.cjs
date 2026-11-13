@@ -42,12 +42,25 @@ function fixture(autoEnabled, withText = true) {
         RegisterEventHandler() {}
     } };
     vm.runInNewContext(source, scope);
+    function category(title, note) {
+        const group = panel('category', root);
+        const first = panel('BuildCategoryName', group, title);
+        const second = panel('DltCategoryNote', group, note);
+        vm.runInNewContext(source, {
+            Date: { now: () => now }, $: {
+                GetContextPanel: () => group,
+                Schedule: (_, action) => tasks.push(action),
+                RegisterEventHandler() {}
+            }
+        });
+        return { first, second };
+    }
     const frame = () => {
         now += 150;
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, progress, status, sent, navigations, tasks, frame, scene,
+    return { root, title, bridge, progress, status, sent, navigations, tasks, frame, scene, category,
         click: () => scope.DLTBuildTextAction(false),
         showOriginal: () => scope.DLTBuildTextAction(true) };
 }
@@ -57,12 +70,12 @@ assert.equal(automatic.sent.length, 1);
 automatic.click();
 assert.equal(automatic.scene.__dltBuildText.enabled, true);
 assert.equal(automatic.progress.visible, true);
-assert.equal(automatic.status.text, '正在读取出装');
+assert.match(automatic.status.text, /读取本地译文/);
 automatic.frame();
-assert.equal(automatic.sent.length, 2);
+assert.equal(automatic.sent.length, 1);
 assert.match(automatic.status.text, /0\/1/);
 automatic.bridge.title = 'DLTBUILD:' + JSON.stringify({
-    id: automatic.sent[1].id, revision: 'r1', translations: ['译文']
+    id: automatic.sent[0].id, revision: 'r1', translations: ['译文']
 });
 automatic.frame();
 assert.equal(automatic.title.text, '译文');
@@ -71,7 +84,7 @@ assert.equal(automatic.title.text, 'Build title');
 assert.equal(automatic.progress.visible, false);
 automatic.frame();
 assert.equal(automatic.scene.__dltBuildText.enabled, false);
-console.log('PASS automatic mode translate button still starts work; original action restores the source');
+console.log('PASS repeated clicks keep an active request; original action restores the source');
 
 const manual = fixture(false);
 assert.equal(manual.sent.length, 0);
@@ -106,3 +119,33 @@ recover.frame();
 assert.equal(recover.scene.__dltBuildText.error, false);
 assert.equal(recover.sent.length, 1);
 console.log('PASS a transient panel error keeps the update loop alive and retries');
+
+const cached = fixture(false);
+const group = cached.category('Early group', 'Early note');
+cached.frame();
+cached.click(); cached.frame();
+assert.deepEqual(cached.sent[0].texts, ['Build title', 'Early group', 'Early note']);
+assert.equal(cached.sent[0].cacheOnly, true);
+cached.bridge.title = 'DLTBUILD:' + JSON.stringify({
+    id: cached.sent[0].id, revision: 'r1', translations: ['标题', null, '说明'], cacheHits: 2
+});
+cached.frame();
+assert.deepEqual(cached.sent[1].texts, ['Early group']);
+assert.equal(cached.sent[1].cacheOnly, false);
+cached.bridge.title = 'DLTBUILD:' + JSON.stringify({
+    id: cached.sent[1].id, revision: 'r1', translations: ['分组'], cacheHits: 0, translated: 1
+});
+cached.frame();
+assert.equal(group.first.text, '分组');
+assert.match(cached.status.text, /本地 2 · 新译 1/);
+cached.showOriginal(); cached.frame(); cached.click(); cached.frame();
+assert.equal(cached.sent.length, 2);
+assert.match(cached.status.text, /本地 3 · 新译 0/);
+cached.scene.__dltBuildText.readers.reverse();
+cached.frame();
+assert.equal(cached.sent.length, 2);
+group.first.text = 'Changed group';
+cached.frame();
+assert.deepEqual(cached.sent[2].texts, ['Changed group']);
+assert.equal(cached.sent[2].cacheOnly, true);
+console.log('PASS cached fields never go to translation; reopen and traversal reorder reuse results; changed fields alone are checked');

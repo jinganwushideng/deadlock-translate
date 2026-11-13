@@ -15,7 +15,21 @@
 
 .DltBuildActions { flow-children: right; vertical-align: center; }
 .DltBuildTranslateButton { vertical-align: center; }
-.DltBuildProgress { flow-children: down; width: 140px; margin-left: 8px; vertical-align: center; }
-.DltBuildProgressTrack { width: 100%; height: 4px; background-color: #172d36aa; border-radius: 2px; }
+.DltBuildProgress { flow-children: down; width: 420px; }
+.DltBuildProgressPopup {
+    ignore-parent-flow: true;
+    horizontal-align: left;
+    vertical-align: bottom;
+    margin-left: 36px;
+    margin-bottom: 58px;
+    padding: 12px 18px;
+    background-color: #263b40f5;
+    border: 1px solid #94b8ad;
+    border-top: 3px solid #9ce4c6;
+    border-radius: 3px;
+    box-shadow: 0px 3px 8px #142022b0;
+}
+.DltBuildProgressHeading { color: #f8ebca; font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+.DltBuildProgressTrack { width: 100%; height: 6px; background-color: #172d36aa; border-radius: 2px; }
 .DltBuildProgressFill { width: 0%; height: 100%; background-color: #9ce4c6; }
-.DltBuildProgressText { color: #f8ebca; font-size: 13px; margin-top: 2px; text-shadow: 1px 1px 1px #203539; }
+.DltBuildProgressText { color: #e8dbb8; font-size: 15px; margin-top: 6px; white-space: normal; }

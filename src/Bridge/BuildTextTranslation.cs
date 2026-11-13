@@ -52,6 +52,19 @@ internal sealed class BuildTextCache {
         })));
     }
 
+    internal static string Scope(string build, string context) {
+        // Loading order, whitespace, and changing win-rate badges are presentation
+        // details. Retain the build name as the namespace for context-sensitive terms.
+        if(!string.IsNullOrWhiteSpace(build)){
+            var title=System.Text.RegularExpressions.Regex.Replace(build,@"<[^>]*>", "",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+            title=System.Text.RegularExpressions.Regex.Replace(title,@"\[[^\[\]\r\n]*%[^\[\]\r\n]*\]", "",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+            title=System.Text.RegularExpressions.Regex.Replace(title,@"\s+", " ",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).Trim();
+            return "build:"+Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(title)));
+        }
+        var lines=context.Replace("\r","").Split('\n').Select(line=>line.Trim()).Where(line=>line.Length>0).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        return "context:"+Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n",lines))));
+    }
+
     internal bool TryGet(string key, out string? translation)=>entries.TryGetValue(key,out translation);
 
     internal void Store(string key, string translation) {
