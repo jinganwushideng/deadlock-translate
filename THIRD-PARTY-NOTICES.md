@@ -32,6 +32,8 @@ DLCT、poker chat 属于在 BabelTower 资料中接触的间接参考，未确�
 
 ## Valve 资源
 
+本地出装缓存解码使用 ValveResourceFormat 20.1.7467、ValveKeyValue 0.70.0.499、K4os.Compression.LZ4 1.3.8、ZstdSharp.Port 0.8.8 和 System.IO.Hashing 10.0.10；均保留 MIT 许可及包内适用的第三方声明。只随后台附带 KV3 解码所需程序集，不引入纹理渲染组件。缓存中的 HeroBuild 消息按 SteamDatabase/Protobufs 公开的 Valve 消息结构读取；用户的出装缓存不包含在源码或安装包中。
+
 `mod/panorama/layout/chat.xml` 是从原版 `panorama/layout/chat.vxml_c` 重建后注入脚本和桥接面板的生成物；`src/Bridge/data/terms.json` 包含游戏本地化生成数据。二者从公开 Git 源码及源码归档排除，由构建者自己的游戏安装重新生成。项目提供生成脚本和自己维护的词条适配逻辑。其他 XML 引用游戏原生样式和图标 URI，不附带图像文件。
 
 本项目 GPL 授权不授予 Valve 原始资源的再分发权。含生成布局和词库的二进制 VPK/运行包与公开源码包是不同发布物；发布者需分别核对游戏资源分发条件，不能用本文件代替授权。

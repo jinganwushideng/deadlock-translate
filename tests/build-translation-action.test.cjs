@@ -65,121 +65,96 @@ function fixture(autoEnabled, withText = true) {
         showOriginal: () => scope.DLTBuildTextAction(true) };
 }
 
+function reply(f, body) {
+    f.bridge.title = 'DLTBUILD:' + JSON.stringify({ id: f.sent.at(-1).id, revision: 'r1', ...body });
+    f.frame(50);
+}
+function plan(f, texts = ['Build title']) {
+    reply(f, { planStatus: 'ready', plan: { id: 101, hero: 17, version: 1, name: 'Build title', texts } });
+}
 const automatic = fixture(true);
+assert.equal(automatic.sent[0].loadPlan, true);
+automatic.click(); automatic.frame();
 assert.equal(automatic.sent.length, 1);
-automatic.click();
-assert.equal(automatic.scene.__dltBuildText.enabled, true);
-assert.equal(automatic.progress.visible, true);
-assert.match(automatic.status.text, /读取本地译文/);
-automatic.frame();
-assert.equal(automatic.sent.length, 1);
-assert.match(automatic.status.text, /0\/1/);
-automatic.bridge.title = 'DLTBUILD:' + JSON.stringify({
-    id: automatic.sent[0].id, revision: 'r1', translations: ['译文']
-});
-automatic.frame();
-assert.equal(automatic.title.text, '译文');
+plan(automatic);
+assert.equal(automatic.sent[1].cacheOnly, true);
+reply(automatic, { translations: ['Translated title'], cacheHits: 1 });
+assert.equal(automatic.title.text, 'Translated title');
 automatic.showOriginal();
 assert.equal(automatic.title.text, 'Build title');
 assert.equal(automatic.progress.visible, false);
-automatic.frame();
-assert.equal(automatic.scene.__dltBuildText.enabled, false);
-console.log('PASS repeated clicks keep an active request; original action restores the source');
-
-const manual = fixture(false);
-assert.equal(manual.sent.length, 0);
-manual.click();
-assert.equal(manual.progress.visible, true);
-manual.frame();
-assert.equal(manual.sent.length, 1);
-console.log('PASS manual native action starts translation and immediately reveals status');
+console.log('PASS native action reads local plan first; repeated clicks cannot cancel it; original action restores text');
 
 const empty = fixture(false, false);
-empty.click();
-empty.frame();
+empty.click(); empty.frame();
 assert.equal(empty.sent.length, 0);
-assert.equal(empty.progress.visible, true);
-assert.match(empty.status.text, /等待游戏加载/);
 assert.equal(empty.scene.__dltBuildText.collectDelayMs, null);
-empty.title.text = 'Loaded title';
-empty.frame(50);
+empty.title.text = 'Loaded title'; empty.frame(50);
 assert.equal(empty.sent.length, 1);
-assert.equal(empty.scene.__dltBuildText.collectDelayMs, 200);
-console.log('PASS a loading build name cannot start an unidentified translation task');
+assert.equal(empty.sent[0].loadPlan, true);
+console.log('PASS loading scheme name prevents unidentified requests');
 
-const recover = fixture(false);
-let throwOnce = true;
-Object.defineProperty(recover.title, 'text', {
-    get() {
-        if (throwOnce) { throwOnce = false; throw Error('transient panel'); }
-        return 'Recovered title';
-    },
-    set() {}
-});
-recover.click();
-recover.frame();
-assert.equal(recover.scene.__dltBuildText.error, false);
-assert.equal(recover.tasks.length, 1);
-assert.equal(recover.sent.length, 1);
-console.log('PASS a transient panel error keeps the update loop alive and retries');
+const identified = fixture(false);
+identified.root.FindChildrenWithClassTraverse = () => [{ text: 'Build ID: 4321' }];
+identified.click(); identified.frame();
+assert.equal(identified.sent[0].buildId, 4321);
+identified.root.FindChildrenWithClassTraverse = () => [{ text: 'Build ID: 4322' }];
+for(let i=0;i<4;i++)identified.frame();
+assert.equal(identified.sent.at(-1).buildId, 4322);
+console.log('PASS native ID with localized label prefix disambiguates plans and same-name switches');
 
-const cached = fixture(false);
-const group = cached.category('Early group', 'Early note');
-cached.frame();
-cached.click(); cached.frame();
-assert.deepEqual(cached.sent[0].texts, ['Build title', 'Early group', 'Early note']);
-assert.equal(cached.sent[0].cacheOnly, true);
-cached.bridge.title = 'DLTBUILD:' + JSON.stringify({
-    id: cached.sent[0].id, revision: 'r1', translations: ['标题', null, '说明'], cacheHits: 2
-});
-cached.frame();
-assert.deepEqual(cached.sent[1].texts, ['Early group']);
-assert.equal(cached.sent[1].cacheOnly, false);
-cached.bridge.title = 'DLTBUILD:' + JSON.stringify({
-    id: cached.sent[1].id, revision: 'r1', translations: ['分组'], cacheHits: 0, translated: 1
-});
-cached.frame();
-assert.equal(group.first.text, '分组');
-assert.match(cached.status.text, /本地 2 · 新译 1/);
-cached.showOriginal(); cached.frame(); cached.click(); cached.frame();
-assert.equal(cached.sent.length, 2);
-assert.match(cached.status.text, /本地 3 · 新译 0/);
-cached.scene.__dltBuildText.readers.reverse();
-cached.frame();
-assert.equal(cached.sent.length, 2);
-group.first.text = 'Changed group';
-for (let i = 0; i < 4; i++) cached.frame();
-assert.deepEqual(cached.sent[2].texts, ['Changed group']);
-assert.equal(cached.sent[2].cacheOnly, true);
-console.log('PASS cached fields never go to translation; reopen and traversal reorder reuse results; changed fields alone are checked');
+const complete = fixture(false);
+complete.click(); complete.frame(0);
+plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
+assert.deepEqual(complete.sent[1].texts, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
+assert.match(complete.sent[1].context, /Unseen annotation/);
+reply(complete, { translations: ['Title result', null, 'Note result', null], cacheHits: 2 });
+assert.deepEqual(complete.sent[2].texts, ['Early group', 'Unseen annotation']);
+reply(complete, { translations: ['Group result', 'Annotation result'], translated: 2 });
+assert.equal(complete.scene.__dltBuildText.job.total, 4);
+const later = complete.category('Early group', 'Unseen annotation');
+complete.frame(); complete.frame();
+assert.equal(later.first.text, 'Group result');
+assert.equal(later.second.text, 'Annotation result');
+assert.equal(complete.sent.length, 3);
+const unrelated = complete.category('Not in plan', 'Other tooltip');
+complete.frame(); complete.frame();
+assert.equal(unrelated.first.text, 'Not in plan');
+assert.equal(complete.sent.length, 3);
+complete.showOriginal(); complete.frame(); complete.click(); complete.frame();
+assert.equal(complete.sent.at(-1).loadPlan, true);
+plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
+assert.equal(complete.sent.length, 4);
+assert.equal(complete.scene.__dltBuildText.job.cacheHits, 4);
+assert.equal(complete.scene.__dltBuildText.job.translated, 0);
+console.log('PASS unseen notes translate in the initial job, later UI creation makes no request, reopen uses memo');
+
+const missing = fixture(false);
+missing.click(); missing.frame();
+reply(missing, { planStatus: 'not-found', plan: null });
+missing.frame(); missing.frame();
+assert.equal(missing.sent.length, 1);
+assert.equal(missing.scene.__dltBuildText.job.failed, 1);
+assert.equal(missing.scene.__dltBuildText.job.total, 0);
+missing.click(); missing.frame();
+assert.equal(missing.sent.length, 2);
+assert.equal(missing.sent[1].loadPlan, true);
+console.log('PASS missing local source stops cloud consumption and allows explicit retry');
+
+const corrupt = fixture(false);
+corrupt.click(); corrupt.frame();
+reply(corrupt, { planStatus: 'ready', plan: { name: 'Broken', texts: [42] } });
+assert.equal(corrupt.sent.length, 1);
+assert.equal(corrupt.scene.__dltBuildText.job.failed, 1);
+console.log('PASS malformed local response cannot enter provider queue');
 
 const collection = fixture(false);
-for (let i = 0; i < 30; i++) collection.category('Group ' + i, 'Description ' + i);
-collection.frame();
-collection.click();
-collection.frame(0);
-const evidence = collection.scene.__dltBuildText;
-assert.equal(evidence.job.total, 61);
-assert.equal(evidence.collectDelayMs, 0);
-assert.equal(evidence.dispatchDelayMs, 0);
-const scans = evidence.collections;
-for (let i = 0; i < 8; i++) collection.frame(50);
-assert.equal(evidence.collections, scans);
-assert.equal(collection.sent.length, 1);
-console.log('PASS all 61 loaded fields are collected immediately; result polling does not repeat collection');
-
-const snapshot = fixture(false);
-snapshot.click(); snapshot.frame(0);
-snapshot.bridge.title = 'DLTBUILD:' + JSON.stringify({
-    id: snapshot.sent[0].id, revision: 'r1', translations: ['标题'], cacheHits: 1,
-    snapshot: { 'Later group': { value: '后续分组', refine: false }, 'Later note': { value: '后续说明', refine: false } }
-});
-snapshot.frame(50);
-const later = snapshot.category('Later group', 'Later note');
-later.first.GetParent().visible = false;
-snapshot.frame(50); snapshot.frame(50);
-assert.equal(snapshot.sent.length, 1);
-assert.equal(later.first.text, '后续分组');
-assert.equal(later.second.text, '后续说明');
-assert.equal(snapshot.scene.__dltBuildText.job.cacheHits, 3);
-console.log('PASS persisted plan snapshot supplies late-created and collapsed groups without another request');
+for(let i=0;i<30;i++)collection.category('Group '+i,'Description '+i);
+collection.frame(); collection.click(); collection.frame(0);
+assert.equal(collection.scene.__dltBuildText.collectDelayMs, 0);
+assert.equal(collection.scene.__dltBuildText.dispatchDelayMs, 0);
+assert.equal(collection.sent[0].loadPlan, true);
+const scans=collection.scene.__dltBuildText.collections;
+for(let i=0;i<8;i++)collection.frame(50);
+assert.equal(collection.scene.__dltBuildText.collections,scans);
+console.log('PASS immediate local request and no repeated collection during result polling');

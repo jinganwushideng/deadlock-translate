@@ -128,9 +128,13 @@ function DLTBuildTextAction(showOriginal) {
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
                     var looking = job && (job.pending && job.pending.batch.lookup || job.queue.some(function (batch) { return batch.lookup; }));
+                    var sourceErrors = { 'account-unavailable': '未找到当前 Steam 账号', 'cache-missing': '本地出装缓存尚未生成，请先加载该方案',
+                        'cache-too-large': '本地出装缓存超出读取限制', 'cache-changing': '游戏正在保存出装，请稍后重试',
+                        'cache-unreadable': '本地出装缓存无法读取，请重新加载该方案', 'not-found': '本地没有此方案，请在游戏中加载后重试',
+                        'ambiguous': '本地有同名方案，请打开方案详情后重试', 'unavailable': '读取整套出装失败，请重试' };
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' :
                         !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : !job.total ?
-                        '未读到出装文本' : running ?
+                        (sourceErrors[job.sourceStatus] || (job.failed ? '读取整套出装失败，请重试' : '正在读取本地整套出装')) : running ?
                         (looking ? '读取本地译文 ' : job.refining ? '精翻 ' : '云端翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
                         (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
@@ -173,7 +177,7 @@ function DLTBuildTextAction(showOriginal) {
             try {
                 bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encodeURIComponent(JSON.stringify({
                     id: id, texts: batch.texts, context: job.context, revision: state.revision, refine: job.refining,
-                    build: job.build, cacheOnly: !!batch.lookup
+                    build: job.build, cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null
                 })));
             } catch (_) { job.pending.deadline = 0; }
         }
@@ -229,7 +233,34 @@ function DLTBuildTextAction(showOriginal) {
                 if (result && result.id === pending.id) {
                     job.pending = null;
                     if (result.error === 'settings-changed') { restartJob(); return; }
-                    if (result.revision === state.revision && Array.isArray(result.translations) &&
+                    if (pending.batch.plan && result.revision === state.revision && result.planStatus) {
+                        job.sourceStatus = result.planStatus;
+                        var plan = result.plan;
+                        if (result.planStatus === 'ready' && plan && typeof plan.name === 'string' &&
+                            Array.isArray(plan.texts) && plan.texts.length > 0 && plan.texts.length <= 256 &&
+                            plan.texts.every(function (text) { return typeof text === 'string' && text.length <= 6000; }) &&
+                            plan.texts.reduce(function (size, text) { return size + text.length; }, 0) <= 64000) {
+                            job.build = plan.name.slice(0, 1000);
+                            job.context = plan.texts.join('\n').slice(0, config && config.contextChars || 6000);
+                            var memoKey = job.build + ':' + plan.id + ':' + plan.hero + ':' + plan.version;
+                            job.memo = state.completed[memoKey];
+                            if (!job.memo) {
+                                if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
+                                state.completedOrder.push(memoKey);
+                                job.memo = state.completed[memoKey] = Object.create(null);
+                            }
+                            job.planTitle = plan.name;
+                            var unseen = [];
+                            Array.from(new Set(plan.texts)).forEach(function (text) {
+                                job.known[text] = true; job.total++;
+                                var saved = job.memo[text];
+                                if (!saved) { unseen.push(text); return; }
+                                job.values[text] = saved.value; job.done++; job.cacheHits++;
+                                if (saved.refine) job.refine.push([text]);
+                            });
+                            addBatches(job.queue, unseen, true);
+                        } else { job.failed = 1; job.sourceStatus = sourceErrorsStatus(result.planStatus); }
+                    } else if (!pending.batch.plan && result.revision === state.revision && Array.isArray(result.translations) &&
                         result.translations.length === pending.batch.texts.length &&
                         result.translations.every(function (text) { return typeof text === 'string' || pending.batch.lookup && text === null; })) {
                         var misses = [], refinement = [];
@@ -245,7 +276,7 @@ function DLTBuildTextAction(showOriginal) {
                         job.cacheHits += result.cacheHits || 0;
                         job.translated += result.translated || 0;
                         if(pending.batch.lookup && result.snapshot && typeof result.snapshot === 'object'){
-                            Object.keys(result.snapshot).slice(0,96).forEach(function (text) {
+                            Object.keys(result.snapshot).slice(0,256).forEach(function (text) {
                                 var saved = result.snapshot[text];
                                 if(saved && typeof saved.value === 'string' && saved.value.length<=4096 &&
                                     (!job.memo[text] || !saved.refine || job.memo[text].refine))
@@ -273,12 +304,15 @@ function DLTBuildTextAction(showOriginal) {
             if (next >= 0) state.owner.request(job, job.queue.splice(next, 1)[0], config);
             if (!job.pending && !job.queue.length && !job.refine.length && !job.finishedAt) job.finishedAt = now;
         }
+        function sourceErrorsStatus(status) {
+            return typeof status === 'string' && status.length <= 40 ? status : 'unavailable';
+        }
         function retry(job, batch, now, busy) {
             batch.attempts++;
             if (batch.attempts <= (busy ? 3 : 1)) {
                 batch.after = now + (busy ? 1500 : 2500);
                 job.queue.push(batch);
-            } else job.failed += batch.texts.length;
+            } else { job.failed += batch.texts.length; if (batch.plan) job.sourceStatus = 'unavailable'; }
         }
         function update() {
             var config = syncSettings();
@@ -310,37 +344,23 @@ function DLTBuildTextAction(showOriginal) {
                             var distinct = function (entries) {
                                 return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
                             };
-                            var baseTexts = distinct(base), texts = distinct(pairs);
+                            var baseTexts = distinct(base);
                             var title = read(0);
                             var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
-                            var signature = build || JSON.stringify(baseTexts.slice().sort());
+                            var idLabels = root.FindChildrenWithClassTraverse ? root.FindChildrenWithClassTraverse('BuildID') : [];
+                            var idText = idLabels.length ? String(idLabels[0].text || '').replace(/<[^>]*>/g, '') : '';
+                            var idParts = idText.match(/\d+/g);
+                            var buildId = idParts && idParts.length === 1 && Number(idParts[0]) <= 4294967295 ? Number(idParts[0]) : null;
+                            var signature = build + ':' + (buildId || '');
                             if (signature !== state.signature) {
                                 restartJob();
                                 state.signature = signature;
-                                var memo = state.completed[signature];
-                                if (!memo) {
-                                    if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
-                                    state.completedOrder.push(signature);
-                                    memo = state.completed[signature] = Object.create(null);
-                                }
-                                state.job = { context: '', build: build, memo: memo,
-                                    known: Object.create(null), values: Object.create(null), queue: [], pending: null,
+                                var hintSize = 0;
+                                var hints = baseTexts.slice(0, 96).filter(function (text) { hintSize += text.length; return hintSize <= 48000; });
+                                state.job = { context: '', build: build, buildId: buildId, title: title, memo: Object.create(null), sourceStatus: '',
+                                    known: Object.create(null), values: Object.create(null), queue: [{ texts: hints.length ? hints : [build], plan: true, attempts: 0, after: 0 }], pending: null,
                                     refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
                             }
-                            var job = state.job;
-                            job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
-                            var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
-                            var unseen = [];
-                            fresh.forEach(function (value) {
-                                job.known[value] = true;
-                                var saved = job.memo[value];
-                                if (!saved) { unseen.push(value); return; }
-                                job.values[value] = saved.value; job.done++; job.cacheHits++;
-                                if (saved.refine) job.refine.push([value]);
-                            });
-                            job.total += fresh.length;
-                            if (fresh.length) job.finishedAt = 0;
-                            addBatches(job.queue, unseen, true);
                         }
                     }
                     state.forceCollect = false;
@@ -354,6 +374,8 @@ function DLTBuildTextAction(showOriginal) {
                 }
                 if (active && state.job) advance(state.job, config);
                 else if (state.job) restartJob();
+                if (state.job && state.job.planTitle && state.job.values[state.job.planTitle] !== undefined)
+                    state.job.values[state.job.title] = state.job.values[state.job.planTitle];
                 state.pairs.forEach(function (entry) {
                     if (entry.view.root.IsValid()) entry.view.render(entry.texts, active && state.job ? state.job.values : null);
                 });

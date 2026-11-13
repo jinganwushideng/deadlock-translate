@@ -98,6 +98,7 @@ await using var app=builder.Build();
 using var releaseUpdates=new ReleaseUpdates(dataDir,BuildInfo.Version);
 using var buildTextSlot=new SemaphoreSlim(1);
 var buildTextCache=new BuildTextCache(dataDir);
+var localBuilds=new LocalBuildCatalog();
 var maintenance=new MaintenanceInspection(dataDir,AppContext.BaseDirectory,port);
 if(!noShell)app.Lifetime.ApplicationStarted.Register(()=>_ = releaseUpdates.RunDaily(app.Lifetime.ApplicationStopping));
 await using var llmKeepAlive=new LlmKeepAlive(config,translators,()=>engine.Connected,audit,app.Lifetime.ApplicationStopping);
@@ -370,9 +371,9 @@ if(location.hash)translate();
 });
 app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpContext ctx)=>{
     if(!Same(key,pairing)||ctx.Request.Headers.Origin!=Origin(ctx))return Results.Unauthorized();
-    if(input.Texts is not {Length: >0 and <=96} || (!input.CacheOnly&&input.Texts.Length>12) ||
+    if(input.Texts is not {Length: >0 and <=96} || (!input.CacheOnly&&!input.LoadPlan&&input.Texts.Length>12) ||
         input.Texts.Any(text=>text==null||text.Length>6000) ||
-        input.Texts.Sum(text=>text.Length)>(input.CacheOnly?48000:6000) || input.Context?.Length>12000 || input.Build?.Length>1000)
+        input.Texts.Sum(text=>text.Length)>(input.CacheOnly||input.LoadPlan?48000:6000) || input.Context?.Length>12000 || input.Build?.Length>1000)
         return Results.BadRequest();
     var (settings,configRevision)=config.Snapshot();
     var termRevision=terms.Revision;
@@ -384,7 +385,17 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
     if(!buildTextSlot.Wait(0))return ReplyError("busy");
     var batchTimer=Stopwatch.StartNew();
     var completedBatch=false;
+    var localFields=0;
     try{
+        if(input.LoadPlan){
+            if(string.IsNullOrWhiteSpace(input.Build))return Results.BadRequest();
+            var selection=await localBuilds.Find(input.Build,input.BuildId,input.Texts,ctx.RequestAborted);
+            completedBatch=selection.Build!=null;
+            localFields=selection.Build?.Texts.Length??0;
+            return Results.Json(new{id=input.Id,revision,planStatus=selection.Status,plan=selection.Build==null?null:new{
+                id=selection.Build.Id,hero=selection.Build.Hero,version=selection.Build.Version,
+                name=selection.Build.Name,texts=selection.Build.Texts}});
+        }
         var profile=BuildTextProfile.Resolve(settings);
         var quality=profile.Mode=="quality"||(profile.Mode=="hybrid"&&input.Refine);
         var context=input.Context??"";
@@ -459,8 +470,8 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
     }catch(FastProviderBusyException){return ReplyError("busy");}
     catch(Exception ex) when(ex is not OutOfMemoryException){return ReplyError("unavailable");}
     finally{
-        audit.Record("translation",LogKind.TranslationTiming,new(Stage:input.CacheOnly?"build-cache":"build-translate",
-            Count:input.Texts.Length,ElapsedMs:batchTimer.Elapsed.TotalMilliseconds,Flag:completedBatch));
+        audit.Record("translation",LogKind.TranslationTiming,new(Stage:input.LoadPlan?"build-local":input.CacheOnly?"build-cache":"build-translate",
+            Count:input.LoadPlan?localFields:input.Texts.Length,ElapsedMs:batchTimer.Elapsed.TotalMilliseconds,Flag:completedBatch));
         buildTextSlot.Release();
     }
 });
@@ -532,7 +543,7 @@ try {
 
 } catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
 public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending,int CacheHits=0,int Translated=0,double CollectionMs=0,int Collections=0,double? ClickToCollectMs=null,double? ClickToDispatchMs=null);
-public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false);
+public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false,bool LoadPlan=false,uint? BuildId=null);
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
 public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0,int HudContainers=0,int HudRebinds=0,int HudRendered=0,int HudRecovered=0,int HudHostRepairs=0,int HudHiddenRepairs=0,int HudBindings=0,int HudExpiredResults=0,int HudDeferredScans=0,int GameLogDrops=0,int HudWaits=0,int HudRetryRecovered=0,int HudNativeExpired=0,int HudPanelGone=0,int HudRetryDropped=0,int FeedRendered=0,int FeedExpired=0,int FeedDropped=0,PerformanceSample? Performance=null);

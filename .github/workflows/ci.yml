@@ -92,6 +92,10 @@ jobs:
         run: node tests/receive-burst-ui.test.cjs
       - name: Concurrency tests (mock HTTP only)
         run: dotnet run --project tests/ConcurrencyTests
+      - name: Local complete build cache and lazy UI rendering
+        run: |
+          dotnet run --project tests/BuildCatalogTests -c Release
+          node tests/build-translation-action.test.cjs
       - name: Scheduling, cache and certificate diagnostics tests
         run: dotnet run --project tests/OptimizationTests
       - name: Incoming style, cache, snapshots and diagnostic privacy

@@ -32,7 +32,24 @@ def collect(output):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file, target)
         shutil.copy2(root/'LICENSES/dotnet-MIT.txt', destination/'dotnet-MIT.txt')
-    print('Collected exact-version runtime and ProtectedData license notices.')
+    parsers = {'valveresourceformat': ('20.1.7467', 'cache-valveresourceformat-MIT.txt'),
+               'valvekeyvalue': ('0.70.0.499', 'cache-valvekeyvalue-MIT.txt'),
+               'k4os.compression.lz4': ('1.3.8', 'cache-lz4-MIT.txt'),
+               'zstdsharp.port': ('0.8.8', 'cache-zstdsharp-MIT.txt'),
+               'system.io.hashing': ('10.0.10', 'dotnet-MIT.txt')}
+    for name, (version, notice) in parsers.items():
+        package = next((p/name/version for p in folders if (p/name/version).is_dir()), None)
+        if package is None:
+            raise FileNotFoundError(name + '/' + version)
+        original = root/'LICENSES'/notice
+        if original.stat().st_size < 500:
+            raise ValueError('Incomplete parser license: ' + name)
+        destination = output/'LICENSES'/(name+'-'+version)
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, destination/original.name)
+        for file in package.rglob('THIRD-PARTY-NOTICES.TXT'):
+            shutil.copy2(file, destination/file.name)
+    print('Collected exact-version runtime, ProtectedData and build-cache parser license notices.')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

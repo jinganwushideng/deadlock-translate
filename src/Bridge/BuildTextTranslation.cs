@@ -49,7 +49,7 @@ internal sealed class BuildTextCache {
                 ?JsonSerializer.Deserialize<Dictionary<string,Dictionary<string,string>>>(File.ReadAllBytes(indexPath)):null;
             foreach(var (key,fields) in index?.TakeLast(16)??[]){
                 if(key.Length!=64||!key.All(Uri.IsHexDigit)||fields==null)continue;
-                var valid=fields.Where(item=>item.Key.Length<=6000&&item.Value is {Length:64}&&item.Value.All(Uri.IsHexDigit)).TakeLast(96);
+                var valid=fields.Where(item=>item.Key.Length<=6000&&item.Value is {Length:64}&&item.Value.All(Uri.IsHexDigit)).TakeLast(256);
                 plans[key]=valid.ToDictionary(item=>item.Key,item=>item.Value,StringComparer.Ordinal);
             }
         }catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException){}
@@ -90,7 +90,7 @@ internal sealed class BuildTextCache {
         }
         if(fields.TryGetValue(text,out var existing)&&existing==key)return false;
         fields[text]=key;
-        if(fields.Count>96)fields.Remove(fields.Keys.First());
+        if(fields.Count>256)fields.Remove(fields.Keys.First());
         return true;
     }
 
@@ -100,7 +100,7 @@ internal sealed class BuildTextCache {
         var size=0;
         foreach(var (text,key) in fields){
             if(!entries.TryGetValue(key,out var value))continue;
-            if(size+text.Length+value.Length>24000)break;
+            if(size+text.Length+value.Length>96000)break;
             result[text]=value;size+=text.Length+value.Length;
         }
         return result;

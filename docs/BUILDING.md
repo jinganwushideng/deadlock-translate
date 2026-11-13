@@ -30,6 +30,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 `
 
 完整构建发布自包含运行时时，会从实际还原的 NuGet 包中收集运行时和 ProtectedData 的第三方声明；缺失时停止。单独使用 `-ModOnly` 不生成新的后台或其运行时许可，不可把这种结果当成完整发行包。
 
+出装翻译后台另外还原固定版本的 KV3、LZ4、Zstd 解码依赖；`collect_licenses.py` 同步收集其许可。只附带解码所需程序集，不附带 Source 2 Viewer 的图形渲染依赖。`BuildCatalogTests` 使用程序生成的 KV3/protobuf 样例，不需要个人 Steam 缓存，也不调用付费接口。
+
 ## 只开发后台和网页
 
 无需游戏即可编译：
