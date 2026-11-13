@@ -32,7 +32,9 @@ function DLTBuildTextAction(showOriginal) {
         var state = scene.__dltBuildText;
         if (!state) {
             state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
-                revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [] };
+                revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [],
+                forceCollect: true, nextCollectAt: 0, pairs: [], collectionMs: 0, collections: 0,
+                clickAt: 0, collectDelayMs: null, dispatchDelayMs: null };
             scene.__dltBuildText = state;
         }
         var eventTitle = '';
@@ -43,7 +45,7 @@ function DLTBuildTextAction(showOriginal) {
                 }
             }); } catch (_) {}
         });
-        var applied = [null, null];
+        var applied = [null, null], rendered = null;
         function isVisible() {
             for (var panel = root; panel; panel = panel.GetParent()) {
                 if (panel.visible === false || panel.style.visibility === 'collapse' ||
@@ -57,10 +59,14 @@ function DLTBuildTextAction(showOriginal) {
             var text = String(label.text || '');
             var last = label.__dltBuildOriginal || applied[index];
             if (last && last.panel === label && last.translation === text) text = last.source;
+            else if (last) rendered = null;
             text = text.trim();
             return text.length <= 6000 && !/^[#{]/.test(text) && /[\p{L}]/u.test(text) ? text : '';
         }
         function render(texts, values) {
+            var next = [originals[0], originals[1], texts[0], texts[1], values && values[texts[0]] || '', values && values[texts[1]] || ''];
+            if (rendered && next.every(function (value, index) { return value === rendered[index]; })) return;
+            rendered = next;
             for (var i = 0; i < originals.length; i++) {
                 var label = originals[i];
                 if (!label || !label.IsValid()) continue;
@@ -99,6 +105,7 @@ function DLTBuildTextAction(showOriginal) {
         }
         var view = { root: root, visible: isVisible, read: readView, render: render };
         state.readers.push(view);
+        state.forceCollect = true;
         if (toggle) {
             var original = root.FindChildTraverse(shop ? 'DltShopOriginal' : 'DltBuildOriginal');
             var progress = root.FindChildTraverse(shop ? 'DltShopProgress' : 'DltBuildProgress');
@@ -142,14 +149,21 @@ function DLTBuildTextAction(showOriginal) {
                 restartJob();
                 state.enabled = !showOriginal;
                 state.owner = control;
+                state.clickAt = Date.now();
+                state.collectDelayMs = null;
+                state.dispatchDelayMs = null;
                 control.status(null, !config || config.enabled);
                 if (showOriginal) state.readers.forEach(function (item) {
                     if (item.root.IsValid()) item.render([], null);
+                });
+                else $.Schedule(0, function () {
+                    if (root.IsValid() && state.owner === control && state.enabled) refresh();
                 });
             };
         }
         function send(job, batch, config) {
             var id = ++state.seq;
+            if (state.clickAt && state.dispatchDelayMs === null) state.dispatchDelayMs = Date.now() - state.clickAt;
             job.pending = { id: id, batch: batch, deadline: Date.now() +
                 (job.refining || !config ? (config && config.qualityTimeout || 90) + 5 :
                     Math.max(config.fastTimeout || 15, config.qualityTimeout || 90) + 5) * 1000 };
@@ -175,6 +189,7 @@ function DLTBuildTextAction(showOriginal) {
             }
             state.job = null;
             state.signature = null;
+            state.forceCollect = true;
         }
         function syncSettings() {
             var config = scene.__dltBuildTextConfig;
@@ -263,63 +278,75 @@ function DLTBuildTextAction(showOriginal) {
                 if (owner !== state.owner) { restartJob(); state.owner = owner; }
             }
             if (state.owner && state.owner.root === root) {
-                state.controls = state.controls.filter(function (item) { return item.root.IsValid(); });
-                state.readers = state.readers.filter(function (item) { return item.root.IsValid(); });
-                var views = state.readers.filter(function (item) {
-                    return item.visible() && !state.controls.some(function (control) {
-                        return control !== state.owner && attached(item.root, control.root) &&
-                            !attached(control.root, root) && !attached(root, control.root);
-                    });
-                });
-                var pairs = views.map(function (item) { return { view: item, texts: item.read() }; });
                 var active = state.enabled && online;
-                if (active) {
-                    var base = pairs.filter(function (entry) { return attached(entry.view.root, root); });
-                    var distinct = function (entries) {
-                        return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
-                    };
-                    var baseTexts = distinct(base), texts = distinct(pairs);
-                    var title = read(0);
-                    var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
-                    var signature = build || JSON.stringify(baseTexts.slice().sort());
-                    if (signature !== state.signature) {
-                        restartJob();
-                        state.signature = signature;
-                        var memo = state.completed[signature];
-                        if (!memo) {
-                            if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
-                            state.completedOrder.push(signature);
-                            memo = state.completed[signature] = Object.create(null);
-                        }
-                        state.job = { context: '', build: build, memo: memo,
-                            known: Object.create(null), values: Object.create(null), queue: [], pending: null,
-                            refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
-                    }
-                    var job = state.job;
-                    job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
-                    var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
-                    var unseen = [];
-                    fresh.forEach(function (value) {
-                        job.known[value] = true;
-                        var saved = job.memo[value];
-                        if (!saved) { unseen.push(value); return; }
-                        job.values[value] = saved.value; job.done++; job.cacheHits++;
-                        if (saved.refine) job.refine.push([value]);
+                var collect = state.forceCollect || Date.now() >= state.nextCollectAt;
+                if (collect) {
+                    var started = Date.now();
+                    state.controls = state.controls.filter(function (item) { return item.root.IsValid(); });
+                    state.readers = state.readers.filter(function (item) { return item.root.IsValid(); });
+                    var views = state.readers.filter(function (item) {
+                        return item.visible() && !state.controls.some(function (control) {
+                            return control !== state.owner && attached(item.root, control.root) &&
+                                !attached(control.root, root) && !attached(root, control.root);
+                        });
                     });
-                    job.total += fresh.length;
-                    if (fresh.length) job.finishedAt = 0;
-                    addBatches(job.queue, unseen, true);
-                    advance(job, config);
-                } else if (state.job) restartJob();
-                pairs.forEach(function (entry) { entry.view.render(entry.texts, active && state.job ? state.job.values : null); });
-                state.readers.forEach(function (item) { if (!item.visible()) item.render([], null); });
+                    state.pairs = views.map(function (item) { return { view: item, texts: item.read() }; });
+                    var pairs = state.pairs;
+                    if (active) {
+                        var base = pairs.filter(function (entry) { return attached(entry.view.root, root); });
+                        var distinct = function (entries) {
+                            return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
+                        };
+                        var baseTexts = distinct(base), texts = distinct(pairs);
+                        var title = read(0);
+                        var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
+                        var signature = build || JSON.stringify(baseTexts.slice().sort());
+                        if (signature !== state.signature) {
+                            restartJob();
+                            state.signature = signature;
+                            var memo = state.completed[signature];
+                            if (!memo) {
+                                if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
+                                state.completedOrder.push(signature);
+                                memo = state.completed[signature] = Object.create(null);
+                            }
+                            state.job = { context: '', build: build, memo: memo,
+                                known: Object.create(null), values: Object.create(null), queue: [], pending: null,
+                                refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                        }
+                        var job = state.job;
+                        job.context = baseTexts.join('\n').slice(0, config && config.contextChars || 6000);
+                        var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
+                        var unseen = [];
+                        fresh.forEach(function (value) {
+                            job.known[value] = true;
+                            var saved = job.memo[value];
+                            if (!saved) { unseen.push(value); return; }
+                            job.values[value] = saved.value; job.done++; job.cacheHits++;
+                            if (saved.refine) job.refine.push([value]);
+                        });
+                        job.total += fresh.length;
+                        if (fresh.length) job.finishedAt = 0;
+                        addBatches(job.queue, unseen, true);
+                    }
+                    state.forceCollect = false;
+                    state.nextCollectAt = Date.now() + 500;
+                    state.collectionMs = Date.now() - started;
+                    state.collections++;
+                    if (state.clickAt && state.collectDelayMs === null) state.collectDelayMs = Date.now() - state.clickAt;
+                    state.readers.forEach(function (item) { if (!item.visible()) item.render([], null); });
+                }
+                if (active && state.job) advance(state.job, config);
+                else if (state.job) restartJob();
+                state.pairs.forEach(function (entry) {
+                    if (entry.view.root.IsValid()) entry.view.render(entry.texts, active && state.job ? state.job.values : null);
+                });
                 state.controls.forEach(function (item) { if (item.visible()) item.status(state.job, online); });
             } else if (!state.owner) {
                 render([], null);
             }
         }
-        function tick() {
-            if (!root.IsValid()) return;
+        function refresh() {
             try {
                 update();
                 state.error = false;
@@ -329,7 +356,11 @@ function DLTBuildTextAction(showOriginal) {
                     try { if (item.root.IsValid() && item.visible()) item.status(state.job, true); } catch (_) {}
                 });
             }
-            $.Schedule(toggle ? 0.15 : 0.4, tick);
+        }
+        function tick() {
+            if (!root.IsValid()) return;
+            refresh();
+            $.Schedule(toggle && state.job && state.job.pending ? 0.05 : toggle ? 0.15 : 0.4, tick);
         }
         $.Schedule(0, tick);
     }

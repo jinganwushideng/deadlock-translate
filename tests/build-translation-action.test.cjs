@@ -55,8 +55,8 @@ function fixture(autoEnabled, withText = true) {
         });
         return { first, second };
     }
-    const frame = () => {
-        now += 150;
+    const frame = (milliseconds = 150) => {
+        now += milliseconds;
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
@@ -113,10 +113,8 @@ Object.defineProperty(recover.title, 'text', {
 });
 recover.click();
 recover.frame();
-assert.equal(recover.scene.__dltBuildText.error, true);
-assert.equal(recover.tasks.length, 1);
-recover.frame();
 assert.equal(recover.scene.__dltBuildText.error, false);
+assert.equal(recover.tasks.length, 1);
 assert.equal(recover.sent.length, 1);
 console.log('PASS a transient panel error keeps the update loop alive and retries');
 
@@ -145,7 +143,22 @@ cached.scene.__dltBuildText.readers.reverse();
 cached.frame();
 assert.equal(cached.sent.length, 2);
 group.first.text = 'Changed group';
-cached.frame();
+for (let i = 0; i < 4; i++) cached.frame();
 assert.deepEqual(cached.sent[2].texts, ['Changed group']);
 assert.equal(cached.sent[2].cacheOnly, true);
 console.log('PASS cached fields never go to translation; reopen and traversal reorder reuse results; changed fields alone are checked');
+
+const collection = fixture(false);
+for (let i = 0; i < 30; i++) collection.category('Group ' + i, 'Description ' + i);
+collection.frame();
+collection.click();
+collection.frame(0);
+const evidence = collection.scene.__dltBuildText;
+assert.equal(evidence.job.total, 61);
+assert.equal(evidence.collectDelayMs, 0);
+assert.equal(evidence.dispatchDelayMs, 0);
+const scans = evidence.collections;
+for (let i = 0; i < 8; i++) collection.frame(50);
+assert.equal(evidence.collections, scans);
+assert.equal(collection.sent.length, 1);
+console.log('PASS all 61 loaded fields are collected immediately; result polling does not repeat collection');

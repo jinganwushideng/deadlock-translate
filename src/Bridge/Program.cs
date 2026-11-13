@@ -306,7 +306,14 @@ app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
     if(req.ClientVersion!=null&&(req.ClientVersion.Length>32||!req.ClientVersion.All(c=>char.IsAsciiDigit(c)||c=='.')))throw new ArgumentException("客户端版本字段过长");
     if(req.ClientBuildId!=null&&(req.ClientBuildId.Length>40||req.ClientBuildId.Any(c=>!char.IsAsciiLetterOrDigit(c)&&c!='.'&&c!='-')))throw new ArgumentException("无效的构建编号");
     var result=engine.Exchange(req.Session,req.Messages??[],req.Poll??[]);
-    if(req.BuildText!=null)Volatile.Write(ref buildTextEvidence,req.BuildText);
+    if(req.BuildText is { } buildState){
+        var priorBuildState=Volatile.Read(ref buildTextEvidence);
+        if(buildState.ClickToCollectMs.HasValue&&(priorBuildState?.Clicks!=buildState.Clicks||priorBuildState?.ClickToCollectMs==null))
+            audit.Record("game",LogKind.TranslationTiming,new(Stage:"build-collect",Count:buildState.Total,ElapsedMs:buildState.ClickToCollectMs,FirstContentMs:buildState.CollectionMs));
+        if(buildState.ClickToDispatchMs.HasValue&&(priorBuildState?.Clicks!=buildState.Clicks||priorBuildState?.ClickToDispatchMs==null))
+            audit.Record("game",LogKind.TranslationTiming,new(Stage:"build-dispatch",Count:buildState.Total,ElapsedMs:buildState.ClickToDispatchMs));
+        Volatile.Write(ref buildTextEvidence,buildState);
+    }
     if(!engine.IsCurrentSession(req.Session))return Results.Conflict(new{error="stale-session"});
     if(req.OpenSettings && Environment.TickCount64-lastOpen>2000) {lastOpen=Environment.TickCount64;OpenSettings();}
     if(req.Metrics!=null) {
@@ -375,6 +382,8 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
     if(!settings.Enabled)return ReplyError("disabled");
     if(!string.IsNullOrEmpty(input.Revision)&&input.Revision!=revision)return ReplyError("settings-changed");
     if(!buildTextSlot.Wait(0))return ReplyError("busy");
+    var batchTimer=Stopwatch.StartNew();
+    var completedBatch=false;
     try{
         var profile=BuildTextProfile.Resolve(settings);
         var quality=profile.Mode=="quality"||(profile.Mode=="hybrid"&&input.Refine);
@@ -410,6 +419,7 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         var hasLlm=config.Secret("llm").Length>0;
         if(input.CacheOnly){
             if(migrated)buildTextCache.Flush();
+            completedBatch=true;
             return Results.Json(new{id=input.Id,revision,
                 translations=input.Texts.Select(text=>values.TryGetValue(text.Trim(),out var value)?value:null).ToArray(),
                 cacheHits,translated=0,refine=false,
@@ -432,11 +442,16 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         }else if(migrated){
             buildTextCache.Flush();
         }
+        completedBatch=true;
         return Results.Json(new{id=input.Id,revision,translations=input.Texts.Select(text=>values[text.Trim()]).ToArray(),
             cacheHits,translated=misses.Count,refine=refineTexts.Count>0&&hasLlm});
     }catch(FastProviderBusyException){return ReplyError("busy");}
     catch(Exception ex) when(ex is not OutOfMemoryException){return ReplyError("unavailable");}
-    finally{buildTextSlot.Release();}
+    finally{
+        audit.Record("translation",LogKind.TranslationTiming,new(Stage:input.CacheOnly?"build-cache":"build-translate",
+            Count:input.Texts.Length,ElapsedMs:batchTimer.Elapsed.TotalMilliseconds,Flag:completedBatch));
+        buildTextSlot.Release();
+    }
 });
 app.MapGet("/bridge/{key}",(string key)=>{
     if(!Same(key,pairing)) return Results.NotFound();
@@ -505,7 +520,7 @@ try {
 }
 
 } catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
-public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending,int CacheHits=0,int Translated=0);
+public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending,int CacheHits=0,int Translated=0,double CollectionMs=0,int Collections=0,double? ClickToCollectMs=null,double? ClickToDispatchMs=null);
 public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false);
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
