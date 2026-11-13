@@ -114,6 +114,9 @@ public sealed class ConfigStore {
         } else Validate(settings);
     }
     public Settings Current { get { lock (gate) return settings; } }
+    internal (Settings Settings, string Revision) Snapshot() {
+        lock (gate) return (settings, revisionScope+"-"+revision);
+    }
     public string Secret(string name) { lock (gate) return secrets.GetValueOrDefault(name, ""); }
     public string LlmSecretFor(Settings snapshot){lock(gate){
         if(snapshot.LlmBaseUrl!=settings.LlmBaseUrl || snapshot.Model!=settings.Model)throw new InvalidOperationException("大模型配置已变更，旧排队任务未继续请求，请重试");

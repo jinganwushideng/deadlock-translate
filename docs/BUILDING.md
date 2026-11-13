@@ -6,7 +6,7 @@ Windows x64、.NET 10 SDK、Node.js 22 或更新 LTS、Python 3.10+、Git。安�
 
 下载以下工具，保留其原始许可证；不要只复制 EXE 而遗漏随附 DLL：
 
-- [Source 2 Viewer CLI](https://github.com/ValveResourceFormat/ValveResourceFormat/releases)：完整解压到 `tools/vrf/`，入口 `Source2Viewer-CLI.exe`。本项目验证过 20.0。
+- [Source 2 Viewer CLI](https://github.com/ValveResourceFormat/ValveResourceFormat/releases)：完整解压到 `tools/vrf/`，入口 `Source2Viewer-CLI.exe`。出装翻译需要 21.1 或支持当前游戏 KV3 类型的更新版。也可设置 `DLT_RESOURCE_VIEWER` 指向独立工具路径。
 - [VPKEdit](https://github.com/craftablescience/VPKEdit/releases)：完整解压到 `tools/vpkedit/`，入口 `vpkeditcli.exe`。验证过 v5.0.0.4。
 - Valve 编译器取自自己的 CS2 Workshop Tools 安装，不随源码提供。
 

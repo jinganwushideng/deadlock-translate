@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.3-1907d059a0c7';
+var BUILD_ID = '0.7.3-e8ce9119755b';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -1851,6 +1851,9 @@ var DLTChatInputFocused = function () {};
         }
         if (payload.config) {
             state.config = payload.config;
+            if (typeof payload.buildTextRevision === 'string') {
+                ROOT.__dltBuildTextConfig = { revision: payload.buildTextRevision, enabled: state.config.enabled !== false };
+            }
             ROOT.__dltSettingsBackgroundMode = state.config.settingsBackgroundMode || 'static';
             if (typeof state.config.fontSize !== 'number' || !isFinite(state.config.fontSize) || state.config.fontSize < 12 || state.config.fontSize > 24) state.config.fontSize = 17;
             syncOwnDisplay(); maintainFeed();

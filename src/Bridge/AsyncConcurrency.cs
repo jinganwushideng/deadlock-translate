@@ -7,6 +7,13 @@ public sealed class AsyncConcurrency(int limit) {
     private int active,maximum=limit;
     public object Stats {get{lock(gate)return new{active,waiting=waiting.Count(x=>!x.Task.IsCompleted),limit=maximum};}}
     public void SetLimit(int value){if(value<1)throw new ArgumentOutOfRangeException(nameof(value));lock(gate){maximum=value;Drain();}}
+    internal IDisposable? TryEnterBackground(){
+        lock(gate){
+            if(active>=Math.Max(1,maximum-1)||waiting.Any(waiter=>!waiter.Task.IsCompleted))return null;
+            active++;
+            return new Lease(this);
+        }
+    }
     public async Task<IDisposable> Enter(CancellationToken token){
         token.ThrowIfCancellationRequested();
         TaskCompletionSource<IDisposable> waiter;

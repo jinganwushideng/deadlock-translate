@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace DeadlockTranslate;
+internal sealed class FastProviderBusyException : Exception;
 public interface ITranslator {
     Task<string> Fast(string text, Settings config, CancellationToken ct);
     Task<string> Quality(string text, string[] context, Settings config, CancellationToken ct);
@@ -30,13 +31,16 @@ public sealed partial class Translators : ITranslator, IDisposable {
     private readonly SemaphoreSlim bingLock = new(1);
     private sealed record BingCredentials(string Key,string Token,string Ig,Uri Origin,DateTime Until);
     private BingCredentials? bing;
-    public async Task<string> Fast(string text, Settings config, CancellationToken ct) {
+    public Task<string> Fast(string text, Settings config, CancellationToken ct) => Fast(text,config,ct,false);
+    internal async Task<string> Fast(string text, Settings config, CancellationToken ct, bool background) {
         var language=TranslationLanguages.Incoming(config);
         var exact = terms.Exact(text,config.BilingualNames,language.ChineseGlossary);
         if(exact != null) return terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");
         var protectedText = language.ChineseGlossary?terms.Protect(text,config.BilingualNames,true):terms.ProtectOutgoing(text);
         var target=TranslationLanguages.RequireServiceCode(language);
-        using var admission=await EnterProvider(config.FastProvider,ct);
+        using var admission=background ? fastSlots.TryEnterBackground() ?? throw new FastProviderBusyException()
+            : await EnterProvider(config.FastProvider,ct);
+        if(background){ct.ThrowIfCancellationRequested();CheckCooldown(config.FastProvider);}
         string result = config.FastProvider == "azure" ? await Azure(protectedText.Text,config,ct,target) : await Bing(protectedText.Text,ct,target);
         return terms.RenderChineseStyle(Terms.Restore(result, protectedText.Map),text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");
     }

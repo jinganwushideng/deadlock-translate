@@ -21,6 +21,7 @@ try {
         if (-not (Test-Path -LiteralPath $taskPrevious) -or (Get-Content -LiteralPath $taskPrevious -Raw|ConvertFrom-Json).buildId -ne $taskIdentity.buildId) { throw 'Source changed: perform a full backend + VPK build; ModOnly would mix build identities.' }
     }
     $env:DEADLOCK_TRANSLATE_GAME=$GamePath
+    $taskViewer=if($env:DLT_RESOURCE_VIEWER){$env:DLT_RESOURCE_VIEWER}else{Join-Path $taskRoot 'tools/vrf/Source2Viewer-CLI.exe'}
     if (-not (Test-Path -LiteralPath $Compiler)) { throw 'Source 2 resource compiler not found.' }
     foreach($taskRequired in @($CorePath,$ModBinPath,(Join-Path $GamePath 'game\citadel\pak01_dir.vpk'),'tools\vpkedit\vpkeditcli.exe')) {
         if(-not(Test-Path -LiteralPath $taskRequired)){throw "Missing build prerequisite: $taskRequired"}
@@ -77,7 +78,7 @@ try {
     foreach($taskDoc in @('UPDATE-0.2.2.md','CHECKLIST-0.2.2.md','REVIEW-FIX-0.2.3.md')){if(Test-Path ('docs\'+$taskDoc)){Copy-Item -LiteralPath ('docs\'+$taskDoc) -Destination $taskDist -Force}}
     $taskBuildInfo=Get-Content -LiteralPath (Join-Path $taskRoot 'build-info.json') -Raw|ConvertFrom-Json
     Copy-Item -LiteralPath (Join-Path $taskRoot 'build-info.json') -Destination (Join-Path $taskDist 'build-info.json') -Force
-    $taskManifest = [ordered]@{buildId=$taskBuildInfo.buildId;version=$taskVersion;featureRevision=$taskVersionInfo.featureRevision;chatPipelineFix=$taskVersionInfo.chatPipelineFix;builtUtc=[DateTime]::UtcNow.ToString('o');gamePath=$GamePath;compilerPath=$Compiler;compilerSha256=(Get-FileHash -LiteralPath $Compiler).Hash;viewerVersion='20.0';vpkeditRelease='v5.0.0.4';artifacts=@()}
+    $taskManifest = [ordered]@{buildId=$taskBuildInfo.buildId;version=$taskVersion;featureRevision=$taskVersionInfo.featureRevision;chatPipelineFix=$taskVersionInfo.chatPipelineFix;builtUtc=[DateTime]::UtcNow.ToString('o');gamePath=$GamePath;compilerPath=$Compiler;compilerSha256=(Get-FileHash -LiteralPath $Compiler).Hash;viewerVersion=(Get-Item -LiteralPath $taskViewer).VersionInfo.ProductVersion;vpkeditRelease='v5.0.0.4';artifacts=@()}
     $taskManifest.nativeBubbleTemplate=Get-Content -LiteralPath (Join-Path $taskRoot 'artifacts/native-bubble-provenance.json') -Raw -Encoding UTF8|ConvertFrom-Json
     $taskManifest.artifacts=@(Get-ChildItem -LiteralPath $taskDist -Recurse -File | Where-Object Name -ne 'build-manifest.json' | ForEach-Object {[ordered]@{file=$_.FullName.Substring($taskDist.Length+1).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})
     $taskManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskDist 'build-manifest.json') -Encoding utf8
