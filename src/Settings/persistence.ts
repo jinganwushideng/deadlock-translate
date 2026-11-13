@@ -10,7 +10,7 @@ function setSaveStatus(text:string,error=false){putText($('autoSaveStatus'),text
 function readSettingsDraft(){
  const value:Record<string,any>={...current};
  for(const key of fields){const input=$<HTMLInputElement>(key);if(!input.checkValidity()){input.setAttribute('aria-invalid','true');throw new Error((input.labels?.[0]?.textContent||'设置项').trim().slice(0,60)+'填写不完整或超出范围');}
-  value[key]=key==='incomingThinking'||key==='outgoingThinking'?(input.value===''?null:input.value==='true'):input.type==='checkbox'?input.checked:typeof current[key]==='number'?Number(input.value):input.value;
+  value[key]=key==='incomingThinking'||key==='outgoingThinking'||key==='buildTextThinking'?(input.value===''?null:input.value==='true'):input.type==='checkbox'?input.checked:typeof current[key]==='number'?Number(input.value):input.value;
  }
  for(const [key,clear]of[['azureKey',clearAzure],['llmKey',clearLlm]]as const){const input=$<HTMLInputElement>(key);if(clear)value[key]='';else if(input.value.trim())value[key]=input.value.trim();else delete value[key];}
  value.quickMessages=quickMessages.map(q=>({...q}));return value;

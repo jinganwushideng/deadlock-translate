@@ -42,11 +42,20 @@ def patch_build_text_layout(xml, name):
         xml = xml[:start] + original + ('' if category or shop else output) + xml[end:]
     bridge = ('<HTML id="DltBuildBridge" class="DltBuildBridge" hittest="false" '
               'hittestchildren="false" acceptsinput="false" acceptsfocus="false" />')
+    def progress(prefix):
+        return (f'<Panel id="{prefix}Progress" class="DltBuildProgress" hittest="false" visible="false">'
+                '<Panel class="DltBuildProgressTrack"><Panel id="DltBuildProgressFill" class="DltBuildProgressFill" /></Panel>'
+                '<Label id="DltBuildProgressText" class="DltBuildProgressText" /></Panel>')
+    def actions(prefix, button, classes, event):
+        return ('<Panel class="DltBuildActions">'
+                f'<{button} id="{prefix}Translate" class="{classes}" text="翻译当前出装" {event}="DLTBuildTextAction(false);" />'
+                f'<{button} id="{prefix}Original" class="{classes}" text="显示原文" visible="false" {event}="DLTBuildTextAction(true);" />'
+                + progress(prefix) + '</Panel>')
     if name == 'citadel_ui_build_details':
         anchor = '<Panel id="BuildDetails_Overview">'
         if xml.count(anchor) != 1:
             raise ValueError('Build details controls changed')
-        xml = xml.replace(anchor, anchor + '<TextButton id="DltBuildTranslate" class="DltBuildTranslateButton" text="翻译配装" />' + bridge)
+        xml = xml.replace(anchor, anchor + actions('DltBuild', 'TextButton', 'Medium Fill DltBuildTranslateButton', 'onactivate') + bridge)
     elif shop:
         anchor = '<Panel id="SelectedBuildOuter" />'
         if xml.count(anchor) != 1:
@@ -55,7 +64,8 @@ def patch_build_text_layout(xml, name):
         controls = '<Panel id="ControlButtons">'
         if xml.count(controls) != 1:
             raise ValueError('Shop build controls changed')
-        xml = xml.replace(controls, controls + '<TextButton id="DltShopTranslate" class="DltBuildTranslateButton" text="翻译配装" />')
+        xml = xml.replace(controls, controls + actions('DltShop', 'CitadelButton',
+                          'BuildHeaderButton Medium Dark Fill DltBuildTranslateButton', 'onmouseactivate'))
     return xml
 
 

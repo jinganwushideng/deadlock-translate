@@ -7,6 +7,16 @@ namespace DeadlockTranslate;
 public record Settings {
     public string Mode { get; init; } = "hybrid";
     public string FastProvider { get; init; } = "bing";
+    public bool BuildTextAutoEnabled { get; init; }
+    public string BuildTextMode { get; init; } = "fast";
+    public string BuildTextTargetLanguage { get; init; } = "zh-Hans";
+    public string BuildTextCustomLanguage { get; init; } = "";
+    public string BuildTextCustomLanguageCode { get; init; } = "";
+    public string BuildTextFastProvider { get; init; } = "common";
+    public string BuildTextModel { get; init; } = "";
+    public bool? BuildTextThinking { get; init; }
+    public int BuildTextContextChars { get; init; } = 6000;
+    public int BuildTextMaxTokens { get; init; } = 8192;
     public string AzureRegion { get; init; } = "";
     public string LlmBaseUrl { get; init; } = "https://api.deepseek.com/v1";
     public string Model { get; init; } = "deepseek-chat";
@@ -174,6 +184,12 @@ public sealed class ConfigStore {
         foreach(var code in new[]{s.IncomingCustomLanguageCode,s.OutgoingCustomLanguageCode})
             if(code==null||code.Length>32||code.Any(char.IsControl))throw new ArgumentException("自定义语言代码格式无效");
         TranslationLanguages.Incoming(s);TranslationLanguages.Outgoing(s);
+        TranslationLanguages.Resolve(s.BuildTextTargetLanguage,s.BuildTextCustomLanguage,s.BuildTextCustomLanguageCode);
+        if(s.BuildTextMode is not ("fast" or "quality" or "hybrid") ||
+           s.BuildTextFastProvider is not ("common" or "bing" or "azure") ||
+           s.BuildTextModel==null || s.BuildTextModel.Length>150 || s.BuildTextModel.Any(char.IsControl) ||
+           s.BuildTextContextChars is <1000 or >12000 || !LlmRequestOptions.ValidBudget(s.BuildTextMaxTokens))
+            throw new ArgumentException("出装翻译配置无效。");
         if (!new[]{"fast","quality","hybrid"}.Contains(s.Mode) || !new[]{"bing","azure"}.Contains(s.FastProvider)) throw new ArgumentException("无效的翻译模式或服务商");
         if (s.FastTimeoutSeconds is < 2 or > 15 || s.LlmTimeoutSeconds is < 5 or > 90 || s.LlmConcurrency is < 1 or > 8 || s.FastConcurrency is <1 or >8 || s.OutgoingConcurrency is <1 or >8 || s.OutgoingQueueLimit is <3 or >32) throw new ArgumentException("超时、并发数或队列容量超出范围");
         if (s.FontSize is < 12 or > 24 || s.ScanIntervalMs is < 100 or > 1000) throw new ArgumentException("显示参数超出范围");

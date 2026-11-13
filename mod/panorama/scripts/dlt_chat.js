@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.3-e8ce9119755b';
+var BUILD_ID = '0.7.3-e9919e1e99c9';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -1756,6 +1756,28 @@ var DLTChatInputFocused = function () {};
             if ((entry.sample === 1 || nudgeState > 0 && nudgeState < 3 && entry.sample < 4) && !has(entry.view.row, 'Expired')) { entry.sample++; entry.due = Date.now() + (entry.sample === 2 ? 800 : 400); state.nativeChecks.push(entry); }
         }
     }
+    var pendingHistoryScroll = null;
+    function revealLatestTranslation(row, label) {
+        if (!inputOpen()) return;
+        var history = state.chats.find(function (panel) { return valid(panel) && inside(row, panel); });
+        if (!history) return;
+        var tail = row;
+        while (valid(tail.GetParent()) && tail.GetParent() !== history) tail = tail.GetParent();
+        if (tail !== child(history, count(history) - 1)) return;
+        var queued = pendingHistoryScroll;
+        pendingHistoryScroll = { row: row, label: label, history: history, tail: tail, session: state.session };
+        if (queued) return;
+        $.Schedule(0.03, function () {
+            var target = pendingHistoryScroll; pendingHistoryScroll = null;
+            if (!target || target.session !== state.session || !inputOpen() ||
+                !valid(target.label) || !valid(target.history) || !inside(target.label, target.row) ||
+                child(target.history, count(target.history) - 1) !== target.tail) return;
+            try {
+                if (typeof target.label.ScrollParentToMakePanelFit === 'function') target.label.ScrollParentToMakePanelFit(0, true);
+                else if (typeof target.history.ScrollToBottom === 'function') target.history.ScrollToBottom();
+            } catch (_) {}
+        });
+    }
     function renderOne(record) {
         record.renderQueued = false;
         if (!state.config.enabled) return;
@@ -1798,7 +1820,10 @@ var DLTChatInputFocused = function () {};
                 label.html = false; label.hittest = false; row.__dltLabel = label;
                 // Visuals live in CSS so history and HUD share the game palette.
             }
-            updateLabel(label, nativeLabelText(record)); label.visible = true; label.style.opacity = String(appearance().opacity / 100);
+            var translated = nativeLabelText(record);
+            var layoutChanged = text(label) !== translated || label.visible === false;
+            updateLabel(label, translated); label.visible = true; label.style.opacity = String(appearance().opacity / 100);
+            if (layoutChanged && view.kind === 'regular') revealLatestTranslation(row, label);
         }
         state.metrics.rendered++;
     }
@@ -1851,9 +1876,7 @@ var DLTChatInputFocused = function () {};
         }
         if (payload.config) {
             state.config = payload.config;
-            if (typeof payload.buildTextRevision === 'string') {
-                ROOT.__dltBuildTextConfig = { revision: payload.buildTextRevision, enabled: state.config.enabled !== false };
-            }
+            if (payload.buildTextConfig) ROOT.__dltBuildTextConfig = payload.buildTextConfig;
             ROOT.__dltSettingsBackgroundMode = state.config.settingsBackgroundMode || 'static';
             if (typeof state.config.fontSize !== 'number' || !isFinite(state.config.fontSize) || state.config.fontSize < 12 || state.config.fontSize > 24) state.config.fontSize = 17;
             syncOwnDisplay(); maintainFeed();
@@ -2024,6 +2047,13 @@ var DLTChatInputFocused = function () {};
             chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingPartAcks: state.outgoingPartAcks.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),
             outgoingStatus: state.statusSupported ? state.outgoingStatus.slice(0, 24) : undefined, outgoingRefused: state.outgoingRefused.slice(0, 12), serverId: state.serverId || '', logs: state.diagSupported || !state.serverId ? state.logs.slice(0, 8) : [] };
+        var buildText = ROOT.__dltBuildText;
+        if (buildText && Array.isArray(buildText.controls) && Array.isArray(buildText.readers)) payload.buildText = {
+            controls: buildText.controls.length, readers: buildText.readers.length,
+            clicks: buildText.clicks || 0, enabled: buildText.enabled, error: !!buildText.error,
+            total: buildText.job ? buildText.job.total : 0, done: buildText.job ? buildText.job.done : 0,
+            failed: buildText.job ? buildText.job.failed : 0, pending: !!(buildText.job && buildText.job.pending)
+        };
         if (editorCommand) {
             // Reuse the already initialised browser/HTTPS channel. Editor text is
             // isolated from incoming/outgoing chat and is never a translation job.

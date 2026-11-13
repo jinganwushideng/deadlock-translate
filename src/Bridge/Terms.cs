@@ -12,12 +12,14 @@ public sealed class Terms {
     private sealed class Snapshot {
         public readonly Term[] Items;
         public readonly int Revision;
+        public readonly string Fingerprint;
         public readonly Dictionary<string,Term> Exact;
         public readonly OutgoingTerm[] Outgoing;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string,Regex> patterns=new(StringComparer.OrdinalIgnoreCase);
         public Snapshot(Term[] items,int revision=0){
             Revision=revision;
             Items=items.ToArray();Exact=Items.ToDictionary(t=>t.Source,StringComparer.OrdinalIgnoreCase);
+            Fingerprint=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(Items)));
             Outgoing=Items.Where(t=>t.Kind=="name"&&t.English.Length>0)
                 .SelectMany(t=>new[]{new OutgoingTerm(t.Target,t.English,t.Ambiguous),new OutgoingTerm(t.Source,t.English,t.Ambiguous)})
                 .Where(t=>t.Chinese.Any(IsHan)).GroupBy(t=>t.Chinese,StringComparer.Ordinal)
@@ -31,6 +33,7 @@ public sealed class Terms {
     private Snapshot current;
     private readonly object gate = new();
     public int Revision => Volatile.Read(ref current).Revision;
+    internal string Fingerprint => Volatile.Read(ref current).Fingerprint;
     public object Preview(TermPreviewInput input,Settings settings) {
         if(input.Text==null||input.Text.Length is <1 or >1024||input.Direction is not ("incoming" or "outgoing")||input.Provider is not ("fast" or "quality")||input.NameStyle is not ("current" or "legacy"))throw new ArgumentException("请输入最多 1024 字的测试文本并选择有效方向、引擎与译名");
         var outgoing=input.Direction=="outgoing";

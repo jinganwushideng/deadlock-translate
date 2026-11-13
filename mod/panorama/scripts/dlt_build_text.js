@@ -1,235 +1,291 @@
+function DLTBuildTextAction(showOriginal) {
+    for (var panel = $.GetContextPanel(); panel; panel = panel.GetParent()) {
+        if (panel.__dltBuildTextAction) {
+            panel.__dltBuildTextAction(showOriginal);
+            return;
+        }
+    }
+}
+
 (function (root) {
     'use strict';
-    $.Schedule(0, function () { initialize(root); });
+    $.Schedule(0, initialize);
+    function initialize() {
+        if (!root || !root.IsValid()) return;
+        var button = root.FindChildTraverse('DltBuildTranslate');
+        var shop = !button && root.FindChildTraverse('DltShopBridge');
+        var toggle = button || (shop && root.FindChildTraverse('DltShopTranslate'));
+        var category = !button && !shop && root.FindChildTraverse('BuildCategoryName');
+        var prefix = category ? 'DltCategory' : 'DltBuild';
+        var bridge = shop || (button && root.FindChildTraverse('DltBuildBridge'));
+        var selected = shop && root.FindChildTraverse('SelectedBuildOuter');
+        var originals = shop ? [] : [root.FindChildTraverse(button ? 'DltBuildTitle' : category ? 'BuildCategoryName' : 'ModName'),
+            root.FindChildTraverse(prefix + 'Note')];
+        var outputs = [root.FindChildTraverse(prefix + 'TitleTranslation'), root.FindChildTraverse(prefix + 'NoteTranslation')];
+        if ((toggle && !bridge) || originals.some(function (label) { return !label; }) ||
+            (!shop && !category && outputs.some(function (label) { return !label; }))) return;
 
-function initialize(root) {
-    'use strict';
-    if (!root || !root.IsValid()) return;
-    var button = root.FindChildTraverse('DltBuildTranslate');
-    var shop = !button && root.FindChildTraverse('DltShopBridge');
-    var toggle = button || (shop && root.FindChildTraverse('DltShopTranslate'));
-    var category = !button && !shop && root.FindChildTraverse('BuildCategoryName');
-    var prefix = category ? 'DltCategory' : 'DltBuild';
-    var bridge = shop || (button && root.FindChildTraverse('DltBuildBridge'));
-    var selected = shop && root.FindChildTraverse('SelectedBuildOuter');
-    var originals = shop ? [] : [root.FindChildTraverse(button ? 'DltBuildTitle' : category ? 'BuildCategoryName' : 'ModName'),
-        root.FindChildTraverse(prefix + 'Note')];
-    var outputs = [root.FindChildTraverse(prefix + 'TitleTranslation'), root.FindChildTraverse(prefix + 'NoteTranslation')];
-    if ((button && !bridge) || originals.some(function (label) { return !label; }) ||
-        (!shop && !category && outputs.some(function (label) { return !label; }))) return;
-
-    var scene = root;
-    while (scene.GetParent()) scene = scene.GetParent();
-    var state = scene.__dltBuildText;
-    if (!state) {
-        state = { owner: null, enabled: false, cache: Object.create(null), order: [],
-            queue: [], pending: null, retry: Object.create(null), retryOrder: [], seq: 0, revision: '' };
-        scene.__dltBuildText = state;
-    }
-    var eventTitle = '';
-    if (bridge) ['HTMLChangedTitle', 'HTMLTitle'].forEach(function (name) {
-        try { $.RegisterEventHandler(name, bridge, function () {
-            for (var i = 0; i < arguments.length; i++) {
-                if (typeof arguments[i] === 'string' && arguments[i].indexOf('DLTBUILD:') === 0) eventTitle = arguments[i];
-            }
-        }); } catch (_) {}
-    });
-    var shown = '', displayed = null;
-
-    function resetRevision(revision) {
-        state.revision = revision;
-        state.cache = Object.create(null);
-        state.order = [];
-        state.queue = [];
-        state.pending = null;
-        state.retry = Object.create(null);
-        state.retryOrder = [];
-    }
-    function syncRevision() {
-        var config = scene.__dltBuildTextConfig;
-        if (config && config.revision !== state.revision) resetRevision(config.revision);
-    }
-    function fail(job, now) {
-        if (!state.retry[job.key]) {
-            if (state.retryOrder.length >= 256) delete state.retry[state.retryOrder.shift()];
-            state.retryOrder.push(job.key);
+        var scene = root;
+        while (scene.GetParent()) scene = scene.GetParent();
+        var state = scene.__dltBuildText;
+        if (!state) {
+            state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
+                revision: '', seq: 0, job: null, signature: null };
+            scene.__dltBuildText = state;
         }
-        var previous = state.retry[job.key];
-        state.retry[job.key] = { count: previous ? previous.count + 1 : 1, after: now + 4000 };
-        state.pending = null;
-    }
-
-    function pump() {
-        var now = Date.now();
-        var job = state.pending;
-        if (job) {
+        var eventTitle = '';
+        if (bridge) ['HTMLChangedTitle', 'HTMLTitle'].forEach(function (name) {
+            try { $.RegisterEventHandler(name, bridge, function () {
+                for (var i = 0; i < arguments.length; i++) {
+                    if (typeof arguments[i] === 'string' && arguments[i].indexOf('DLTBUILD:') === 0) eventTitle = arguments[i];
+                }
+            }); } catch (_) {}
+        });
+        var applied = [null, null];
+        function isVisible() {
+            for (var panel = root; panel; panel = panel.GetParent()) {
+                if (panel.visible === false || panel.style.visibility === 'collapse' ||
+                    panel.style.visibility === 'hidden') return false;
+            }
+            return true;
+        }
+        function read(index) {
+            var label = originals[index];
+            if (!label || !label.IsValid()) return '';
+            var text = String(label.text || '');
+            var last = applied[index];
+            if (last && last.panel === label && last.translation === text) text = last.source;
+            text = text.trim();
+            return text.length <= 6000 && !/^[#{]/.test(text) && /[\p{L}]/u.test(text) ? text : '';
+        }
+        function render(texts, values) {
+            for (var i = 0; i < originals.length; i++) {
+                var label = originals[i];
+                if (!label || !label.IsValid()) continue;
+                var translation = values && values[texts[i]] || '';
+                if (category || shop) {
+                    var last = applied[i];
+                    if (translation) {
+                        var originalHtml = last && last.panel === label ? last.html : label.html;
+                        label.html = false;
+                        if (label.text !== translation) label.text = translation;
+                        applied[i] = { panel: label, source: texts[i], translation: translation, html: originalHtml };
+                    } else if (last && last.panel === label) {
+                        if (typeof last.html === 'boolean') label.html = last.html;
+                        if (label.text === last.translation) label.text = last.source;
+                        applied[i] = null;
+                    }
+                } else {
+                    if (outputs[i].text !== translation) outputs[i].text = translation;
+                    outputs[i].visible = !!translation;
+                }
+            }
+        }
+        function readView() {
+            if (selected) {
+                var label = selected.FindChildTraverse('DltShopTitle');
+                if (label !== originals[0]) {
+                    render([], null);
+                    originals = label ? [label] : [];
+                }
+            }
+            var texts = [read(0), read(1)];
+            if (!toggle && !category && (!texts[1] || texts[0] === texts[1])) texts[0] = '';
+            return texts;
+        }
+        var view = { root: root, visible: isVisible, read: readView, render: render };
+        state.readers.push(view);
+        if (toggle) {
+            var original = root.FindChildTraverse(shop ? 'DltShopOriginal' : 'DltBuildOriginal');
+            var progress = root.FindChildTraverse(shop ? 'DltShopProgress' : 'DltBuildProgress');
+            var fill = progress.FindChildTraverse('DltBuildProgressFill');
+            var status = progress.FindChildTraverse('DltBuildProgressText');
+            var control = {
+                root: root, visible: isVisible, request: send, receive: receive,
+                cancel: function () { if (bridge.IsValid()) bridge.SetURL('about:blank'); },
+                status: function (job, online) {
+                    var running = job && (job.pending || job.queue.length);
+                    var label = job && job.failed && !running ? '重试翻译' : '翻译当前出装';
+                    if (toggle.text !== label) toggle.text = label;
+                    original.visible = state.enabled;
+                    original.text = running ? '取消翻译' : '显示原文';
+                    progress.visible = state.enabled;
+                    var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
+                    var width = percent + '%';
+                    if (fill.style.width !== width) fill.style.width = width;
+                    var caption = state.error ? '出装界面读取异常，请重新打开商店' :
+                        !online ? '后台翻译已停用' : !job ? '正在读取出装' : !job.total ?
+                        '未读到出装文本' : running ?
+                        (job.refining ? '精翻 ' : '翻译 ') + job.done + '/' + job.total :
+                        job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' : '已翻译 ' + job.done + '/' + job.total;
+                    if (status.text !== caption) status.text = caption;
+                }
+            };
+            state.controls.push(control);
+            root.__dltBuildTextAction = function (showOriginal) {
+                var config = syncSettings();
+                restartJob();
+                state.clicks++;
+                state.error = false;
+                state.enabled = !showOriginal;
+                state.owner = control;
+                control.status(null, !config || config.enabled);
+                if (showOriginal) state.readers.forEach(function (item) {
+                    if (item.root.IsValid()) item.render([], null);
+                });
+            };
+        }
+        function send(job, batch, config) {
+            var id = ++state.seq;
+            job.pending = { id: id, batch: batch, deadline: Date.now() +
+                (job.refining || !config ? (config && config.qualityTimeout || 90) + 5 :
+                    Math.max(config.fastTimeout || 15, config.qualityTimeout || 90) + 5) * 1000 };
+            eventTitle = '';
+            try {
+                bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encodeURIComponent(JSON.stringify({
+                    id: id, texts: batch.texts, context: job.context, revision: state.revision, refine: job.refining
+                })));
+            } catch (_) { job.pending.deadline = 0; }
+        }
+        function receive() {
             try {
                 var reply = eventTitle || String(bridge.title || '');
                 if (reply.indexOf('DLTBUILD:') !== 0 && bridge.GetTitle) reply = String(bridge.GetTitle() || '');
-                if (reply.indexOf('DLTBUILD:') === 0) {
-                    var result = JSON.parse(reply.slice(9));
-                    if (result.id === job.id && result.error) {
-                        if (result.error === 'settings-changed' && typeof result.revision === 'string') {
-                            if (scene.__dltBuildTextConfig) scene.__dltBuildTextConfig.revision = result.revision;
-                            resetRevision(result.revision);
-                        } else fail(job, now);
-                    } else if (result.id === job.id && (!state.revision || result.revision === state.revision) &&
-                        Array.isArray(result.translations) && result.translations.length === 2 &&
-                        result.translations.every(function (value) { return typeof value === 'string'; })) {
-                        if (state.order.length >= 256) delete state.cache[state.order.shift()];
-                        state.order.push(job.key);
-                        state.cache[job.key] = result.translations;
-                        var title = JSON.parse(job.key)[0];
-                        if (title && result.translations[0]) {
-                            var titleKey = JSON.stringify([title, '']);
-                            if (titleKey !== job.key && !state.cache[titleKey]) {
-                                if (state.order.length >= 256) delete state.cache[state.order.shift()];
-                                state.order.push(titleKey);
-                                state.cache[titleKey] = [result.translations[0], ''];
-                            }
-                        }
-                        state.pending = null;
-                    }
-                }
+                if (reply.indexOf('DLTBUILD:') === 0) return JSON.parse(reply.slice(9));
             } catch (_) {}
-            if (state.pending && now >= job.deadline) fail(job, now);
+            return null;
         }
-        if (!state.enabled || state.pending || !state.queue.length) return;
-        job = state.queue.shift();
-        var fields = JSON.parse(job.key);
-        job.id = ++state.seq;
-        job.deadline = now + 18000;
-        state.pending = job;
-        eventTitle = '';
-        try {
-            bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' +
-                encodeURIComponent(JSON.stringify({ id: job.id, title: fields[0], note: fields[1], revision: state.revision })));
-        } catch (_) { fail(job, now); }
-    }
-    function request(key, priority) {
-        var failure = state.retry[key];
-        if (state.cache[key] || (state.pending && state.pending.key === key) ||
-            state.queue.some(function (job) { return job.key === key; }) ||
-            (failure && (failure.count >= 2 || failure.after > Date.now()))) return;
-        if (state.queue.length >= 48) state.queue.pop();
-        if (priority) state.queue.unshift({ key: key });
-        else state.queue.push({ key: key });
-    }
-    function isVisible() {
-        for (var panel = root; panel; panel = panel.GetParent()) {
-            if (panel.visible === false || panel.style.visibility === 'collapse' ||
-                panel.style.visibility === 'hidden') return false;
-        }
-        return true;
-    }
-
-    var applied = [null, null];
-    function originalText(index) {
-        var text = String(originals[index].text || '');
-        var last = applied[index];
-        return last && text === last.translation ? last.source : text;
-    }
-    function read(index, max) {
-        var text = originalText(index).trim();
-        return text.length <= max && !/^[#{]/.test(text) &&
-            /[A-Za-z]{2}/.test(text) && !/[\u3400-\u9fff]/.test(text) ? text : '';
-    }
-    function render(values) {
-        for (var i = 0; i < originals.length; i++) {
-            if (category || shop) {
-                var source = originalText(i);
-                var translation = values[i];
-                if (translation || applied[i]) originals[i].text = translation || source;
-                applied[i] = translation ? { source: source, translation: translation } : null;
-                continue;
+        function restartJob() {
+            if (state.job && state.job.pending && state.owner) {
+                try { state.owner.cancel(); } catch (_) {}
             }
-            outputs[i].text = values[i] || '';
-            outputs[i].visible = Boolean(values[i]);
+            state.job = null;
+            state.signature = null;
         }
-    }
-    var empty = [];
-    function updateView() {
-        if (shop && selected) {
-            var label = selected.FindChildTraverse('DltShopTitle');
-            if (label !== originals[0]) {
-                if (originals[0] && originals[0].IsValid()) render(empty);
-                originals = label ? [label] : [];
-                shown = '';
-                displayed = null;
+        function syncSettings() {
+            var config = scene.__dltBuildTextConfig;
+            if (!config) return null;
+            if (config.revision !== state.revision) { state.revision = config.revision; restartJob(); }
+            if (state.autoEnabled !== config.autoEnabled) {
+                state.autoEnabled = config.autoEnabled;
+                state.enabled = config.autoEnabled === true;
+                restartJob();
+            }
+            return config;
+        }
+        function attached(panel, parent) {
+            for (var p = panel; p; p = p.GetParent()) if (p === parent) return true;
+            return false;
+        }
+        function addBatches(queue, texts) {
+            var batch = [], chars = 0;
+            texts.forEach(function (text) {
+                if (batch.length && (batch.length === 12 || chars + text.length > 3500)) {
+                    queue.push({ texts: batch, attempts: 0, after: 0 }); batch = []; chars = 0;
+                }
+                batch.push(text); chars += text.length;
+            });
+            if (batch.length) queue.push({ texts: batch, attempts: 0, after: 0 });
+        }
+        function advance(job, config) {
+            var now = Date.now();
+            var pending = job.pending;
+            if (pending) {
+                var result = state.owner.receive();
+                if (result && result.id === pending.id) {
+                    job.pending = null;
+                    if (result.error === 'settings-changed') { restartJob(); return; }
+                    if (result.revision === state.revision && Array.isArray(result.translations) &&
+                        result.translations.length === pending.batch.texts.length) {
+                        pending.batch.texts.forEach(function (text, index) {
+                            job.values[text] = result.translations[index];
+                        });
+                        job.done += pending.batch.texts.length;
+                        if (result.refine && !job.refining) job.refine.push(pending.batch.texts);
+                    } else retry(job, pending.batch, now, result.error === 'busy');
+                } else if (now >= pending.deadline) {
+                    state.owner.cancel();
+                    job.pending = null;
+                    retry(job, pending.batch, now, false);
+                }
+            }
+            if (job.pending) return;
+            if (!job.queue.length && job.refine.length) {
+                job.refining = true;
+                job.done = 0;
+                job.total = job.refine.reduce(function (sum, batch) { return sum + batch.length; }, 0);
+                job.refine.forEach(function (batch) { addBatches(job.queue, batch); });
+                job.refine = [];
+            }
+            var next = job.queue.findIndex(function (batch) { return batch.after <= now; });
+            if (next >= 0) state.owner.request(job, job.queue.splice(next, 1)[0], config);
+        }
+        function retry(job, batch, now, busy) {
+            batch.attempts++;
+            if (batch.attempts <= (busy ? 3 : 1)) {
+                batch.after = now + (busy ? 1500 : 2500);
+                job.queue.push(batch);
+            } else job.failed += batch.texts.length;
+        }
+        function update() {
+            var config = syncSettings();
+            var online = !config || config.enabled;
+            if (!state.owner || !state.owner.root.IsValid() || !state.owner.visible()) {
+                var owner = state.controls.find(function (item) { return item.root.IsValid() && item.visible(); }) || null;
+                if (owner !== state.owner) { restartJob(); state.owner = owner; }
+            }
+            if (state.owner && state.owner.root === root) {
+                state.controls = state.controls.filter(function (item) { return item.root.IsValid(); });
+                state.readers = state.readers.filter(function (item) { return item.root.IsValid(); });
+                var views = state.readers.filter(function (item) {
+                    return item.visible() && !state.controls.some(function (control) {
+                        return control !== state.owner && attached(item.root, control.root) &&
+                            !attached(control.root, root) && !attached(root, control.root);
+                    });
+                });
+                var pairs = views.map(function (item) { return { view: item, texts: item.read() }; });
+                var active = state.enabled && online;
+                if (active) {
+                    var base = pairs.filter(function (entry) { return attached(entry.view.root, root); });
+                    var distinct = function (entries) {
+                        return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
+                    };
+                    var baseTexts = distinct(base), texts = distinct(pairs);
+                    var signature = JSON.stringify(baseTexts);
+                    if (signature !== state.signature) {
+                        restartJob();
+                        state.signature = signature;
+                        state.job = { context: baseTexts.join('\n').slice(0, config && config.contextChars || 6000),
+                            known: Object.create(null), values: Object.create(null), queue: [], pending: null,
+                            refine: [], refining: false, done: 0, total: 0, failed: 0 };
+                    }
+                    var job = state.job;
+                    var fresh = texts.filter(function (value) { return !job.known[value]; }).slice(0, 96 - Object.keys(job.known).length);
+                    fresh.forEach(function (value) { job.known[value] = true; });
+                    job.total += fresh.length;
+                    addBatches(job.queue, fresh);
+                    advance(job, config);
+                } else if (state.job) restartJob();
+                pairs.forEach(function (entry) { entry.view.render(entry.texts, active && state.job ? state.job.values : null); });
+                state.readers.forEach(function (item) { if (!item.visible()) item.render([], null); });
+                state.controls.forEach(function (item) { if (item.visible()) item.status(state.job, online); });
+            } else if (!state.owner) {
+                render([], null);
             }
         }
-        var config = scene.__dltBuildTextConfig;
-        var active = state.enabled && (!config || config.enabled) && isVisible() && originals.length > 0;
-        var key = '';
-        if (active) {
-            var title = read(0, 240), note = shop ? '' : read(1, 2000);
-            if (!button && !category && !shop && (!note || title === note)) title = '';
-            if (title || note) key = JSON.stringify([title, note]);
-        }
-        var values = (key && state.cache[key]) || empty;
-        if (shown !== key || displayed !== values) {
-            shown = key;
-            displayed = values;
-            render(values);
-        }
-        if (key && values === empty) request(key, !category);
-        if (toggle) {
-            var label = !state.enabled ? '翻译配装' : config && !config.enabled ? '后台翻译已停用 · 关闭' :
-                key && values === empty ? (state.retry[key] ? '翻译暂不可用 · 关闭' : '翻译中 · 关闭') : '关闭翻译';
-            if (toggle.text !== label) toggle.text = label;
-        }
-    }
-    if (toggle) toggle.SetPanelEvent('onactivate', function () {
-        var turningOff = state.enabled;
-        syncRevision();
-        var cancel = state.pending && state.ownerCancel;
-        state.pending = null;
-        if (cancel) cancel();
-        if (state.owner !== root) {
-            assignOwner();
-        }
-        if (!turningOff && !state.revision) resetRevision('');
-        state.retry = Object.create(null);
-        state.retryOrder = [];
-        state.enabled = !turningOff;
-        state.queue = [];
-        updateView();
-        pump();
-    });
-
-    function assignOwner() {
-        state.owner = root;
-        state.ownerVisible = isVisible;
-        state.ownerCancel = function () {
-            try { if (bridge.IsValid()) bridge.SetURL('about:blank'); } catch (_) {}
-        };
-    }
-    function tick() {
-        if (!root.IsValid()) {
-            if (state.owner === root) {
-                state.owner = null;
-                state.ownerCancel = null;
-                state.pending = null;
-                state.queue = [];
+        function tick() {
+            if (!root.IsValid()) return;
+            try {
+                update();
+                state.error = false;
+            } catch (_) {
+                state.error = true;
+                state.controls.forEach(function (item) {
+                    try { if (item.root.IsValid() && item.visible()) item.status(state.job, true); } catch (_) {}
+                });
             }
-            return;
+            $.Schedule(toggle ? 0.15 : 0.4, tick);
         }
-        var cancel = state.pending && state.ownerCancel;
-        syncRevision();
-        if (cancel && !state.pending) cancel();
-        if (bridge && isVisible() &&
-            (!state.owner || !state.owner.IsValid() || !state.ownerVisible())) {
-            if (state.pending) {
-                state.queue.unshift({ key: state.pending.key });
-                state.ownerCancel();
-            }
-            state.pending = null;
-            assignOwner();
-        }
-        updateView();
-        if (state.owner === root && isVisible()) pump();
-        $.Schedule(0.1, tick);
+        $.Schedule(0, tick);
     }
-    $.Schedule(0, tick);
-}
 })($.GetContextPanel());

@@ -97,6 +97,7 @@ using var hotkey=args.Contains("--no-hotkey")?null:new NativeHotkey(config,audit
 await using var app=builder.Build();
 using var releaseUpdates=new ReleaseUpdates(dataDir,BuildInfo.Version);
 using var buildTextSlot=new SemaphoreSlim(1);
+var buildTextCache=new BuildTextCache(dataDir);
 var maintenance=new MaintenanceInspection(dataDir,AppContext.BaseDirectory,port);
 if(!noShell)app.Lifetime.ApplicationStarted.Register(()=>_ = releaseUpdates.RunDaily(app.Lifetime.ApplicationStopping));
 await using var llmKeepAlive=new LlmKeepAlive(config,translators,()=>engine.Connected,audit,app.Lifetime.ApplicationStopping);
@@ -111,13 +112,14 @@ using var connectionWatch=new Timer(_=>{if(!engine.Connected&&Interlocked.Exchan
 config.Changed+=()=>audit.Record("backend",LogKind.ConfigSaved,new(Binding:config.Current.OutgoingHotkey));
 var bridgeTraffic=new System.Collections.Concurrent.ConcurrentDictionary<string,int>();
 EvidenceSnapshot? gameEvidence=null;string? clientVersion=null;string? clientBuildId=null;int previewClientReady=0;
+BuildTextEvidence? buildTextEvidence=null;
 var gamePrivileges=new GamePrivilegeDiagnostics(expectedExecutable:gameExecutable);
 int settingsBackgroundClientReady=0;
 bool storeHasLlm()=>config.Secret("llm").Length>0;
 object Diagnostics(bool force=false){
     var certificate=certificateDiagnostics.Inspect(force);
     var phase=certificate.State is "unavailable" or "expired" or "not-yet-valid"?"https-unavailable":certificate.State=="untrusted"?"certificate-untrusted":engine.Connected?"connected":bridgeTraffic.GetValueOrDefault("gamePost")>0?"game-stale":bridgeTraffic.GetValueOrDefault("bridgePage")>0?"bridge-no-reply":"waiting-for-game";
-    return new{settingsBackgroundNativeAvailable=engine.Connected&&Volatile.Read(ref settingsBackgroundClientReady)==1&&Volatile.Read(ref clientBuildId)==BuildInfo.Id,version=BuildInfo.Version,buildId=BuildInfo.Id,clientBuildId=Volatile.Read(ref clientBuildId),featureRevision="optional-llm-keepalive-priority-warmup-installer-first-open-community",backendElevated,adminCompatible,clientVersion=Volatile.Read(ref clientVersion),port,httpsPort,certificate,phase,llmRequests=translators.Telemetry.Recent,providers=translators.Issues,configuredLlm=storeHasLlm(),gamePrivileges=gamePrivileges.Inspect(force),sending=outgoing.Diagnostics,receiving=engine.Scheduling,keepAlive=llmKeepAlive.Status,hotkeyAvailable=hotkey?.Available??false,bridgeTraffic,metrics=Volatile.Read(ref gameEvidence)?.Metrics,hotkey=hotkey?.Status,logs=audit.Status};
+    return new{settingsBackgroundNativeAvailable=engine.Connected&&Volatile.Read(ref settingsBackgroundClientReady)==1&&Volatile.Read(ref clientBuildId)==BuildInfo.Id,version=BuildInfo.Version,buildId=BuildInfo.Id,clientBuildId=Volatile.Read(ref clientBuildId),featureRevision="optional-llm-keepalive-priority-warmup-installer-first-open-community",backendElevated,adminCompatible,clientVersion=Volatile.Read(ref clientVersion),port,httpsPort,certificate,phase,llmRequests=translators.Telemetry.Recent,providers=translators.Issues,configuredLlm=storeHasLlm(),gamePrivileges=gamePrivileges.Inspect(force),sending=outgoing.Diagnostics,receiving=engine.Scheduling,keepAlive=llmKeepAlive.Status,hotkeyAvailable=hotkey?.Available??false,bridgeTraffic,metrics=Volatile.Read(ref gameEvidence)?.Metrics,hotkey=hotkey?.Status,buildText=Volatile.Read(ref buildTextEvidence),logs=audit.Status};
 }
 string Origin(HttpContext? ctx=null)=>ctx==null?$"http://localhost:{port}":(ctx.Request.IsHttps?"https://":"http://")+ctx.Request.Host.ToUriComponent();
 string SessionCookie(HttpContext ctx)=>ctx.Request.IsHttps?"dlt-session-tls":"dlt-session";
@@ -138,6 +140,8 @@ app.Use(async(ctx,next)=>{
     var path=ctx.Request.Path.Value ?? "/";
     var trafficKind=path.StartsWith("/in-game/")?"inGamePage":path=="/app.js"?"settingsScript":path=="/"&&ctx.Request.Query["inGame"]=="1"?"inGameDocument":path.StartsWith("/bridge/")?"bridgePage":path.StartsWith("/menu/")?"menuPage":path.StartsWith("/game/")?"gamePost":path.StartsWith("/control/")&&path.EndsWith("/settings")?"openSettings":null;
     if(trafficKind!=null)bridgeTraffic.AddOrUpdate(trafficKind,1,(_,count)=>count+1);
+    if(path.StartsWith("/build-text/",StringComparison.Ordinal))
+        bridgeTraffic.AddOrUpdate(ctx.Request.Method=="POST"?"buildTextPost":"buildTextPage",1,(_,count)=>count+1);
     if(path.StartsWith("/bridge/",StringComparison.Ordinal) || path.StartsWith("/menu/",StringComparison.Ordinal))
         ctx.Response.Headers["Content-Security-Policy"]="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'";
     if(path.StartsWith("/api/",StringComparison.Ordinal)) {
@@ -302,6 +306,7 @@ app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
     if(req.ClientVersion!=null&&(req.ClientVersion.Length>32||!req.ClientVersion.All(c=>char.IsAsciiDigit(c)||c=='.')))throw new ArgumentException("客户端版本字段过长");
     if(req.ClientBuildId!=null&&(req.ClientBuildId.Length>40||req.ClientBuildId.Any(c=>!char.IsAsciiLetterOrDigit(c)&&c!='.'&&c!='-')))throw new ArgumentException("无效的构建编号");
     var result=engine.Exchange(req.Session,req.Messages??[],req.Poll??[]);
+    if(req.BuildText!=null)Volatile.Write(ref buildTextEvidence,req.BuildText);
     if(!engine.IsCurrentSession(req.Session))return Results.Conflict(new{error="stale-session"});
     if(req.OpenSettings && Environment.TickCount64-lastOpen>2000) {lastOpen=Environment.TickCount64;OpenSettings();}
     if(req.Metrics!=null) {
@@ -323,7 +328,9 @@ app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
     if(staleServer&&req.Outgoing is {Length:>0})audit.Record("sending",LogKind.SendFailed,new(Reason:LogReason.ServerChanged,Stage:"rejected",Count:req.Outgoing.Length));
     var nativeEditorResult=req.NativeEditor==null?null:nativeEditor.Dispatch(req.NativeEditor,!staleServer&&req.ClientBuildId==BuildInfo.Id&&req.SettingsOpen==true);
     var outgoingResults=outgoing.Exchange(req.Session,staleServer?[]:req.Outgoing??[],staleServer?[]:req.OutgoingSent??[],staleServer?[]:req.OutgoingWaiting??[],staleServer?[]:req.OutgoingRefused??[],staleServer?[]:req.OutgoingPartAcks??[],staleServer?[]:hotkey?.TakeQuickMessages(req.Session)??[],req.MultipartSupported,staleServer?[]:req.OutgoingStatus??[]);
-    return Results.Json(new{seq=req.Seq,session=req.Session,serverId=audit.RunId,buildTextRevision=config.Snapshot().Revision,logAck,nativeEditor=nativeEditorResult,displayPreview=displayPreview.Snapshot(),results=result,outgoing=outgoingResults,translationProgress=translators.Telemetry.Summary,hotkey=hotkey?.PendingSequence(req.ServerId==audit.RunId?req.HotkeySeen:0)??0,hotkeyAvailable=hotkey?.Available??false,capabilities=new[]{"outgoing-status-v1","native-settings-editor","multipart-send","preset-messages","outgoing-display-mode","incoming-scope-all-players","outgoing-party-channel","multilingual-targets","diagnostic-logs","custom-hotkey"},config=new{quickMessagesEnabled=config.Current.OutgoingEnabled&&config.Current.QuickMessages.Any(q=>q.Enabled)&&req.ClientBuildId==BuildInfo.Id,config.Current.Enabled,config.Current.TranslateOwn,config.Current.IncomingScope,config.Current.IncomingShowOwnTranslations,config.Current.IncomingDisplayMode,config.Current.IncomingFeedSeconds,config.Current.IncomingFeedLines,config.Current.IncomingShowHeroName,config.Current.IncomingShowAccountName,config.Current.IncomingHeroNamePosition,config.Current.IncomingOpacity,config.Current.IncomingFeedWidth,config.Current.IncomingFeedPosition,config.Current.IncomingFeedOffsetX,config.Current.IncomingFeedOffsetY,config.Current.FontSize,config.Current.SettingsBackgroundMode,config.Current.Transport,config.Current.ScanIntervalMs,config.Current.OutgoingEnabled,config.Current.OutgoingHotkey,outgoingHotkeyLabel=HotkeyChord.Parse(config.Current.OutgoingHotkey).Label,config.Current.OutgoingTimeoutSeconds,config.Current.OutgoingDisplayMode,config.Current.OutgoingSeparateBilingual,config.Current.OutgoingSplitLong,config.Current.OutgoingQueueLimit,config.Current.OutgoingUseContext,config.Current.IncomingTargetLanguage,config.Current.IncomingCustomLanguage,config.Current.IncomingCustomLanguageCode,config.Current.OutgoingTargetLanguage,config.Current.OutgoingCustomLanguage,config.Current.OutgoingCustomLanguageCode},configuredLlm=config.Secret("llm").Length>0});
+    var (buildSettings,buildRevision)=config.Snapshot();
+    var buildTextConfig=new{revision=buildRevision+":"+terms.Revision,enabled=buildSettings.Enabled,autoEnabled=buildSettings.BuildTextAutoEnabled,fastTimeout=buildSettings.FastTimeoutSeconds,qualityTimeout=buildSettings.LlmTimeoutSeconds,contextChars=buildSettings.BuildTextContextChars};
+    return Results.Json(new{seq=req.Seq,session=req.Session,serverId=audit.RunId,buildTextConfig,logAck,nativeEditor=nativeEditorResult,displayPreview=displayPreview.Snapshot(),results=result,outgoing=outgoingResults,translationProgress=translators.Telemetry.Summary,hotkey=hotkey?.PendingSequence(req.ServerId==audit.RunId?req.HotkeySeen:0)??0,hotkeyAvailable=hotkey?.Available??false,capabilities=new[]{"outgoing-status-v1","native-settings-editor","multipart-send","preset-messages","outgoing-display-mode","incoming-scope-all-players","outgoing-party-channel","multilingual-targets","diagnostic-logs","custom-hotkey"},config=new{quickMessagesEnabled=config.Current.OutgoingEnabled&&config.Current.QuickMessages.Any(q=>q.Enabled)&&req.ClientBuildId==BuildInfo.Id,config.Current.Enabled,config.Current.TranslateOwn,config.Current.IncomingScope,config.Current.IncomingShowOwnTranslations,config.Current.IncomingDisplayMode,config.Current.IncomingFeedSeconds,config.Current.IncomingFeedLines,config.Current.IncomingShowHeroName,config.Current.IncomingShowAccountName,config.Current.IncomingHeroNamePosition,config.Current.IncomingOpacity,config.Current.IncomingFeedWidth,config.Current.IncomingFeedPosition,config.Current.IncomingFeedOffsetX,config.Current.IncomingFeedOffsetY,config.Current.FontSize,config.Current.SettingsBackgroundMode,config.Current.Transport,config.Current.ScanIntervalMs,config.Current.OutgoingEnabled,config.Current.OutgoingHotkey,outgoingHotkeyLabel=HotkeyChord.Parse(config.Current.OutgoingHotkey).Label,config.Current.OutgoingTimeoutSeconds,config.Current.OutgoingDisplayMode,config.Current.OutgoingSeparateBilingual,config.Current.OutgoingSplitLong,config.Current.OutgoingQueueLimit,config.Current.OutgoingUseContext,config.Current.IncomingTargetLanguage,config.Current.IncomingCustomLanguage,config.Current.IncomingCustomLanguageCode,config.Current.OutgoingTargetLanguage,config.Current.OutgoingCustomLanguage,config.Current.OutgoingCustomLanguageCode},configuredLlm=config.Secret("llm").Length>0});
     }
 });
 // Separate from the chat queue so a build description cannot delay chat polling.
@@ -356,32 +363,59 @@ if(location.hash)translate();
 });
 app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpContext ctx)=>{
     if(!Same(key,pairing)||ctx.Request.Headers.Origin!=Origin(ctx))return Results.Unauthorized();
-    if(input.Title is null || input.Note is null || input.Title.Length>240 || input.Note.Length>2000)
+    if(input.Texts is not {Length: >0 and <=12} || input.Texts.Any(text=>text==null||text.Length>6000)
+        || input.Texts.Sum(text=>text.Length)>6000 || input.Context?.Length>12000)
         return Results.BadRequest();
-    var (settings,revision)=config.Snapshot();
+    var (settings,configRevision)=config.Snapshot();
+    var termRevision=terms.Revision;
+    var glossary=terms.Fingerprint;
+    var revision=configRevision+":"+termRevision;
     IResult ReplyError(string error)=>Results.Json(new{id=input.Id,revision,error});
     if(!settings.Enabled)return ReplyError("disabled");
     if(!string.IsNullOrEmpty(input.Revision)&&input.Revision!=revision)return ReplyError("settings-changed");
     if(!buildTextSlot.Wait(0))return ReplyError("busy");
-    using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
-    timeout.CancelAfter(TimeSpan.FromSeconds(settings.FastTimeoutSeconds));
-    async Task<string> TranslateField(string text){
-        if(string.IsNullOrWhiteSpace(text))return "";
-        var translated=await translators.Fast(text,settings,timeout.Token,background:true);
-        if(string.IsNullOrWhiteSpace(translated))throw new InvalidOperationException("Empty translation");
-        return string.Equals(text,translated,StringComparison.Ordinal)? "":translated;
-    }
     try{
-        var title=await TranslateField(input.Title);
-        var note=await TranslateField(input.Note);
-        return config.Snapshot().Revision==revision
-            ? Results.Json(new{id=input.Id,revision,translations=new[]{title,note}})
-            : Results.Json(new{id=input.Id,revision=config.Snapshot().Revision,error="settings-changed"});
-    }catch(FastProviderBusyException){
-        return ReplyError("busy");
-    }catch(Exception ex) when(ex is not OutOfMemoryException){
-        return ReplyError("unavailable");
-    }finally{buildTextSlot.Release();}
+        var profile=BuildTextProfile.Resolve(settings);
+        var quality=profile.Mode=="quality"||(profile.Mode=="hybrid"&&input.Refine);
+        var context=input.Context??"";
+        if(context.Length>settings.BuildTextContextChars)context=context[..settings.BuildTextContextChars];
+        var contextKey=quality||profile.Mode=="hybrid"
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context))) : null;
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+        timeout.CancelAfter(TimeSpan.FromSeconds(quality?settings.LlmTimeoutSeconds:settings.FastTimeoutSeconds));
+        var values=new Dictionary<string,string>(StringComparer.Ordinal);
+        var misses=new List<(string Text,string Key)>();
+        var needsRefinement=false;
+        foreach(var text in input.Texts.Select(text=>text.Trim()).Distinct(StringComparer.Ordinal)){
+            if(!text.Any(char.IsLetter)){values[text]="";continue;}
+            var cacheKey=BuildTextCache.Key(text,profile,quality,glossary,contextKey);
+            if(profile.Mode=="hybrid"&&!quality){
+                var refinedKey=BuildTextCache.Key(text,profile,true,glossary,contextKey);
+                if(buildTextCache.TryGet(refinedKey,out var refined)){values[text]=refined!;continue;}
+                needsRefinement=true;
+            }
+            if(buildTextCache.TryGet(cacheKey,out var cached))values[text]=cached!;
+            else misses.Add((text,cacheKey));
+        }
+        if(misses.Count!=0){
+            var source=misses.Select(item=>item.Text).ToArray();
+            var results=quality?await translators.TranslateBuildQuality(source,context,profile,timeout.Token)
+                :await translators.TranslateBuildFast(source,profile.Fast,timeout.Token);
+            var latest=config.Snapshot().Revision+":"+terms.Revision;
+            if(latest!=revision)return Results.Json(new{id=input.Id,revision=latest,error="settings-changed"});
+            if(results.Length!=source.Length||results.Any(string.IsNullOrWhiteSpace))return ReplyError("unavailable");
+            for(var i=0;i<results.Length;i++){
+                var value=results[i].Trim();
+                values[source[i]]=value==source[i]?"":value;
+                buildTextCache.Store(misses[i].Key,values[source[i]]);
+            }
+            buildTextCache.Flush();
+        }
+        return Results.Json(new{id=input.Id,revision,translations=input.Texts.Select(text=>values[text.Trim()]).ToArray(),
+            refine=needsRefinement&&config.Secret("llm").Length>0});
+    }catch(FastProviderBusyException){return ReplyError("busy");}
+    catch(Exception ex) when(ex is not OutOfMemoryException){return ReplyError("unavailable");}
+    finally{buildTextSlot.Release();}
 });
 app.MapGet("/bridge/{key}",(string key)=>{
     if(!Same(key,pairing)) return Results.NotFound();
@@ -450,10 +484,11 @@ try {
 }
 
 } catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
-public record BuildTextRequest(int Id,string Title,string Note,string? Revision);
+public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending);
+public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false);
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
 public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0,int HudContainers=0,int HudRebinds=0,int HudRendered=0,int HudRecovered=0,int HudHostRepairs=0,int HudHiddenRepairs=0,int HudBindings=0,int HudExpiredResults=0,int HudDeferredScans=0,int GameLogDrops=0,int HudWaits=0,int HudRetryRecovered=0,int HudNativeExpired=0,int HudPanelGone=0,int HudRetryDropped=0,int FeedRendered=0,int FeedExpired=0,int FeedDropped=0,PerformanceSample? Performance=null);
-public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null,string? ClientVersion=null,GameLogEvent[]? Logs=null,string? ServerId=null,bool? SettingsOpen=null,bool DisplayPreviewSupported=false,string? ClientBuildId=null,bool MultipartSupported=false,OutgoingPartAck[]? OutgoingPartAcks=null,string? ChatChannel=null,NativeEditorCommand? NativeEditor=null,OutgoingStatus[]? OutgoingStatus=null,bool SettingsBackgroundSupported=false);
+public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null,string? ClientVersion=null,GameLogEvent[]? Logs=null,string? ServerId=null,bool? SettingsOpen=null,bool DisplayPreviewSupported=false,string? ClientBuildId=null,bool MultipartSupported=false,OutgoingPartAck[]? OutgoingPartAcks=null,string? ChatChannel=null,NativeEditorCommand? NativeEditor=null,OutgoingStatus[]? OutgoingStatus=null,bool SettingsBackgroundSupported=false,BuildTextEvidence? BuildText=null);
 
 public record EvidenceSnapshot(DateTime At,Metrics Metrics);

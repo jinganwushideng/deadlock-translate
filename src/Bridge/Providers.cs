@@ -35,7 +35,8 @@ public sealed partial class Translators : ITranslator, IDisposable {
     internal async Task<string> Fast(string text, Settings config, CancellationToken ct, bool background) {
         var language=TranslationLanguages.Incoming(config);
         var exact = terms.Exact(text,config.BilingualNames,language.ChineseGlossary);
-        if(exact != null) return terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");
+        if(exact != null && (!background||language.ChineseGlossary||language.Id=="en"))
+            return terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");
         var protectedText = language.ChineseGlossary?terms.Protect(text,config.BilingualNames,true):terms.ProtectOutgoing(text);
         var target=TranslationLanguages.RequireServiceCode(language);
         using var admission=background ? fastSlots.TryEnterBackground() ?? throw new FastProviderBusyException()
@@ -45,15 +46,21 @@ public sealed partial class Translators : ITranslator, IDisposable {
         return terms.RenderChineseStyle(Terms.Restore(result, protectedText.Map),text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");
     }
     private async Task<string> Azure(string text, Settings config, CancellationToken ct,string target="zh-Hans") {
+        return (await AzureBatch([text],config,ct,target))[0];
+    }
+    private async Task<string[]> AzureBatch(string[] texts, Settings config, CancellationToken ct,string target) {
         var epoch=Interlocked.Read(ref qualityEpoch);var previous=providerIssues.GetValueOrDefault("azure");
         var key = store.Secret("azure"); if(key.Length == 0) throw new InvalidOperationException("未配置 Azure 密钥");
         using var req = new HttpRequestMessage(HttpMethod.Post,"https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to="+target);
         req.Headers.Add("Ocp-Apim-Subscription-Key",key);
         if(config.AzureRegion.Length>0) req.Headers.Add("Ocp-Apim-Subscription-Region", config.AzureRegion);
-        req.Content = JsonContent.Create(new[]{new {Text=text}});
+        req.Content = JsonContent.Create(texts.Select(text=>new {Text=text}).ToArray());
         using var res = await http.SendAsync(req,ct); await CheckApiResponse(res,"azure","azure-translate",epoch,ct);
         using var json = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-        var result=json.RootElement[0].GetProperty("translations")[0].GetProperty("text").GetString() ?? "";ClearIssue("azure",previous,epoch);return result;
+        if(json.RootElement.ValueKind!=JsonValueKind.Array||json.RootElement.GetArrayLength()!=texts.Length)
+            throw new InvalidDataException("Unexpected Azure translation response count");
+        var result=json.RootElement.EnumerateArray().Select(item=>item.GetProperty("translations")[0].GetProperty("text").GetString()??"").ToArray();
+        ClearIssue("azure",previous,epoch);return result;
     }
     private async Task<BingCredentials> BingToken(CancellationToken ct,Uri? preferredOrigin=null,long epoch=-1){
         var cached=Volatile.Read(ref bing);
