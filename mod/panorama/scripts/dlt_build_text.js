@@ -34,7 +34,8 @@ function DLTBuildTextAction(showOriginal) {
             state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
                 revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [],
                 forceCollect: true, nextCollectAt: 0, pairs: [], collectionMs: 0, collections: 0,
-                clickAt: 0, collectDelayMs: null, dispatchDelayMs: null };
+                clickAt: 0, collectDelayMs: null, dispatchDelayMs: null,
+                sentParts: 0, receivedParts: 0, maxReplyChars: 0, decodeErrors: 0, timeouts: 0 };
             scene.__dltBuildText = state;
         }
         var eventTitle = '';
@@ -170,23 +171,70 @@ function DLTBuildTextAction(showOriginal) {
         function send(job, batch, config) {
             var id = ++state.seq;
             if (state.clickAt && state.dispatchDelayMs === null) state.dispatchDelayMs = Date.now() - state.clickAt;
+            var input = encodeURIComponent(JSON.stringify({
+                id: id, texts: batch.texts, context: batch.lookup || batch.plan ? '' : job.context,
+                revision: state.revision, refine: job.refining, build: job.build,
+                cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null, includeSnapshot: false
+            }));
+            var parts = [];
+            if (input.length > 1800) for (var offset = 0; offset < input.length; offset += 1200) parts.push(input.slice(offset, offset + 1200));
+            var seconds = batch.lookup ? 10 : batch.plan ? 30 : Math.max(config && config.fastTimeout || 15, config && config.qualityTimeout || 90) + 5;
             job.pending = { id: id, batch: batch, deadline: Date.now() +
-                (job.refining || !config ? (config && config.qualityTimeout || 90) + 5 :
-                    Math.max(config.fastTimeout || 15, config.qualityTimeout || 90) + 5) * 1000 };
+                seconds * 1000 + parts.length * 150, upload: parts, uploadIndex: 0, download: null, lastMalformed: '' };
+            if (parts.length > 1024) { state.decodeErrors++; job.pending.deadline = 0; return; }
+            if (parts.length) upload(job.pending);
+            else navigate(input);
+        }
+        function navigate(encoded) {
             eventTitle = '';
             try {
-                bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encodeURIComponent(JSON.stringify({
-                    id: id, texts: batch.texts, context: job.context, revision: state.revision, refine: job.refining,
-                    build: job.build, cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null
-                })));
-            } catch (_) { job.pending.deadline = 0; }
+                bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encoded);
+                state.sentParts++;
+            } catch (_) { if (state.job && state.job.pending) state.job.pending.deadline = 0; }
         }
-        function receive() {
-            try {
-                var reply = eventTitle || String(bridge.title || '');
-                if (reply.indexOf('DLTBUILD:') !== 0 && bridge.GetTitle) reply = String(bridge.GetTitle() || '');
-                if (reply.indexOf('DLTBUILD:') === 0) return JSON.parse(reply.slice(9));
-            } catch (_) {}
+        function upload(pending) {
+            navigate(encodeURIComponent(JSON.stringify({ wire: 1, id: pending.id, part: pending.uploadIndex,
+                count: pending.upload.length, data: pending.upload[pending.uploadIndex] })));
+        }
+        function receive(pending) {
+            var candidates = [eventTitle];
+            try { candidates.push(String(bridge.title || '')); } catch (_) {}
+            try { if (bridge.GetTitle) candidates.push(String(bridge.GetTitle() || '')); } catch (_) {}
+            for (var c = 0; c < candidates.length; c++) {
+                var reply = candidates[c];
+                if (typeof reply !== 'string' || reply.indexOf('DLTBUILD:') !== 0) continue;
+                state.maxReplyChars = Math.max(state.maxReplyChars, reply.length);
+                var result;
+                try { result = JSON.parse(reply.slice(9)); }
+                catch (_) {
+                    if (pending.lastMalformed !== reply) { pending.lastMalformed = reply; state.decodeErrors++; }
+                    continue;
+                }
+                if (result.id !== pending.id) continue;
+                if (typeof result.ack === 'number') {
+                    if (result.ack === pending.uploadIndex && pending.uploadIndex + 1 < pending.upload.length) {
+                        pending.uploadIndex++; state.receivedParts++; upload(pending);
+                    }
+                    return null;
+                }
+                if (result.wire !== 1) return result;
+                if (!Number.isInteger(result.count) || result.count < 1 || result.count > 1024 ||
+                    !Number.isInteger(result.part) || result.part < 0 || result.part >= result.count ||
+                    typeof result.data !== 'string' || result.data.length > 1200) continue;
+                if (!pending.download) pending.download = { count: result.count, parts: [] };
+                var download = pending.download;
+                if (download.count !== result.count || result.part !== download.parts.length) continue;
+                download.parts.push(result.data); state.receivedParts++;
+                pending.deadline = Math.max(pending.deadline, Date.now() + 5000);
+                if (download.parts.length === download.count) {
+                    try {
+                        var complete = JSON.parse(decodeURIComponent(download.parts.join('')));
+                        if (complete.id === pending.id) return complete;
+                    } catch (_) { state.decodeErrors++; }
+                    pending.deadline = 0;
+                } else navigate(encodeURIComponent(JSON.stringify({ wire: 1, id: pending.id, read: download.parts.length })));
+                return null;
+            }
             return null;
         }
         function restartJob() {
@@ -229,7 +277,7 @@ function DLTBuildTextAction(showOriginal) {
             var now = Date.now();
             var pending = job.pending;
             if (pending) {
-                var result = state.owner.receive();
+                var result = state.owner.receive(pending);
                 if (result && result.id === pending.id) {
                     job.pending = null;
                     if (result.error === 'settings-changed') { restartJob(); return; }
@@ -287,6 +335,7 @@ function DLTBuildTextAction(showOriginal) {
                         if (refinement.length) job.refine.push(refinement);
                     } else retry(job, pending.batch, now, result.error === 'busy');
                 } else if (now >= pending.deadline) {
+                    state.timeouts++;
                     state.owner.cancel();
                     job.pending = null;
                     retry(job, pending.batch, now, false);

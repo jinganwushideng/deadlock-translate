@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.3-9b45d5c7aea0';
+var BUILD_ID = '0.7.3-0c4440755073';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -2055,6 +2055,8 @@ var DLTChatInputFocused = function () {};
             failed: buildText.job ? buildText.job.failed : 0, pending: !!(buildText.job && buildText.job.pending),
             cacheHits: buildText.job ? buildText.job.cacheHits : 0, translated: buildText.job ? buildText.job.translated : 0,
             collectionMs: buildText.collectionMs || 0, collections: buildText.collections || 0,
+            sentParts: buildText.sentParts || 0, receivedParts: buildText.receivedParts || 0,
+            maxReplyChars: buildText.maxReplyChars || 0, decodeErrors: buildText.decodeErrors || 0, timeouts: buildText.timeouts || 0,
             clickToCollectMs: buildText.collectDelayMs, clickToDispatchMs: buildText.dispatchDelayMs
         };
         if (editorCommand) {

@@ -96,6 +96,7 @@ jobs:
         run: |
           dotnet run --project tests/BuildCatalogTests -c Release
           node tests/build-translation-action.test.cjs
+          node tests/build-translation-transport.test.cjs
       - name: Scheduling, cache and certificate diagnostics tests
         run: dotnet run --project tests/OptimizationTests
       - name: Incoming style, cache, snapshots and diagnostic privacy
