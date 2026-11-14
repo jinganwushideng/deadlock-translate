@@ -12,12 +12,19 @@ function DLTPositionBuildTranslation(original, output) {
         var parent = output.GetParent();
         var scaleX = Number(parent.actualuiscale_x), scaleY = Number(parent.actualuiscale_y);
         if (!(scaleX > 0) || !(scaleY > 0)) return '';
-        var point = original.GetPositionWithinWindow(), origin = parent.GetPositionWithinWindow();
-        var x = point.x === undefined ? point[0] : point.x, y = point.y === undefined ? point[1] : point.y;
-        var px = origin.x === undefined ? origin[0] : origin.x, py = origin.y === undefined ? origin[1] : origin.y;
         var width = Number(original.actuallayoutwidth) / scaleX, height = Number(original.actuallayoutheight) / scaleY;
-        if (![x,y,px,py,width,height].every(function (value) { return isFinite(value); }) || width <= 0 || height <= 0) return '';
-        var position = ((x - px) / scaleX) + 'px ' + ((y - py) / scaleY) + 'px 0px';
+        var x, y;
+        try {
+            var point = original.GetPositionWithinWindow(), origin = parent.GetPositionWithinWindow();
+            x = ((point.x === undefined ? point[0] : point.x) - (origin.x === undefined ? origin[0] : origin.x)) / scaleX;
+            y = ((point.y === undefined ? point[1] : point.y) - (origin.y === undefined ? origin[1] : origin.y)) / scaleY;
+        } catch (_) {}
+        if ((!isFinite(x) || !isFinite(y)) && original.GetParent() === parent &&
+            typeof original.actualxoffset === 'number' && typeof original.actualyoffset === 'number') {
+            x = original.actualxoffset; y = original.actualyoffset;
+        }
+        if (![x,y,width,height].every(function (value) { return isFinite(value); }) || width <= 0 || height <= 0) return '';
+        var position = x + 'px ' + y + 'px 0px';
         output.style.position = position;
         output.style.width = width + 'px'; output.style.height = height + 'px';
         return position + ':' + width + ':' + height;
@@ -94,7 +101,7 @@ function DLTChineseBuildTitle(title) {
         }
         surfaceState(false);
         function previewVisible() {
-            return scene.__dltBuildPreview && scene.__dltBuildPreview.controls.some(function (item) { return item.visible(); });
+            return scene.__dltBuildPreview && scene.__dltBuildPreview.controls.some(function (item) { return item.root.IsValid() && item.visible(); });
         }
         function belongsToPreview() {
             if (tooltip || role === 'Details' && !eligibleController()) return !!previewVisible();
@@ -118,6 +125,12 @@ function DLTChineseBuildTitle(title) {
         function normalize(text) {
             return text.replace(/\s+/g, ' ').trim();
         }
+        function normalizedField(text) {
+            return normalize(text.replace(/<br\s*\/?>/gi, ' ')
+                .replace(/<\/?(?:b|i|u|font|span|strong|em)(?:\s[^<>]*)?>/gi, '')
+                .replace(/&(?:nbsp|#160);/gi, ' ').replace(/&amp;/g, '&')
+                .replace(/[\u200B\uFEFF]/g, ''));
+        }
         function titleKey(text) {
             return normalize(text.replace(/<\/?(?:b|i|u|font|span|strong|em|br)(?:\s[^<>]*)?\s*\/?>/gi, ' ')
                 .replace(/\[\s*\d+(?:[.,]\d+)?\s*%\s*(?:WR|win\s*rate|胜率)\s*\]/gi, ' '))
@@ -127,7 +140,7 @@ function DLTChineseBuildTitle(title) {
             if (!job || !source) return '';
             if (Object.prototype.hasOwnProperty.call(job.values, source)) return job.values[source];
             if (title && job.planTitle && titleKey(source) === titleKey(job.planTitle)) return job.values[job.planTitle] || '';
-            var key = normalize(source);
+            var key = normalizedField(source);
             return Object.prototype.hasOwnProperty.call(job.normalized, key) ? job.normalized[key] : '';
         }
         function isVisible() {
@@ -135,6 +148,7 @@ function DLTChineseBuildTitle(title) {
             for (var panel = root; panel; panel = panel.GetParent()) {
                 if (panel.visible === false || panel.style.visibility === 'collapse' ||
                     panel.style.visibility === 'hidden' || panel.BHasClass && panel.BHasClass('Hidden')) return false;
+                try { if (panel.BIsTransparent && panel.BIsTransparent()) return false; } catch (_) {}
             }
             return true;
         }
@@ -276,7 +290,7 @@ function DLTChineseBuildTitle(title) {
                         (looking || job.bg && !job.working ? '读取本地译文 ' : job.refining ? '精翻 ' : '后台翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
                         (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
-                    if (job && job.total) caption += ' · 缓存 ' + job.cacheHits + ' · 新译 ' + job.translated;
+                    if (job && job.total) caption += ' · 缓存 ' + job.cacheHits + (job.localHits ? ' · 本地直译 ' + job.localHits : '') + ' · 新译 ' + job.translated;
                     if (job && job.visibleOnly) caption += ' · 当前页';
                     if (status.text !== caption) status.text = caption;
                 }
@@ -403,7 +417,7 @@ function DLTChineseBuildTitle(title) {
             if (state.sourceViews.size > 12) state.sourceViews.delete(state.sourceViews.keys().next().value);
         }
         function adoptView(job, saved) {
-            ['bg', 'values', 'normalized', 'normalizedSource', 'cursor', 'total', 'done', 'cacheHits', 'translated',
+            ['bg', 'values', 'normalized', 'normalizedSource', 'cursor', 'total', 'done', 'cacheHits', 'localHits', 'translated',
                 'working', 'receiving', 'fieldCount', 'downloadComplete', 'finishedAt', 'fingerprint', 'planTitle', 'planGroups', 'sourceKey', 'sourceIdentity'].forEach(function (name) {
                 job[name] = saved[name];
             });
@@ -534,6 +548,7 @@ function DLTChineseBuildTitle(title) {
                 job.total = reply.total;
                 job.done = reply.done;
                 job.cacheHits = reply.cacheHits;
+                job.localHits = reply.localHits || 0;
                 job.translated = reply.translated;
                 job.failed = reply.failed;
                 job.working = reply.working;
@@ -560,7 +575,7 @@ function DLTChineseBuildTitle(title) {
             if (!job.bg || !job.finishedAt || !job.fingerprint) return;
             var hovered = state.hoveredNote;
             if (!job.note && hovered && hovered.job === job && Date.now() - hovered.since >= 200 &&
-                !Object.prototype.hasOwnProperty.call(job.normalizedSource, normalize(hovered.text))) {
+                !Object.prototype.hasOwnProperty.call(job.normalizedSource, normalizedField(hovered.text))) {
                 if (!job.attemptedNotes) job.attemptedNotes = new Set();
                 if (!job.attemptedNotes.has(hovered.text) && job.attemptedNotes.size < 48) {
                     job.attemptedNotes.add(hovered.text);
@@ -593,7 +608,7 @@ function DLTChineseBuildTitle(title) {
         }
         function storeValue(job, text, value) {
             job.values[text] = value;
-            var key = normalize(text);
+            var key = normalizedField(text);
             var existing = job.normalizedSource[key];
             if (existing === undefined || existing === text) {
                 job.normalizedSource[key] = text;
@@ -687,6 +702,7 @@ function DLTChineseBuildTitle(title) {
                             if (refine && !job.refining) refinement.push(text);
                         });
                         job.cacheHits += result.cacheHits || 0;
+                        job.localHits = (job.localHits || 0) + (result.localHits || 0);
                         job.translated += result.translated || 0;
                         if(pending.batch.lookup && result.snapshot && typeof result.snapshot === 'object'){
                             Object.keys(result.snapshot).slice(0,256).forEach(function (text) {
@@ -819,7 +835,7 @@ function DLTChineseBuildTitle(title) {
                                     var recent = state.recent[shop ? 'shop' : 'details'];
                                     if (state.owner.reopening && recent && recent.identity === identity) {
                                         state.job = Object.assign({}, recent, { selection: selection, translated: 0,
-                                            cacheHits: Object.keys(recent.values).length });
+                                            cacheHits: Math.max(0, Object.keys(recent.values).length - (recent.localHits || 0)) });
                                     } else {
                                         var textSize = 0;
                                         var visible = [title].concat(distinct(base).filter(function (text) { return text !== title; })).slice(0, 96)

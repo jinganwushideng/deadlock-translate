@@ -162,7 +162,7 @@ public sealed partial class Translators {
         return values;
     }
     internal async Task<string[]> TranslateBuildQuality(string[] texts, string context, BuildTextProfile profile, CancellationToken ct,bool partial=false,
-        string? buildTitle=null,BuildSourceField[]? fields=null,bool titlesOnly=false) {
+        string? buildTitle=null,BuildSourceField[]? fields=null,bool titlesOnly=false,bool protectNames=false) {
         var settings=profile.Quality;
         var language=TranslationLanguages.Incoming(profile.Fast);
         var key=store.LlmSecretFor(profile.Fast);
@@ -172,16 +172,17 @@ public sealed partial class Translators {
         ct.ThrowIfCancellationRequested();
         var prepared=texts.Select(text=>language.ChineseGlossary?terms.Prepare(text,settings.BilingualNames):terms.PrepareOutgoingNames(text)).ToArray();
         var items=prepared.Select((value,index)=>new{
-            id=index,kind=BuildTextLanguage.FieldKind(texts[index],buildTitle,fields,titlesOnly),text=Terms.Restore(value.Text,value.Map),
-            requiredNames=value.Map.Values.Distinct(),
+            id=index,kind=BuildTextLanguage.FieldKind(texts[index],buildTitle,fields,titlesOnly),text=protectNames?value.Text:Terms.Restore(value.Text,value.Map),
+            requiredNames=protectNames?value.Map.Keys: value.Map.Values.Distinct(),
             glossary=value.Hints.Select(term=>new{term.Source,term.Target,term.Ambiguous}),
             buildTerminology=language.ChineseGlossary?BuildTextLanguage.Hints(texts[index]):[],
             abbreviationHints=BuildTextAbbreviations.Match(texts[index],terms,settings.BilingualNames,language.ChineseGlossary)
         });
+        if(protectNames&&context.Length>1200)context=context[..1200];
         var referenceNames=(language.ChineseGlossary?terms.Prepare(context,settings.BilingualNames):terms.PrepareOutgoingNames(context))
             .Map.Values.Distinct().Take(32).ToArray();
         var input=JsonSerializer.Serialize(new{targetLanguage=language.Name,context,referenceNames,items},ConfigStore.Json);
-        const string prompt=BuildTextLanguage.Prompt;
+        var prompt=BuildTextLanguage.Prompt+(protectNames?"\nOn this retry, keep each DLTERM placeholder exactly where its name belongs. Do not translate a placeholder, replace it with a name or omit it.":"");
         var epoch=Interlocked.Read(ref qualityEpoch);
         var previous=providerIssues.GetValueOrDefault("llm");
         var trace=Telemetry.Begin(settings,false,0);
@@ -195,19 +196,24 @@ public sealed partial class Translators {
             if(response.RootElement.ValueKind!=JsonValueKind.Array||!partial&&response.RootElement.GetArrayLength()!=texts.Length)
                 throw new InvalidDataException("Incomplete build translation batch");
             var translations=new string[texts.Length];
+            var invalid=0;var namesRejected=0;
             foreach(var entry in response.RootElement.EnumerateArray()){
-                if(!entry.TryGetProperty("id",out var index)||!index.TryGetInt32(out var id)||
+                if(entry.ValueKind!=JsonValueKind.Object||!entry.TryGetProperty("id",out var index)||!index.TryGetInt32(out var id)||
                     !entry.TryGetProperty("translation",out var text)||text.ValueKind!=JsonValueKind.String){
-                    if(partial)continue;
+                    if(partial){invalid++;continue;}
                     throw new InvalidDataException("Invalid build translation entry");
                 }
                 var translation=text.GetString();
                 if(id<0||id>=texts.Length||translations[id]!=null||string.IsNullOrWhiteSpace(translation)||translation.Length>BuildTextCache.MaxResultLength)
-                { if(partial)continue;throw new InvalidDataException("Invalid build translation entry"); }
+                { if(partial){invalid++;continue;}throw new InvalidDataException("Invalid build translation entry"); }
                 try {
-                    translations[id]=terms.RenderChineseStyle(NormalizeNames(translation,prepared[id].Map),texts[id],language.ChineseGlossary&&settings.ChineseNameStyle=="legacy");
-                }catch(TranslationOutputException) when(partial){}
+                    var normalized=protectNames?Terms.Restore(translation,prepared[id].Map):NormalizeNames(translation,prepared[id].Map);
+                    translations[id]=terms.RenderChineseStyle(normalized,texts[id],language.ChineseGlossary&&settings.ChineseNameStyle=="legacy");
+                }catch(Exception ex) when(partial && ex is TranslationOutputException or InvalidDataException){namesRejected++;}
             }
+            if(namesRejected>0)log?.Record("translation",LogKind.TranslationFailed,new(Reason:LogReason.NameMismatch,Token:trace.Id,Stage:"build-translate",Count:namesRejected));
+            var missing=Math.Max(0,translations.Count(value=>value==null)-namesRejected);
+            if(missing+invalid>0)log?.Record("translation",LogKind.TranslationFailed,new(Reason:LogReason.InvalidData,Token:trace.Id,Stage:"build-translate",Count:Math.Max(missing,invalid)));
             trace.Finish("done");ClearIssue("llm",previous,epoch);
             return translations;
         }catch(OperationCanceledException){trace.Finish("cancelled");throw;}

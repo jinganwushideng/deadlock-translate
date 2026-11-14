@@ -41,6 +41,13 @@ internal static class BuildTextLanguage {
         RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
         .Select(term=>new Hint(term.Source,term.Target)).ToArray();
     internal static bool TryLabel(string text,out string value)=>Labels.TryGetValue(Regex.Replace(text,@"\s+"," ").Trim(),out value!);
+    private static readonly Regex ItemStats=new(@"\APick Rate[ \t]*:[ \t]*(?<pick>\d+(?:\.\d+)?%)[ \t]*(?:\r?\n|<br\s*/?>)[ \t]*WR[ \t]*:[ \t]*(?<win>[+\-−]?\d+(?:\.\d+)?%)\z",
+        RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    internal static bool TryItemStats(string text,out string value){
+        var match=ItemStats.Match(text);
+        value=match.Success?$"装备购买率：{match.Groups["pick"].Value}\n胜率：{match.Groups["win"].Value}":"";
+        return match.Success;
+    }
     internal static string FieldKind(string text,string? title,BuildSourceField[]? fields,bool titlesOnly=false){
         if(titlesOnly||text.Equals(title,StringComparison.Ordinal))return "title";
         var kind=fields?.FirstOrDefault(field=>field.Text==text)?.Kind;

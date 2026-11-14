@@ -20,6 +20,16 @@ internal static class BuildPromptFixture {
         var names=handler.Input.RootElement.GetProperty("referenceNames").EnumerateArray().Select(v=>v.GetString()).ToArray();
         check(names.Contains("岚梦（Haze）")&&names.Contains("重装克星（Tankbuster）"),"context supplies canonical dictionary names without making all references mandatory in each result");
         check(result[0].Contains("岚梦（Haze）")&&result[1]=="装备购买率：24%\n胜率：+3%"&&result[2]=="普攻增益","parsed build results retain protected names, signed stats and concise annotation text");
+        handler.Reply=[new(0,"先出重型克星"),new(1,"其他装备说明")];
+        var annotation=new[]{"Buy Tankbuster first", "Other equipment note"};
+        var partial=await translators.TranslateBuildQuality(annotation,"",BuildTextProfile.Resolve(config.Current),default,partial:true);
+        check(partial[0]==null&&partial[1]=="其他装备说明","wrong glossary name rejects only the broken annotation");
+        handler.Reply=[new(0,"先出 DLTERM0X")];
+        var retry=await translators.TranslateBuildQuality([annotation[0]],"",BuildTextProfile.Resolve(config.Current),default,partial:true,protectNames:true);
+        check(handler.Input!.RootElement.GetProperty("items")[0].GetProperty("text").GetString()=="Buy DLTERM0X first"&&retry[0]=="先出 重装克星（Tankbuster）",
+            "retry masks the required item name and restores its exact glossary spelling locally");
+        check(BuildTextLanguage.TryItemStats("Pick Rate: 32%\r\nWR: +2%",out var stats)&&stats=="装备购买率：32%\n胜率：+2%"&&
+            !BuildTextLanguage.TryItemStats("Pick Rate: 32%\nWR: +2%\nOnly in the late game",out _),"known equipment stat format translates locally without eating additional prose");
         terms.Save([new("Tankbuster","自定重装名","Tankbuster"),new("Toxic Bullets","自定毒弹名","Toxic Bullets"),
             new("Mystic Reverb","秘术余波","Mystic Reverb"),new("Mystic Regeneration","秘术再生","Mystic Regeneration"),
             new("Radiant Regeneration","光耀再生","Radiant Regeneration")]);
@@ -32,12 +42,14 @@ internal static class BuildPromptFixture {
         handler.Input.Dispose();
     }
     private sealed class Capture:HttpMessageHandler {
+        internal sealed record Item(int id,string translation);
+        internal Item[] Reply=[new(0,"岚梦（Haze）-枪械先手流"),new(1,"装备购买率：24%\n胜率：+3%"),new(2,"普攻增益")];
         internal JsonDocument? Input;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
             using var json=JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellation));
             var messages=json.RootElement.GetProperty("messages");
-            Input=JsonDocument.Parse(messages[messages.GetArrayLength()-1].GetProperty("content").GetString()!);
-            var translated=JsonSerializer.Serialize(new[]{new{id=0,translation="岚梦（Haze）-枪械先手流"},new{id=1,translation="装备购买率：24%\n胜率：+3%"},new{id=2,translation="普攻增益"}});
+            Input?.Dispose();Input=JsonDocument.Parse(messages[messages.GetArrayLength()-1].GetProperty("content").GetString()!);
+            var translated=JsonSerializer.Serialize(Reply);
             return new(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(new{choices=new[]{new{message=new{content=translated},finish_reason="stop"}}}),Encoding.UTF8,"application/json")};
         }
     }

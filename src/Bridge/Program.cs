@@ -415,10 +415,10 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
 
 async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBuild? source=null,BuildJobPlan? parent=null){
     var token=job.WorkToken;
-    async Task<JsonElement> Execute(BuildTextRequest request){
+    async Task<JsonElement> Execute(BuildTextRequest request,BuildSourceField[]? fields=null,bool protectNames=false){
         for(var attempt=0;;attempt++){
             token.ThrowIfCancellationRequested();
-            var result=await RunBuildRequest(request with{Revision=job.Revision},token,source?.Fields??parent?.Fields);
+            var result=await RunBuildRequest(request with{Revision=job.Revision},token,fields,protectNames);
             var json=JsonSerializer.SerializeToElement((result as IValueHttpResult)?.Value,ConfigStore.Json);
             if(json.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid build response");
             if(!json.TryGetProperty("error",out var error)||error.GetString()!="busy"||attempt==79)return json;
@@ -462,7 +462,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     var missing=new List<string>();
     var refine=new System.Collections.Concurrent.ConcurrentDictionary<string,byte>(StringComparer.Ordinal);
     foreach(var batch in BuildTextJobs.Batches(plan.Texts,48,10000)){
-        var cached=await Execute(request with{Texts=batch,CacheOnly=true});
+        var cached=await Execute(request with{Texts=batch,CacheOnly=true},plan.Fields);
         if(cached.TryGetProperty("error",out var error)){job.Fail(error.GetString()??"unavailable");return;}
         job.Apply(batch,cached,false);
         var values=cached.GetProperty("translations");
@@ -471,15 +471,15 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     }
     async Task TranslateBatch(string[] batch,bool refining,int attempt=0){
         await buildTextJobs.WaitTurn(job,token);
-        var translated=await Execute(request with{Texts=batch,CacheOnly=false,Refine=refining,Context=context});
+        var translated=await Execute(request with{Texts=batch,CacheOnly=false,Refine=refining,Context=context},plan.Fields,protectNames:attempt>0);
         token.ThrowIfCancellationRequested();
         if(translated.TryGetProperty("error",out var error)){
             var code=error.GetString();
             if(code is "settings-changed" or "disabled" or "busy"){job.Fail(code);job.Cancel();return;}
-            if(code=="batch-incomplete"&&batch.Length>1){
+            if(code is "batch-incomplete" or "timeout" && batch.Length>1 && attempt<2){
                 var middle=batch.Length/2;
-                await TranslateBatch(batch[..middle],refining);
-                if(!job.HasError)await TranslateBatch(batch[middle..],refining);
+                await TranslateBatch(batch[..middle],refining,attempt+1);
+                if(!job.HasError)await TranslateBatch(batch[middle..],refining,attempt+1);
             }else job.FailedFields(batch.Length);
             return;
         }
@@ -497,7 +497,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     await BuildTextJobs.RunBatches(BuildTextJobs.Batches(refine.Keys,12,3500),batch=>TranslateBatch(batch,true),()=>job.HasError,token);
 }
 
-async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken requestAborted,BuildSourceField[]? promptFields=null){
+async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken requestAborted,BuildSourceField[]? promptFields=null,bool protectNames=false){
     var (settings,configRevision)=config.Snapshot();
     var termRevision=terms.Revision;
     var glossary=terms.Fingerprint;
@@ -537,6 +537,7 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         var misses=new List<(string Text,string Key)>();
         var refineTexts=new HashSet<string>(StringComparer.Ordinal);
         var cacheHits=0;
+        var localHits=0;
         var migrated=false;
         bool ReadCached(string text,bool refined,out string? value){
             var isTitle=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list")=="title";
@@ -552,13 +553,19 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         }
         foreach(var text in input.Texts.Select(text=>text.Trim()).Distinct(StringComparer.Ordinal)){
             if(!text.Any(char.IsLetter)){values[text]="";continue;}
-            if(TranslationLanguages.Incoming(profile.Fast).ChineseGlossary&&BuildTextLanguage.TryLabel(text,out var label)){
-                var prepared=terms.Prepare(text,profile.Fast.BilingualNames);
-                if(prepared.Map.Count==0&&!prepared.Hints.Any(hint=>hint.Source.Equals(text,StringComparison.OrdinalIgnoreCase))){
-                    values[text]=label;cacheHits++;continue;
+            var kind=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list");
+            if(TranslationLanguages.Incoming(profile.Fast).ChineseGlossary){
+                if(kind=="item-note"&&BuildTextLanguage.TryItemStats(text,out var stats)){
+                    values[text]=stats;localHits++;continue;
+                }
+                if((kind is "group-name" or "text")&&BuildTextLanguage.TryLabel(text,out var label)){
+                    var prepared=terms.Prepare(text,profile.Fast.BilingualNames);
+                    if(prepared.Map.Count==0&&!prepared.Hints.Any(hint=>hint.Source.Equals(text,StringComparison.OrdinalIgnoreCase))){
+                        values[text]=label;localHits++;continue;
+                    }
                 }
             }
-            var isTitle=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list")=="title";
+            var isTitle=kind=="title";
             var cacheKey=BuildTextCache.Key(text,profile,quality,glossary,quality?scope:null,isTitle);
             if(profile.Mode=="hybrid"&&!quality){
                 if(ReadCached(text,true,out var refined)){values[text]=refined!;cacheHits++;continue;}
@@ -578,14 +585,14 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
                 foreach(var (text,value) in buildTextCache.Snapshot(qualityPlan))snapshot[text]=new(value,false);
             return Results.Json(new{id=input.Id,revision,
                 translations=input.Texts.Select(text=>values.TryGetValue(text.Trim(),out var value)?value:null).ToArray(),
-                cacheHits,translated=0,refine=false,snapshot,
+                cacheHits,localHits,translated=0,refine=false,snapshot,
                 refineIndices=input.Texts.Select((text,index)=>(text,index))
                     .Where(item=>hasLlm&&values.ContainsKey(item.text.Trim())&&refineTexts.Contains(item.text.Trim())).Select(item=>item.index).ToArray()});
         }
         if(misses.Count!=0){
             var source=misses.Select(item=>item.Text).ToArray();
-            var partial=quality&&(input.Source!=null||input.Action=="list");
-            var results=quality?await translators.TranslateBuildQuality(source,context,profile,timeout.Token,partial,input.Build,promptFields,input.Action=="list")
+            var partial=quality&&(input.Action is "start" or "list" or "note");
+            var results=quality?await translators.TranslateBuildQuality(source,context,profile,timeout.Token,partial,input.Build,promptFields,input.Action=="list",protectNames)
                 :await translators.TranslateBuildFast(source,profile.Fast,timeout.Token);
             var latest=config.Snapshot().Revision+":"+terms.Revision;
             if(latest!=revision)return Results.Json(new{id=input.Id,revision=latest,error="settings-changed"});
@@ -604,10 +611,15 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         }
         completedBatch=true;
         return Results.Json(new{id=input.Id,revision,translations=input.Texts.Select(text=>values.GetValueOrDefault(text.Trim())).ToArray(),
-            cacheHits,translated=misses.Count(item=>values.ContainsKey(item.Text)),refine=refineTexts.Count>0&&hasLlm});
+            cacheHits,localHits,translated=misses.Count(item=>values.ContainsKey(item.Text)),refine=refineTexts.Count>0&&hasLlm});
     }catch(FastProviderBusyException){return ReplyError("busy");}
-    catch(Exception ex) when(input.Action is "start" or "note" && ex is (InvalidDataException or JsonException or TranslationOutputException)){return ReplyError("batch-incomplete");}
-    catch(Exception ex) when(ex is not OutOfMemoryException){return ReplyError("unavailable");}
+    catch(OperationCanceledException) when(requestAborted.IsCancellationRequested){throw;}
+    catch(Exception ex) when(ex is not OutOfMemoryException){
+        var reason=ex switch{OperationCanceledException=>LogReason.Timeout,TranslationOutputException output=>output.Reason,
+            ProviderRequestException provider=>provider.Reason,HttpRequestException=>LogReason.Network,JsonException or InvalidDataException=>LogReason.InvalidData,_=>LogReason.Other};
+        audit.Record("translation",LogKind.TranslationFailed,new(Reason:reason,Stage:"build-translate",Count:input.Texts.Length));
+        return ReplyError(ex is OperationCanceledException?"timeout":input.Action is "start" or "list" or "note" && ex is (InvalidDataException or JsonException or TranslationOutputException)?"batch-incomplete":"unavailable");
+    }
     finally{
         audit.Record("translation",LogKind.TranslationTiming,new(Stage:input.LoadPlan?"build-local":input.CacheOnly?"build-cache":"build-translate",
             Count:input.LoadPlan?localFields:input.Texts.Length,ElapsedMs:batchTimer.Elapsed.TotalMilliseconds,Flag:completedBatch));

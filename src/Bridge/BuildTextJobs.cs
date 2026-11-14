@@ -64,7 +64,7 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
         private readonly object gate = new();
         private readonly List<BuildJobField> updates = [];
         private bool ended, working;
-        private int total, done, cached, translated, failed;
+        private int total, done, cached, local, translated, failed;
         private string? error;
         private DateTime lastSeen = DateTime.UtcNow;
         private BuildJobPlan? plan;
@@ -88,6 +88,7 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
         internal void Apply(string[] sources, JsonElement reply, bool refinement) {
             lock (gate) {
                 if (reply.TryGetProperty("cacheHits", out var hits)) cached += hits.GetInt32();
+                if (reply.TryGetProperty("localHits", out var localHits)) local += localHits.GetInt32();
                 if (reply.TryGetProperty("translated", out var added)) translated += added.GetInt32();
                 var translations = reply.GetProperty("translations");
                 for (var i = 0; i < sources.Length; i++) {
@@ -114,7 +115,7 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
                 var fields=page.ToArray();
                 return new { id, revision = Revision, cursor = cursor + fields.Length, fieldCount=updates.Count,
                     ended, more = cursor + fields.Length < updates.Count, working, total, done,
-                    cacheHits = cached, translated, failed, error,
+                    cacheHits = cached, localHits = local, translated, failed, error,
                     plan = cursor == 0 && plan != null ? new { plan.Name, Groups=plan.FullSource?null:plan.Groups, plan.Fingerprint, plan.VisibleOnly } : null,
                     fields };
             }

@@ -315,11 +315,19 @@ assert.equal(exported.sent.at(-1).action, 'start');
 assert.equal(exported.sent.at(-1).source, 'B'.repeat(64));
 reply(exported, { accepted: true });
 exported.frame(300);
-reply(exported, { cursor: 2, total: 2, done: 2, cacheHits: 0, translated: 2, failed: 0, working: false, ended: true, more: false,
+reply(exported, { cursor: 3, total: 3, done: 3, cacheHits: 0, localHits: 1, translated: 2, failed: 0, working: false, ended: true, more: false,
     plan: { name: 'Build title', fingerprint: 'B'.repeat(64), groups: [], visibleOnly: false },
-    fields: [{ source: 'Build title', value: '整套出装' }, { source: 'First annotation', value: '预先翻译的注释', fieldId: 'groups/0/items/0/note' }] });
+    fields: [{ source: 'Build title', value: '整套出装' }, { source: 'First annotation', value: '预先翻译的注释', fieldId: 'groups/0/items/0/note' },
+        { source: 'Pick Rate: 32%\nWR: +2%', value: '装备购买率：32%\n胜率：+2%', fieldId: 'groups/0/items/1/note' }] });
 const exportedPopup = exported.addTooltip(); exported.frame(40); exported.frame(40);
 assert.equal(exportedPopup.output.text, '预先翻译的注释');
+assert.match(exported.status.text, /缓存 0 · 本地直译 1 · 新译 2/);
+exportedPopup.note.text = 'Pick Rate: 32%<br/>WR:&nbsp;+2%';
+exportedPopup.note.GetPositionWithinWindow = () => { throw new Error('Tooltip has no window coordinates'); };
+exportedPopup.note.actualxoffset = 7; exportedPopup.note.actualyoffset = 4;
+exported.frame(40);
+assert.equal(exportedPopup.output.text, '装备购买率：32%\n胜率：+2%');
+assert.equal(exportedPopup.output.style.position, '7px 4px 0px');
 const requestsAfterExport = exported.sent.length;
 exportedPopup.note.text = 'Other item'; exported.frame(300); exported.frame(300);
 assert.equal(exported.sent.length, requestsAfterExport, 'hovering cannot trigger additional cloud translation');
