@@ -10,8 +10,11 @@ function fixture(autoEnabled, withText = true) {
     let now = 0;
     function panel(id, parent, text = '') {
         const item = {
-            id, text, visible: true, style: {}, children: [],
-            IsValid: () => true, GetParent: () => parent,
+            id, text, parent, paneltype: 'Panel', visible: true, style: {}, children: [], classes: new Set(),
+            IsValid: () => true, GetParent: () => item.parent,
+            GetChildCount: () => item.children.length, GetChild: index => item.children[index],
+            SetHasClass(name, value) { if(value)this.classes.add(name);else this.classes.delete(name); },
+            BHasClass(name) { return this.classes.has(name); },
             FindChildTraverse(id) {
                 for (const child of this.children) {
                     if (child.id === id) return child;
@@ -27,8 +30,10 @@ function fixture(autoEnabled, withText = true) {
     const scene = panel('scene', null);
     scene.__dltBuildTextConfig = { revision: 'r1', enabled: true, autoEnabled, contextChars: 6000, fastTimeout: 5, qualityTimeout: 30 };
     const root = panel('shop', scene), selected = panel('SelectedBuildOuter', root);
+    root.paneltype = 'CitadelShopModsBuild';
     const title = panel('DltShopTitle', selected, withText ? 'Build title' : '');
-    const bridge = panel('DltShopBridge', root), translate = panel('DltShopTranslate', root);
+    panel('DltShopTitleTranslation', selected).visible = false;
+    const bridge = panel('DltShopBridge', root), actions = panel('actions',root), translate = panel('DltShopTranslate', actions);
     const progress = panel('DltShopProgress', root);
     panel('DltBuildProgressFill', progress);
     const status = panel('DltBuildProgressText', progress);
@@ -54,13 +59,17 @@ function fixture(autoEnabled, withText = true) {
     }
     function category(title, note) {
         const group = panel('category', root);
+        group.paneltype = 'CitadelShopModsBuildCategory';
         const first = panel('BuildCategoryName', group, title);
         const second = panel('DltCategoryNote', group, note);
+        panel('DltCategoryTitleTranslation',group).visible = false;
+        panel('DltCategoryNoteTranslation',group).visible = false;
         initializePanel(group);
         return { first, second };
     }
     function addTooltip() {
         const popup = panel('tooltip', scene);
+        popup.paneltype = 'CitadelTooltipModDetails';
         panel('ModName', popup, 'Equipment A');
         panel('DltBuildTitleTranslation', popup);
         const note = panel('DltBuildNote', popup, 'First annotation');
@@ -73,9 +82,14 @@ function fixture(autoEnabled, withText = true) {
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip, panel,
+    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip, panel, initializePanel,
         click: () => scope.DLTBuildTextAction(),
         showOriginal: () => scope.DLTBuildTextAction() };
+}
+function shown(label) {
+    const id={DltShopTitle:'DltShopTitleTranslation',BuildCategoryName:'DltCategoryTitleTranslation',DltCategoryNote:'DltCategoryNoteTranslation',DltBuildTitle:'DltBuildTitleTranslation',DltBuildNote:'DltBuildNoteTranslation'}[label.id];
+    const output=id&&label.GetParent()?.FindChildTraverse(id);
+    return output?.visible&&output.style.visibility!=='collapse'?output.text:label.text;
 }
 
 function reply(f, body) {
@@ -100,9 +114,9 @@ assert.equal(automatic.translate.text, '显示原文');
 plan(automatic);
 assert.equal(automatic.sent[2].cacheOnly, true);
 reply(automatic, { translations: ['Translated title'], cacheHits: 1 });
-assert.equal(automatic.title.text, 'Translated title');
+assert.equal(shown(automatic.title), 'Translated title');
 automatic.showOriginal();
-assert.equal(automatic.title.text, 'Build title');
+assert.equal(shown(automatic.title), 'Build title');
 assert.equal(automatic.progress.visible, false);
 assert.equal(automatic.translate.text, '翻译当前出装');
 assert.equal(automatic.root.FindChildTraverse('DltShopOriginal'), null);
@@ -140,8 +154,8 @@ reply(complete, { translations: ['Group result', 'Annotation result'], translate
 assert.equal(complete.scene.__dltBuildText.job.total, 4);
 const later = complete.category('Early group', 'Unseen   annotation');
 complete.frame(); complete.frame();
-assert.equal(later.first.text, 'Group result');
-assert.equal(later.second.text, 'Annotation result');
+assert.equal(shown(later.first), 'Group result');
+assert.equal(shown(later.second), 'Annotation result');
 assert.equal(complete.sent.length, 3);
 complete.showOriginal(); complete.frame(); complete.click(); complete.frame();
 assert.equal(complete.sent.at(-1).loadPlan, true);
@@ -166,9 +180,9 @@ reopened.root.visible = false;
 reopened.frame();
 reopened.root.visible = true;
 reopened.frame();
-assert.equal(reopened.title.text, 'Translated title');
-assert.equal(reusedGroup.first.text, 'Translated group');
-assert.equal(reusedGroup.second.text, 'Translated note');
+assert.equal(shown(reopened.title), 'Translated title');
+assert.equal(shown(reusedGroup.first), 'Translated group');
+assert.equal(shown(reusedGroup.second), 'Translated note');
 assert.equal(reopened.sent.length, previousRequests, 'an identical full scheme needs no bridge request on reopen');
 assert.equal(reopened.progress.visible, false, 'completion toast is not replayed');
 reopened.root.visible = false;
@@ -178,7 +192,7 @@ reopened.root.visible = true;
 reopened.frame();
 assert.equal(reopened.sent.length, previousRequests + 1, 'same title with updated groups must be checked again');
 assert.equal(reopened.sent.at(-1).loadPlan, true);
-assert.equal(reusedGroup.second.text, 'Changed instructions');
+assert.equal(shown(reusedGroup.second), 'Changed instructions');
 assert.equal(reopened.progress.visible, false);
 console.log('PASS reopening one scheme restores results silently; reopened matching title with edited instructions starts a new lookup');
 
@@ -201,7 +215,7 @@ assert.equal(poll.job, start.job, 'reopening attaches to the same backend job');
 reply(background, { cursor: 3, total: 3, done: 3, cacheHits: 0, translated: 3, failed: 0, working: false, ended: true, more: false,
     plan: { name: 'Build title', fingerprint: 'C'.repeat(64), groups: [{ name: 'Core', note: 'Build note' }] },
     fields: [{ source: 'Build title', value: 'Translated build' }, { source: 'First annotation', value: 'First translation' }, { source: 'Second annotation', value: 'Second translation' }] });
-assert.equal(background.title.text, 'Translated build');
+assert.equal(shown(background.title), 'Translated build');
 assert.equal(background.progress.visible, false, 'a job completed while away does not replay the progress popup');
 const popup = background.addTooltip();
 background.frame(40); background.frame(40);
@@ -236,17 +250,17 @@ assert.equal(swapped.sent.at(-1).loadPlan, true);
 assert.deepEqual(swapped.sent.at(-1).groups, [{ name: 'Shared title', note: 'Different instructions' }]);
 swapped.bridge.title = 'DLTBUILD:' + JSON.stringify({ id: oldLookup, revision: 'r1', translations: ['Old build', 'Old group', 'Old note'] });
 swapped.frame(50);
-assert.equal(group.first.text, 'Shared title');
-assert.equal(group.second.text, 'Different instructions');
+assert.equal(shown(group.first), 'Shared title');
+assert.equal(shown(group.second), 'Different instructions');
 reply(swapped, { planStatus: 'ambiguous', fallback: 'B'.repeat(64) });
 assert.equal(swapped.sent.at(-1).cacheOnly, true);
 assert.deepEqual(swapped.sent.at(-1).texts, ['Build title', 'Shared title', 'Different instructions']);
 reply(swapped, { translations: ['New build', null, null], cacheHits: 1 });
-assert.equal(swapped.title.text, 'New build');
-assert.equal(group.first.text, 'Shared title');
+assert.equal(shown(swapped.title), 'New build');
+assert.equal(shown(group.first), 'Shared title');
 reply(swapped, { translations: ['New group', 'New note'], translated: 2 });
-assert.equal(group.first.text, 'New group');
-assert.equal(group.second.text, 'New note');
+assert.equal(shown(group.first), 'New group');
+assert.equal(shown(group.second), 'New note');
 assert.equal(swapped.translate.text, '显示原文');
 console.log('PASS same-title replacement disowns late results, translates the current panel only, and updates without a toggle');
 
@@ -319,4 +333,4 @@ assert.equal(manualExport.dispatched.length, 0, 'unsafe clipboard formats cannot
 assert.equal(manualExport.progress.visible, true);
 assert.match(manualExport.status.text, /复制到剪贴板/);
 console.log('PASS unsupported clipboard contents expose manual export without overwriting clipboard');
-module.exports = { fixture };
+module.exports = { fixture, shown };

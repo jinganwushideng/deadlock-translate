@@ -19,6 +19,10 @@ byte[] Build(uint id,string name,uint version=1)=>Data(1,Join(Number(1,id),Numbe
 var plan=LocalBuildCatalog.Parse(Build(101,"Test build"))!;
 Check(plan.Fields?.Any(field=>field.Text=="Unseen item annotation"&&field.ItemId==123&&field.Group==0&&field.Entry==0)==true,"unseen item annotations keep native item ID and field position");
 Check(plan.Texts.SequenceEqual(new[]{"Test build","Build introduction","Early group","Group note","Unseen item annotation","Ability note"}),"complete protobuf contains unrendered annotations and ability notes");
+Check(BuildSourceCapture.MatchesExportTitle("[Haze build [55% WR]]的副本","Haze build [55% WR]"),"known native copy titles validate the original complete title");
+Check(!BuildSourceCapture.MatchesExportTitle("[Vindicta build]的副本","Haze build"),"a native ID cannot authorize renaming another hero's exported source");
+Check(!BuildSourceCapture.MatchesExportTitle("[Haze build [61% WR]]的副本","Haze build [55% WR]"),"source validation retains title numbers");
+Check(BuildSourceCapture.IsConsistent(plan)&&!BuildSourceCapture.IsConsistent(plan with{Name="Wrong title"})&&!BuildSourceCapture.IsConsistent(plan with{Hero=3}),"stored sources retain their original native title and hero identity");
 var sourceOrder=BuildTextJobs.PrioritizeSource(plan with{Texts=["Unseen item annotation","Group note","Test build","Ability note","Build introduction","Early group"]},["Group note"]);
 Check(sourceOrder[0]=="Test build"&&sourceOrder[1]=="Early group"&&Array.IndexOf(sourceOrder,"Group note")<Array.IndexOf(sourceOrder,"Unseen item annotation"),"native title, group names and visible instructions precede equipment annotations");
 Check(BuildSourceCapture.SourceFingerprint(plan)==BuildSourceCapture.SourceFingerprint(plan with{Texts=plan.Texts.Reverse().ToArray(),Fields=plan.Fields?.Reverse().ToArray()}),"local cache and export text enumeration produce the same complete source fingerprint");
@@ -45,6 +49,15 @@ try{LocalBuildCatalog.Parse(Data(1,Data(5,[0xFF])));throw new Exception("Accepte
 
 var folder=Path.Combine(Path.GetTempPath(),"dlt-catalog-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
 try{
+    var reviewFolder=Path.Combine(folder,"review");var snapshots=Path.Combine(reviewFolder,"build-sources-v2");Directory.CreateDirectory(snapshots);
+    var invalidKey=new string('F',64);var invalidFile=Path.Combine(snapshots,invalidKey+".json");
+    File.WriteAllBytes(invalidFile,System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new{Account=LocalBuildCatalog.LocateCurrentCache()??"",Plan=plan with{Name="Wrong title",Fingerprint=invalidKey}}));
+    using(var reviewed=new BuildSourceCapture(reviewFolder)){
+        Check(reviewed.Find(invalidKey)==null,"mismatched legacy snapshots are refused without modifying their files");
+        Check(reviewed.NeedsCacheRefresh(plan)&&!reviewed.NeedsCacheRefresh(plan with{Id=999}),"only proven mismatched source scopes receive a fresh quality cache namespace");
+    }
+    File.Delete(invalidFile);
+    using(var reviewed=new BuildSourceCapture(reviewFolder))Check(reviewed.NeedsCacheRefresh(plan),"targeted cache repair survives old snapshot cleanup and restart");
     var translationCache=new BuildTextCache(folder);
     var longTranslation=new string('译',8000);
     translationCache.Store(new string('A',64),longTranslation);translationCache.Flush();

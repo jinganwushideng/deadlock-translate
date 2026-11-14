@@ -31,6 +31,18 @@ def patch_build_text_layout(xml, name):
     if xml.count('</styles>') != 1 or '<scripts>' in xml:
         raise ValueError(f'Unexpected styles or scripts in {name}')
     xml = xml.replace('</styles>', includes)
+    contexts = {
+        'citadel_ui_build_selector': ('CitadelHeroBuildsSelector', 'Selector'),
+        'citadel_ui_build_details': ('CitadelBuildDetails', 'Details'),
+        'citadel_shop_mods_build': ('CitadelShopModsBuild', 'Shop'),
+        'citadel_shop_mods_build_category': ('CitadelShopModsBuildCategory', 'Category'),
+        'tooltips/citadel_tooltip_mod_details': ('CitadelTooltipModDetails', 'Item'),
+    }
+    tag, role = contexts[name]
+    xml, count = re.subn(r'<' + tag + r'(?:\s[^>]*)?>', lambda match: match[0] +
+                        f'<Panel id="DltBuildContext{role}" class="DltBuildContextMarker" hittest="false" />', xml, count=1)
+    if count != 1:
+        raise ValueError(f'Missing native context root in {name}')
     if name == 'citadel_ui_build_selector':
         xml = xml.replace('</scripts>', '<include src="s2r://panorama/scripts/dlt_build_browser.vjs_c" /></scripts>')
         anchor = '<Label class="BuildName"'
@@ -67,8 +79,14 @@ def patch_build_text_layout(xml, name):
         original = xml[start:end]
         if 'id=' not in original:
             original = original.replace('<Label ', f'<Label id="{prefix}{field}" ', 1)
-        output = f'<Label id="{prefix}{field}Translation" class="DltBuildTranslation" html="false" visible="false" />'
-        xml = xml[:start] + original + ('' if category or shop else output) + xml[end:]
+        style = ('ShopTitle' if shop else 'Category' + field if category else
+                 'Details' + field if name == 'citadel_ui_build_details' else 'Item' + field)
+        output = f'<Label id="{prefix}{field}Translation" class="DltBoundTranslation Dlt{style}Text" html="false" visible="false" />'
+        # Keep the native text/localization token intact. Writing Label.text would
+        # detach selected_hero_build_name/category_name dialog-variable updates.
+        paired = original + output if style == 'ItemTitle' else (
+            f'<Panel class="DltBuildTextSlot Dlt{style}Slot" hittest="false">' + original + output + '</Panel>')
+        xml = xml[:start] + paired + xml[end:]
     bridge = ('<HTML id="DltBuildBridge" class="DltBuildBridge" hittest="false" '
               'hittestchildren="false" acceptsinput="false" acceptsfocus="false" />')
     def progress(prefix):

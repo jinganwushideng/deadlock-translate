@@ -456,7 +456,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     if(context.Length>contextChars)context=context[..contextChars];
     var request=input with{LoadPlan=false,Build=plan.Name[..Math.Min(1000,plan.Name.Length)],Fingerprint=plan.Fingerprint,
         Groups=null,Description=null,Context=null,IncludeSnapshot=false};
-    if(source!=null)request=request with{Fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("source-v2:"+LocalBuildCatalog.LocateCurrentCache()+":"+source.Id+":"+source.Hero)))};
+    if(source!=null)request=request with{Fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("source-v2:"+LocalBuildCatalog.LocateCurrentCache()+":"+source.Id+":"+source.Hero+(buildSourceCapture.NeedsCacheRefresh(source)?":title-checked-v3":""))))};
     else if(input.Action=="list")request=request with{Fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("browser-titles-v2")))};
     var missing=new List<string>();
     var refine=new HashSet<string>(StringComparer.Ordinal);

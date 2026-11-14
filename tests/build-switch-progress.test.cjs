@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { fixture } = require('./build-translation-action.test.cjs');
+const { fixture, shown } = require('./build-translation-action.test.cjs');
 
 function sourceFixture() {
     const f = fixture(false);
@@ -31,8 +31,8 @@ draining.reply({ cursor: 3, total: 3, done: 3, cacheHits: 0, translated: 3, fail
     fields: [{ source: 'Late heading', value: '后期标题' }, { source: 'Late instructions', value: '后期说明' }] });
 const late = draining.category('Late heading', 'Late instructions');
 draining.frame(50); draining.frame(50);
-assert.equal(late.first.text, '后期标题');
-assert.equal(late.second.text, '后期说明');
+assert.equal(shown(late.first), '后期标题');
+assert.equal(shown(late.second), '后期说明');
 console.log('PASS result draining remains visible and late fields paint from the completed source');
 
 const versions = sourceFixture();
@@ -56,10 +56,12 @@ host.children = [];
 group.first.IsValid = group.second.IsValid = () => false;
 const newHeader = recycled.panel('BuildCategoryName', host, 'Header');
 const newNote = recycled.panel('DltCategoryNote', host, 'Instructions');
+recycled.panel('DltCategoryTitleTranslation',host).visible=false;
+recycled.panel('DltCategoryNoteTranslation',host).visible=false;
 const requestsBeforeRebind = recycled.sent.length;
 recycled.frame(50);
-assert.equal(newHeader.text, '分组', 'a recreated native label must bind to its existing translation');
-assert.equal(newNote.text, '说明');
+assert.equal(shown(newHeader), '分组', 'a recreated native label must bind to its existing translation');
+assert.equal(shown(newNote), '说明');
 assert.equal(recycled.sent.length, requestsBeforeRebind, 'recreated fields in a verified native version need no source reload');
 console.log('PASS recycled native labels rebind and translate in the next UI tick');
 
@@ -74,7 +76,7 @@ revisited.reply({ cursor: 1, total: 1, done: 1, cacheHits: 0, translated: 1, fai
 revisited.title.text = 'Build title'; revisited.frame(50);
 const startsBeforeReturn = revisited.sent.filter(x => x.action === 'start').length;
 revisited.capture(201);
-assert.equal(revisited.title.text, '出装甲');
+assert.equal(shown(revisited.title), '出装甲');
 assert.equal(revisited.sent.filter(x => x.action === 'start').length, startsBeforeReturn, 'verified native source reuse does not restart or redownload the completed job');
 const note = revisited.addTooltip(); revisited.frame(40); revisited.frame(40);
 assert.equal(note.output.text, '甲注释');
@@ -100,7 +102,7 @@ shared.reply({ cursor: 2, total: 2, done: 2, cacheHits: 0, translated: 2, failed
 sharedGroup.second.text = 'Instructions B'; shared.frame(50);
 shared.capture(402);
 assert.equal(shared.scene.__dltBuildText.job.done, 0);
-assert.equal(sharedGroup.first.text, 'Shared header', 'a different native source cannot inherit a shared heading from the previous scheme');
+assert.equal(shown(sharedGroup.first), 'Shared header', 'a different native source cannot inherit a shared heading from the previous scheme');
 assert.equal(shared.sent.at(-1).action, 'start');
 console.log('PASS same titles and shared headings cannot restore fields from a different native source');
 

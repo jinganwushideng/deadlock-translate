@@ -13,11 +13,37 @@ function DLTBuildTextAction() {
     function initialize() {
         if (!root || !root.IsValid()) return;
         if (root.__dltBuildTextInitialized) return;
-        var button = root.FindChildTraverse('DltBuildTranslate');
-        var shop = !button && root.FindChildTraverse('DltShopBridge');
+        function contextRole(panel) {
+            var types = { CitadelBuildDetails: 'Details', CitadelShopModsBuild: 'Shop',
+                CitadelShopModsBuildCategory: 'Category', CitadelTooltipModDetails: 'Item', CitadelHeroBuildsSelector: 'Selector' };
+            if (types[panel.paneltype]) return types[panel.paneltype];
+            if (panel.GetChildCount && panel.GetChild)
+                for (var i = 0; i < panel.GetChildCount(); i++) {
+                    var id = String(panel.GetChild(i).id || '');
+                    if (/^DltBuildContext(Details|Shop|Category|Item|Selector)$/.test(id)) return id.slice(15);
+                }
+            return '';
+        }
+        function ancestorRole(role) {
+            for (var panel = root.GetParent(); panel; panel = panel.GetParent()) if (contextRole(panel) === role) return true;
+            return false;
+        }
+        var role = contextRole(root);
+        if (!role || role === 'Selector') return;
+        var button = role === 'Details' && root.FindChildTraverse('DltBuildTranslate');
+        var shop = role === 'Shop' && root.FindChildTraverse('DltShopBridge');
         var toggle = button || (shop && root.FindChildTraverse('DltShopTranslate'));
-        var category = !button && !shop && root.FindChildTraverse('BuildCategoryName');
-        var tooltip = !toggle && !category;
+        var category = role === 'Category';
+        var tooltip = role === 'Item';
+        function eligibleController() {
+            if (role === 'Details') {
+                if (root.id === 'TooltipBuildDetails') return false;
+                for (var panel = root.GetParent(); panel; panel = panel.GetParent())
+                    if (panel.BHasClass && panel.BHasClass('BuildDetailsTooltip')) return false;
+                return ancestorRole('Selector');
+            }
+            return role === 'Shop' && !ancestorRole('Details');
+        }
         var prefix = category ? 'DltCategory' : 'DltBuild';
         var bridge = shop || (button && root.FindChildTraverse('DltBuildBridge'));
         var selected = shop && root.FindChildTraverse('SelectedBuildOuter');
@@ -40,6 +66,11 @@ function DLTBuildTextAction() {
                 sentParts: 0, receivedParts: 0, maxReplyChars: 0, decodeErrors: 0, timeouts: 0 };
             scene.__dltBuildText = state;
         }
+        if (typeof root.__dltReboundEnabled === 'boolean') {
+            state.enabled = root.__dltReboundEnabled;
+            state.keepReboundEnabled = state.autoEnabled === null;
+            delete root.__dltReboundEnabled;
+        }
         var priorWire = { sent: 0, received: 0, errors: 0 };
         var transport = bridge ? DLTBuildTransport(bridge, function (stats) {
             state.sentParts += stats.sent - priorWire.sent;
@@ -48,7 +79,7 @@ function DLTBuildTextAction() {
             state.maxReplyChars = Math.max(state.maxReplyChars, stats.maximum);
             priorWire = { sent: stats.sent, received: stats.received, errors: stats.errors };
         }) : null;
-        var applied = [null, null], rendered = null, selectedRevision = 0;
+        var rendered = null, selectedRevision = 0;
         function normalize(text) {
             return text.replace(/\s+/g, ' ').trim();
         }
@@ -76,9 +107,6 @@ function DLTBuildTextAction() {
             var label = originals[index];
             if (!label || !label.IsValid()) return '';
             var text = String(label.text || '');
-            var last = label.__dltBuildOriginal || applied[index];
-            if (last && last.panel === label && last.translation === text) text = last.source;
-            else if (last) rendered = null;
             text = text.trim();
             return text.length <= 6000 && !/^[#{]/.test(text) && /[\p{L}]/u.test(text) ? text : '';
         }
@@ -88,39 +116,32 @@ function DLTBuildTextAction() {
                 return false;
             }
             var translations = [translationFor(job, texts[0], !!toggle), translationFor(job, texts[1], false)];
-            var next = [originals[0], originals[1], texts[0], texts[1], translations[0], translations[1]];
-            if (rendered && next.every(function (value, index) { return value === rendered[index]; })) return true;
+            var next = [originals[0], originals[1], outputs[0], outputs[1], texts[0], texts[1], translations[0], translations[1]];
+            if (rendered && next.every(function (value, index) { return value === rendered[index]; }) && outputs.every(function (output, index) {
+                return !output || output.text === translations[index] && output.visible === !!translations[index] &&
+                    (!originals[index] || !originals[index].BHasClass || originals[index].BHasClass('DltNativeHidden') === !!translations[index]);
+            })) return true;
             rendered = next;
             for (var i = 0; i < originals.length; i++) {
                 var label = originals[i];
                 if (!label || !label.IsValid()) continue;
-                var translation = translations[i];
-                if (category || shop || toggle) {
-                    if (outputs[i] && outputs[i].IsValid()) outputs[i].visible = false;
-                    var last = label.__dltBuildOriginal || applied[i];
-                    if (translation) {
-                        var originalHtml = last && last.panel === label ? last.html : label.html;
-                        label.html = false;
-                        if (label.text !== translation) label.text = translation;
-                        applied[i] = { panel: label, source: texts[i], translation: translation, html: originalHtml };
-                        label.__dltBuildOriginal = applied[i];
-                    } else if (last && last.panel === label) {
-                        if (typeof last.html === 'boolean') label.html = last.html;
-                        if (label.text === last.translation) label.text = last.source;
-                        applied[i] = null;
-                        label.__dltBuildOriginal = null;
-                    }
-                } else {
-                    if (outputs[i] && outputs[i].IsValid()) {
-                        if (outputs[i].text !== translation) outputs[i].text = translation;
-                        outputs[i].visible = !!translation;
-                    }
+                var translation = translations[i], output = outputs[i];
+                if (output && output.IsValid()) {
+                    if (output.text !== translation) output.text = translation;
+                    output.visible = !!translation;
+                    output.style.visibility = translation ? 'visible' : 'collapse';
                 }
+                // Preserve the native localization template and dialog-variable binding.
+                // Only our own sibling label receives text assignments.
+                if (label.SetHasClass) label.SetHasClass('DltNativeHidden', !!translation && !!output);
             }
             return true;
         }
         function readView() {
-            if (selected) {
+            if (shop) {
+                var currentSelected = root.FindChildTraverse('SelectedBuildOuter');
+                if (currentSelected !== selected) { selected = currentSelected; selectedRevision++; state.forceCollect = true; }
+                if (!selected) return ['', ''];
                 var label = selected.FindChildTraverse('DltShopTitle');
                 if (!label && selected.FindChildrenWithClassTraverse) {
                     var titles = selected.FindChildrenWithClassTraverse('SelectedBuildName');
@@ -129,14 +150,16 @@ function DLTBuildTextAction() {
                 if (label !== originals[0]) {
                     render([], null);
                     originals = label ? [label] : [];
+                    rendered = null;
                     selectedRevision++;
                 }
+                outputs[0] = selected.FindChildTraverse('DltShopTitleTranslation');
             } else {
                 var bound = [root.FindChildTraverse(button ? 'DltBuildTitle' : category ? 'BuildCategoryName' : 'ModName'),
                     root.FindChildTraverse(prefix + 'Note')];
                 for (var index = 0; index < bound.length; index++) {
                     if (bound[index] !== originals[index]) {
-                        originals[index] = bound[index]; applied[index] = null; rendered = null;
+                        originals[index] = bound[index]; rendered = null;
                         state.forceCollect = true;
                     }
                     outputs[index] = root.FindChildTraverse(prefix + (index ? 'Note' : 'Title') + 'Translation');
@@ -162,7 +185,7 @@ function DLTBuildTextAction() {
             var fill = progress.FindChildTraverse('DltBuildProgressFill');
             var status = progress.FindChildTraverse('DltBuildProgressText');
             var control = {
-                root: root, visible: isVisible, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
+                root: root, visible: function () { return eligibleController() && isVisible(); }, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));
@@ -176,6 +199,7 @@ function DLTBuildTextAction() {
                     var confirmation = job && !job.reopened && job.translated && job.finishedAt && now - job.finishedAt < 3500;
                     progress.visible = state.owner === control && state.enabled && online && !!(needsTranslation || job &&
                         (job.manualCapture || job.failed || confirmation || job.progressShown && !job.finishedAt));
+                    progress.style.visibility = progress.visible ? 'visible' : 'collapse';
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
                     if (running) percent = Math.min(99, percent);
                     var width = percent + '%';
@@ -204,6 +228,7 @@ function DLTBuildTextAction() {
             };
             state.controls.push(control);
             root.__dltBuildTextAction = function () {
+                if (!eligibleController()) return;
                 var config = syncSettings();
                 var showOriginal = state.enabled;
                 var background = state.job && state.job.bg;
@@ -274,7 +299,8 @@ function DLTBuildTextAction() {
             }
             if (state.autoEnabled !== config.autoEnabled) {
                 state.autoEnabled = config.autoEnabled;
-                state.enabled = config.autoEnabled === true;
+                if (!state.keepReboundEnabled) state.enabled = config.autoEnabled === true;
+                state.keepReboundEnabled = false;
                 restartJob();
             }
             return config;
@@ -316,7 +342,7 @@ function DLTBuildTextAction() {
         }
         function adoptView(job, saved) {
             ['bg', 'values', 'normalized', 'normalizedSource', 'cursor', 'total', 'done', 'cacheHits', 'translated',
-                'working', 'receiving', 'fieldCount', 'downloadComplete', 'finishedAt', 'fingerprint', 'planTitle', 'planGroups', 'sourceKey'].forEach(function (name) {
+                'working', 'receiving', 'fieldCount', 'downloadComplete', 'finishedAt', 'fingerprint', 'planTitle', 'planGroups', 'sourceKey', 'sourceIdentity'].forEach(function (name) {
                 job[name] = saved[name];
             });
             job.reopened = true;
@@ -331,6 +357,7 @@ function DLTBuildTextAction() {
                 var saved = state.sourceViews.get(key);
                 if (saved && saved !== job && !saved.failed) adoptView(job, saved);
                 job.sourceKey = key;
+                job.sourceIdentity = { id: plan.id, hero: plan.hero, version: plan.version, name: plan.name };
                 rememberSourceView(job);
             }
             job.bg.source = capture.source;
@@ -644,10 +671,7 @@ function DLTBuildTextAction() {
                     state.controls = state.controls.filter(function (item) { return item.root.IsValid(); });
                     state.readers = state.readers.filter(function (item) { return item.root.IsValid(); });
                     var views = state.readers.filter(function (item) {
-                        return (item.visible() || item.category && attached(item.root, root)) && !state.controls.some(function (control) {
-                            return control !== state.owner && attached(item.root, control.root) &&
-                                !attached(control.root, root) && !attached(root, control.root);
-                        });
+                        return attached(item.root, root) && (item.visible() || item.category);
                     });
                     state.pairs = views.map(function (item) { return { view: item, texts: item.read() }; });
                     var pairs = state.pairs;
@@ -762,6 +786,34 @@ function DLTBuildTextAction() {
         }
         function tick() {
             if (!root.IsValid()) return;
+            var currentScene = root;
+            while (currentScene.GetParent()) currentScene = currentScene.GetParent();
+            if (currentScene !== scene) {
+                if (transport) transport.cancel();
+                state.controls = state.controls.filter(function (item) { return item.root !== root; });
+                state.readers = state.readers.filter(function (item) { return item.root !== root; });
+                if (state.owner && state.owner.root === root) { state.owner = null; state.job = null; state.signature = null; }
+                root.__dltBuildTextInitialized = false;
+                if (toggle && eligibleController()) root.__dltReboundEnabled = state.enabled;
+                initialize();
+                return;
+            }
+            if (toggle) {
+                var eligible = eligibleController();
+                var actions = toggle.GetParent();
+                actions.visible = eligible;
+                actions.style.visibility = eligible ? 'visible' : 'collapse';
+                if (!eligible || !isVisible() || state.owner !== control) { progress.visible = false; progress.style.visibility = 'collapse'; }
+            }
+            if (role === 'Details' && !eligibleController()) {
+                var identity = state.job && state.job.sourceIdentity;
+                var native = nativeIdentity();
+                var texts = readView();
+                var matches = identity && native.id === identity.id && native.version === identity.version && normalize(texts[0]) === normalize(identity.name);
+                render(texts, state.enabled && isVisible() && matches ? state.job : null);
+                $.Schedule(0.05, tick);
+                return;
+            }
             if (tooltip) {
                 var visible = isVisible() && state.enabled && state.owner && state.owner.visible();
                 var job = visible ? state.job : null;

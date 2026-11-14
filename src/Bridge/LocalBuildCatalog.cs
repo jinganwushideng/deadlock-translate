@@ -176,6 +176,10 @@ internal sealed class LocalBuildCatalog {
         var bytes=decoder.Unwrap(compressed,4*1024*1024).ToArray();
         return ParseBuild(bytes)??throw new InvalidDataException("Invalid build export");
     }
+    internal static LocalHeroBuild ParseSerialized(byte[] bytes) {
+        if(bytes.Length>4*1024*1024)throw new InvalidDataException("Build snapshot too large");
+        return ParseBuild(bytes)??throw new InvalidDataException("Invalid build snapshot");
+    }
 
     private static LocalHeroBuild? ParseBuild(ReadOnlySpan<byte> bytes) {
         uint id=0,hero=0,version=0,updated=0;

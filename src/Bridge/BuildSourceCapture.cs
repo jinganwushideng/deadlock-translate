@@ -12,6 +12,9 @@ internal sealed class BuildSourceCapture : IDisposable {
     private readonly Thread thread;
     private Session? session;
     private readonly string directory;
+    private readonly string resetFile;
+    private readonly object resetGate=new();
+    private readonly HashSet<string> resetScopes=new(StringComparer.Ordinal);
     private sealed record StoredSource(string Account,LocalHeroBuild Plan);
     private readonly ConcurrentDictionary<string,StoredSource> sources=new(StringComparer.Ordinal);
 
@@ -20,6 +23,14 @@ internal sealed class BuildSourceCapture : IDisposable {
     private IntPtr window;
     internal BuildSourceCapture(string state) {
         directory=Path.Combine(state,"build-sources-v2");
+        resetFile=Path.Combine(state,"build-source-cache-resets-v1.json");
+        try {
+            var info=new FileInfo(resetFile);
+            if(info.Exists&&info.Length<65536)
+                foreach(var key in JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(resetFile))??[])
+                    if(key.Length==64&&key.All(Uri.IsHexDigit)&&resetScopes.Count<256)resetScopes.Add(key);
+        }catch(Exception ex) when(ex is IOException or JsonException or UnauthorizedAccessException){}
+        ReviewSnapshots();
         thread=new Thread(Run){IsBackground=true,Name="Build source clipboard"};
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -72,13 +83,10 @@ internal sealed class BuildSourceCapture : IDisposable {
             if(encoded==null) return new{error="export-format"};
             var plan=LocalBuildCatalog.ParseExport(Convert.FromBase64String(encoded));
             if(current.Id is >0 && plan.Id!=current.Id)return new{error="selection-changed"};
-            // Valve's export deliberately renames the build to a localized copy name.
-            // Require exact known export formatting or the independently obtained native ID.
-            var canonical=LocalBuildCatalog.Canonical(current.Title);
-            var title=LocalBuildCatalog.Canonical(plan.Name);
-            if(current.Id is not >0&&title!=canonical&&title!=LocalBuildCatalog.Canonical("["+current.Title+"]的副本")&&
-                title!=LocalBuildCatalog.Canonical("Copy of "+current.Title))
-                return new{error="selection-changed"};
+            // A matching native ID does not prove that a reused label has updated.
+            // Validate the actual exported title before replacing its copy suffix.
+            owned=current.Id is >0;
+            if(!MatchesExportTitle(plan.Name,current.Title))return new{error="selection-changed"};
             owned=true;
             if(current.Version is >0 && plan.Version!=current.Version)return new{error="selection-changed"};
             plan=plan with{Name=current.Title,Texts=plan.Texts.Select(text=>text==plan.Name?current.Title:text).ToArray(),
@@ -92,10 +100,46 @@ internal sealed class BuildSourceCapture : IDisposable {
         finally {ReleaseSession(owned,sequence);}
     }
     internal object AcceptLocal(LocalHeroBuild plan) {
+        if(!IsConsistent(plan))throw new InvalidDataException("Build source does not match native data");
         plan=plan with{Fingerprint=SourceFingerprint(plan)};
         Store(plan.Fingerprint,plan);
         return new{source=plan.Fingerprint,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=plan.Fingerprint,total=plan.Texts.Length}};
     }
+    internal static bool MatchesExportTitle(string nativeTitle,string expected) {
+        static string Plain(string value) => System.Text.RegularExpressions.Regex.Replace(
+            System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(value,@"<[^>]*>","",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100))),
+            @"\s+"," ",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).Trim();
+        var actual=Plain(nativeTitle);
+        return new[]{expected,"["+expected+"]的副本","Copy of "+expected}.Any(value=>actual.Equals(Plain(value),StringComparison.OrdinalIgnoreCase));
+    }
+    internal static bool IsConsistent(LocalHeroBuild plan) {
+        try {
+            if(plan.Serialized is not {Length:>0})return false;
+            var native=LocalBuildCatalog.ParseSerialized(plan.Serialized);
+            if(native.Id!=plan.Id||native.Hero!=plan.Hero||native.Version!=plan.Version||!MatchesExportTitle(native.Name,plan.Name))return false;
+            var texts=native.Texts.Select(text=>text==native.Name?plan.Name:text).Order(StringComparer.Ordinal);
+            return texts.SequenceEqual(plan.Texts.Order(StringComparer.Ordinal))&&native.Description==plan.Description&&native.Groups.SequenceEqual(plan.Groups);
+        }catch(Exception ex) when(ex is not OutOfMemoryException){return false;}
+    }
+    private static string ScopeKey(string account,LocalHeroBuild plan) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(account+":"+plan.Id+":"+plan.Hero)));
+    private void ResetScope(StoredSource source) {
+        lock(resetGate){
+            if(resetScopes.Count>=256||!resetScopes.Add(ScopeKey(source.Account,source.Plan)))return;
+            Directory.CreateDirectory(Path.GetDirectoryName(resetFile)!);
+            ConfigStore.WriteAtomic(resetFile,JsonSerializer.SerializeToUtf8Bytes(resetScopes));
+        }
+    }
+    private void ReviewSnapshots() {
+        if(!Directory.Exists(directory))return;
+        foreach(var file in new DirectoryInfo(directory).EnumerateFiles("*.json").Take(64)){
+            try {
+                if(file.Length>8*1024*1024)continue;
+                var stored=JsonSerializer.Deserialize<StoredSource>(File.ReadAllBytes(file.FullName));
+                if(stored?.Plan!=null&&!IsConsistent(stored.Plan))ResetScope(stored);
+            }catch(Exception ex) when(ex is IOException or JsonException or UnauthorizedAccessException){}
+        }
+    }
+    internal bool NeedsCacheRefresh(LocalHeroBuild plan) {lock(resetGate)return resetScopes.Contains(ScopeKey(LocalBuildCatalog.LocateCurrentCache()??"",plan));}
     internal static string SourceFingerprint(LocalHeroBuild plan) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
         JsonSerializer.SerializeToUtf8Bytes(new{schema=2,plan.Id,plan.Hero,plan.Version,plan.Name,plan.Description,plan.Groups,
             texts=plan.Texts.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
@@ -119,7 +163,8 @@ internal sealed class BuildSourceCapture : IDisposable {
             var file=new FileInfo(Path.Combine(directory,key+".json"));
             if(!file.Exists||file.Length>8*1024*1024)return null;
             stored=JsonSerializer.Deserialize<StoredSource>(File.ReadAllBytes(file.FullName));
-            if(stored?.Account!=account||stored.Plan.Fingerprint!=key||stored.Plan.Texts.Length>256)return null;
+            if(stored?.Account!=account||stored.Plan==null||stored.Plan.Fingerprint!=key||stored.Plan.Texts is not {Length:<=256})return null;
+            if(!IsConsistent(stored.Plan)){ResetScope(stored);return null;}
             sources[key]=stored;
             return stored.Plan;
         }catch(Exception ex) when(ex is IOException or JsonException or UnauthorizedAccessException){return null;}

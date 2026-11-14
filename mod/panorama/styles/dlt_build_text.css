@@ -17,6 +17,7 @@
 .DltBuildTranslateButton { vertical-align: center; min-width: 180px; }
 .DltBuildProgress { flow-children: down; width: 300px; }
 .DltBuildProgressPopup {
+    visibility: collapse;
     ignore-parent-flow: true;
     horizontal-align: left;
     vertical-align: bottom;
@@ -42,3 +43,20 @@
 .DltBuildListActions .DltBuildProgressText { margin-left: 10px; vertical-align: center; max-width: 180px; }
 .DltBuildListNames { flow-children: down; width: fill-parent-flow(1.0); vertical-align: center; }
 .DltListTranslation { visibility: collapse; color: #e8dbb8; font-size: 16px; width: 100%; text-overflow: ellipsis; margin-left: 10px; }
+.DltBuildContextMarker { visibility: collapse; ignore-parent-flow: true; width: 0px; height: 0px; }
+.DltBuildTextSlot { flow-children: down; max-width: 100%; vertical-align: center; }
+.DltNativeHidden { visibility: collapse; }
+.DltBoundTranslation { visibility: collapse; max-width: 100%; color: #e8dbb8; text-overflow: clip; }
+.DltShopTitleSlot { width: fill-parent-flow(1.0); }
+.DltShopTitleText { font-family: oracle; font-size: 28px; font-weight: bold; color: offBlack; margin-right: 10px; text-overflow: shrink; }
+.DltDetailsTitleSlot { width: fill-parent-flow(1.0); }
+.HeroBuildsExtraInfo .AuthoringInfo { width: 100%; }
+.DltDetailsTitleText { font-family: oracle; font-size: 30px; font-weight: bold; height: 48px; text-overflow: shrink; }
+.DltDetailsNoteSlot, .DltItemNoteSlot { width: 100%; }
+.DltCategoryNoteSlot { width: fill-parent-flow(1.0); }
+.DltDetailsNoteText { font-family: sans; font-size: 18px; font-weight: semi-bold; margin: 4px; opacity: 0.7; width: 100%; }
+.DltCategoryTitleSlot { max-width: 45%; }
+.DltCategoryTitleText { font-size: 16px; font-weight: bold; margin: 6px 4px 4px 12px; }
+.DltCategoryNoteText { font-size: 15px; font-weight: semi-bold; opacity: 0.6; margin: 4px; }
+.DltItemNoteText { font-size: 16px; width: 100%; }
+.BuildDetailsTooltip .DltBuildActions, .BuildDetailsTooltip .DltBuildProgressPopup { visibility: collapse; }
