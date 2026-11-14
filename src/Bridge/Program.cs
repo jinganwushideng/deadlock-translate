@@ -418,7 +418,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     async Task<JsonElement> Execute(BuildTextRequest request){
         for(var attempt=0;;attempt++){
             token.ThrowIfCancellationRequested();
-            var result=await RunBuildRequest(request with{Revision=job.Revision},token);
+            var result=await RunBuildRequest(request with{Revision=job.Revision},token,source?.Fields??parent?.Fields);
             var json=JsonSerializer.SerializeToElement((result as IValueHttpResult)?.Value,ConfigStore.Json);
             if(json.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid build response");
             if(!json.TryGetProperty("error",out var error)||error.GetString()!="busy"||attempt==79)return json;
@@ -501,7 +501,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     }
 }
 
-async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken requestAborted){
+async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken requestAborted,BuildSourceField[]? promptFields=null){
     var (settings,configRevision)=config.Snapshot();
     var termRevision=terms.Revision;
     var glossary=terms.Fingerprint;
@@ -543,13 +543,14 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         var cacheHits=0;
         var migrated=false;
         bool ReadCached(string text,bool refined,out string? value){
-            var key=BuildTextCache.Key(text,profile,refined,glossary,refined?scope:null);
+            var isTitle=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list")=="title";
+            var key=BuildTextCache.Key(text,profile,refined,glossary,refined?scope:null,isTitle);
             if(buildTextCache.TryGet(key,out value)){
                 migrated|=buildTextCache.Remember(refined?qualityPlan:fastPlan,text,key);return true;
             }
             // Old cache entries have no source metadata. Reuse them when the
             // original context still matches, then add the stable namespace.
-            if(!refined||input.Fingerprint!=null||!buildTextCache.TryGet(BuildTextCache.Key(text,profile,true,glossary,legacyContext),out value))return false;
+            if(isTitle||!refined||input.Fingerprint!=null||!buildTextCache.TryGet(BuildTextCache.Key(text,profile,true,glossary,legacyContext),out value))return false;
             buildTextCache.Store(key,value!);
             buildTextCache.Remember(qualityPlan,text,key);migrated=true;return true;
         }
@@ -561,7 +562,8 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
                     values[text]=label;cacheHits++;continue;
                 }
             }
-            var cacheKey=BuildTextCache.Key(text,profile,quality,glossary,quality?scope:null);
+            var isTitle=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list")=="title";
+            var cacheKey=BuildTextCache.Key(text,profile,quality,glossary,quality?scope:null,isTitle);
             if(profile.Mode=="hybrid"&&!quality){
                 if(ReadCached(text,true,out var refined)){values[text]=refined!;cacheHits++;continue;}
                 refineTexts.Add(text);
@@ -587,7 +589,7 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         if(misses.Count!=0){
             var source=misses.Select(item=>item.Text).ToArray();
             var partial=quality&&(input.Source!=null||input.Action=="list");
-            var results=quality?await translators.TranslateBuildQuality(source,context,profile,timeout.Token,partial)
+            var results=quality?await translators.TranslateBuildQuality(source,context,profile,timeout.Token,partial,input.Build,promptFields,input.Action=="list")
                 :await translators.TranslateBuildFast(source,profile.Fast,timeout.Token);
             var latest=config.Snapshot().Revision+":"+terms.Revision;
             if(latest!=revision)return Results.Json(new{id=input.Id,revision=latest,error="settings-changed"});

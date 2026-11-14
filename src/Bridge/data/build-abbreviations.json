@@ -1,0 +1,504 @@
+{
+  "sourceDocument": "docs/deadlock-english-glossary.md",
+  "sourceSha256": "2b9bec39df74bd2488ebd386d6a008440e15852278141d47dec47529fa2e9f9f",
+  "policy": "Build-only contextual hints. Canonical names are resolved from the active dictionary. Never perform direct substitutions.",
+  "entries": [
+    {
+      "source": "hvr",
+      "names": [
+        "High-Velocity Rounds"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "hvm",
+      "names": [
+        "High-Velocity Rounds"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "ext mag",
+      "names": [
+        "Extended Magazine"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "titanic mag",
+      "names": [
+        "Titanic Magazine"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "hsb",
+      "names": [
+        "Headshot Booster"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "hs booster",
+      "names": [
+        "Headshot Booster"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "whs",
+      "names": [
+        "Weakening Headshot"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "weakening hs",
+      "names": [
+        "Weakening Headshot"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "chs",
+      "names": [
+        "Crippling Headshot"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "cripple hs",
+      "names": [
+        "Crippling Headshot"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "hpw",
+      "names": [
+        "Hollow Point"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "kdash",
+      "names": [
+        "Kinetic Dash"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mshot",
+      "names": [
+        "Mystic Shot"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "imag",
+      "names": [
+        "Intensifying Magazine"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "intensifying mag",
+      "names": [
+        "Intensifying Magazine"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "alch fire",
+      "names": [
+        "Alchemical Fire"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "apr",
+      "names": [
+        "Armor Piercer"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "ap rounds",
+      "names": [
+        "Armor Piercer"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "vamp burst",
+      "names": [
+        "Vampiric Burst"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mleap",
+      "names": [
+        "Majestic Leap"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mburst",
+      "names": [
+        "Mystic Burst"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mb",
+      "names": [
+        "Mystic Burst"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "improved burst",
+      "names": [
+        "Tankbuster"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "ib",
+      "names": [
+        "Tankbuster"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mreach",
+      "names": [
+        "Mystic Expansion"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "greach",
+      "names": [
+        "Greater Expansion"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "sup cd",
+      "names": [
+        "Superior Cooldown"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "superior cd",
+      "names": [
+        "Superior Cooldown"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "trans cd",
+      "names": [
+        "Transcendent Cooldown"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "sup dur",
+      "names": [
+        "Superior Duration"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "superior dur",
+      "names": [
+        "Superior Duration"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "qs reload",
+      "names": [
+        "Quicksilver Reload"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "sop",
+      "names": [
+        "Surge of Power"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "ssnatch",
+      "names": [
+        "Spirit Snatch"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "brs",
+      "names": [
+        "Bullet Resist Shredder"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mystic vuln",
+      "names": [
+        "Mystic Vulnerability"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "esc exp",
+      "names": [
+        "Escalating Exposure"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "shex",
+      "names": [
+        "Slowing Hex"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "slow hex",
+      "names": [
+        "Slowing Hex"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "dhex",
+      "names": [
+        "Disarming Hex"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "disarm hex",
+      "names": [
+        "Disarming Hex"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "swave",
+      "names": [
+        "Silence Wave"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "eshift",
+      "names": [
+        "Ethereal Shift"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "e-shift",
+      "names": [
+        "Ethereal Shift"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "eshard",
+      "names": [
+        "Echo Shard"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "diviners",
+      "names": [
+        "Diviner's Kevlar"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "rust barrel",
+      "names": [
+        "Rusted Barrel"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "bullet res",
+      "names": [
+        "Bullet Resilience"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "spirit res",
+      "names": [
+        "Spirit Resilience"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "ss",
+      "names": [
+        "Spirit Strike",
+        "Stamina Mastery",
+        "Swift Striker"
+      ],
+      "otherMeanings": [
+        "enemy missing"
+      ]
+    },
+    {
+      "source": "ms",
+      "names": [
+        "Metal Skin",
+        "Mystic Shot"
+      ],
+      "otherMeanings": [
+        "movement speed",
+        "latency in milliseconds"
+      ]
+    },
+    {
+      "source": "tb",
+      "names": [
+        "Tankbuster",
+        "Toxic Bullets"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "es",
+      "names": [
+        "Echo Shard",
+        "Enduring Speed",
+        "Ethereal Shift",
+        "Extra Spirit",
+        "Extra Stamina"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "kd",
+      "names": [
+        "Kinetic Dash",
+        "Knockdown"
+      ],
+      "otherMeanings": [
+        "kill/death ratio"
+      ]
+    },
+    {
+      "source": "ap",
+      "names": [
+        "Armor Piercer"
+      ],
+      "otherMeanings": [
+        "ability points"
+      ]
+    },
+    {
+      "source": "tp",
+      "names": [
+        "Torment Pulse"
+      ],
+      "otherMeanings": [
+        "teleport / teleporter"
+      ]
+    },
+    {
+      "source": "dr",
+      "names": [
+        "Debuff Reducer"
+      ],
+      "otherMeanings": [
+        "damage reduction"
+      ]
+    },
+    {
+      "source": "ls",
+      "names": [
+        "Lightning Scroll",
+        "Lucky Shot"
+      ],
+      "otherMeanings": [
+        "lifesteal"
+      ]
+    },
+    {
+      "source": "sb",
+      "names": [
+        "Slowing Bullets",
+        "Spellbreaker"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mr",
+      "names": [
+        "Monster Rounds",
+        "Mystic Reverb"
+      ],
+      "otherMeanings": [
+        "magic resistance"
+      ]
+    },
+    {
+      "source": "db",
+      "names": [
+        "Divine Barrier"
+      ],
+      "otherMeanings": [
+        "debuff"
+      ]
+    },
+    {
+      "source": "tc",
+      "names": [
+        "Transcendent Cooldown",
+        "Trophy Collector"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "rr",
+      "names": [
+        "Rapid Recharge",
+        "Rapid Rounds"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "hb",
+      "names": [
+        "Healbane",
+        "Healing Booster"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "mystic.r",
+      "names": [
+        "Mystic Regeneration",
+        "Mystic Reverb"
+      ],
+      "otherMeanings": []
+    },
+    {
+      "source": "radiant.r",
+      "names": [
+        "Radiant Regeneration"
+      ],
+      "otherMeanings": []
+    }
+  ]
+}

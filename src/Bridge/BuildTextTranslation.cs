@@ -56,10 +56,10 @@ internal sealed class BuildTextCache {
         }catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException){}
     }
 
-    internal static string Key(string text, BuildTextProfile profile, bool quality, string glossary, string? context) {
-        // Refresh only fields affected by the new tactical guidance. Other cached
+    internal static string Key(string text, BuildTextProfile profile, bool quality, string glossary, string? context,bool title=false) {
+        // Refresh titles and fields affected by the new tactical guidance. Other cached
         // annotations retain their keys and incur no additional provider request.
-        if(quality&&BuildTextLanguage.Hints(text).Length>0)glossary+="\0"+BuildTextLanguage.Revision;
+        if(quality&&(title||BuildTextLanguage.Hints(text).Length>0||BuildTextAbbreviations.Contains(text)))glossary+="\0"+BuildTextLanguage.Revision+(title?":title":"");
         var fast=profile.Fast;
         var llm=profile.Quality;
         return Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{
@@ -161,7 +161,8 @@ public sealed partial class Translators {
             throw new InvalidDataException("Fast translator did not preserve batch boundaries");
         return values;
     }
-    internal async Task<string[]> TranslateBuildQuality(string[] texts, string context, BuildTextProfile profile, CancellationToken ct,bool partial=false) {
+    internal async Task<string[]> TranslateBuildQuality(string[] texts, string context, BuildTextProfile profile, CancellationToken ct,bool partial=false,
+        string? buildTitle=null,BuildSourceField[]? fields=null,bool titlesOnly=false) {
         var settings=profile.Quality;
         var language=TranslationLanguages.Incoming(profile.Fast);
         var key=store.LlmSecretFor(profile.Fast);
@@ -171,12 +172,15 @@ public sealed partial class Translators {
         ct.ThrowIfCancellationRequested();
         var prepared=texts.Select(text=>language.ChineseGlossary?terms.Prepare(text,settings.BilingualNames):terms.PrepareOutgoingNames(text)).ToArray();
         var items=prepared.Select((value,index)=>new{
-            id=index,text=Terms.Restore(value.Text,value.Map),
+            id=index,kind=BuildTextLanguage.FieldKind(texts[index],buildTitle,fields,titlesOnly),text=Terms.Restore(value.Text,value.Map),
             requiredNames=value.Map.Values.Distinct(),
             glossary=value.Hints.Select(term=>new{term.Source,term.Target,term.Ambiguous}),
-            buildTerminology=language.ChineseGlossary?BuildTextLanguage.Hints(texts[index]):[]
+            buildTerminology=language.ChineseGlossary?BuildTextLanguage.Hints(texts[index]):[],
+            abbreviationHints=BuildTextAbbreviations.Match(texts[index],terms,settings.BilingualNames,language.ChineseGlossary)
         });
-        var input=JsonSerializer.Serialize(new{targetLanguage=language.Name,context,items},ConfigStore.Json);
+        var referenceNames=(language.ChineseGlossary?terms.Prepare(context,settings.BilingualNames):terms.PrepareOutgoingNames(context))
+            .Map.Values.Distinct().Take(32).ToArray();
+        var input=JsonSerializer.Serialize(new{targetLanguage=language.Name,context,referenceNames,items},ConfigStore.Json);
         const string prompt=BuildTextLanguage.Prompt;
         var epoch=Interlocked.Read(ref qualityEpoch);
         var previous=providerIssues.GetValueOrDefault("llm");

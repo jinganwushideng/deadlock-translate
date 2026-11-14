@@ -13,6 +13,12 @@ Check(BuildTextLanguage.TryLabel("Core Build",out var core)&&core=="核心出装
 Check(!BuildTextLanguage.TryLabel("Buy Core Build later",out _)&&!BuildTextLanguage.TryLabel("Tankbuster",out _),"local headings never replace substrings or equipment names");
 Check(BuildTextLanguage.Hints("L>R, poke then sustain; CC").Select(hint=>hint.Source).ToHashSet().SetEquals(new[]{"L>R","poke","sustain","CC"}),"build tactical hints preserve purchase order and combat context");
 Check(BuildTextLanguage.Hints("showcase farmer sustainment").Length==0,"tactical hints use whole tokens rather than arbitrary substrings");
+Check(BuildTextLanguage.FieldKind("Shared", "Current build", [new("item:7","item-note","Shared",99)])=="item-note"&&
+    BuildTextLanguage.FieldKind("Current build","Current build",null)=="title"&&
+    BuildTextLanguage.FieldKind("Any listed guide",null,null,true)=="title","native field metadata distinguishes equipment annotations, selected title and browser list titles");
+Check(BuildTextLanguage.FieldKind("Another title","Current build",null)=="text","unknown field roles are never guessed from matching words");
+var promptProfile=BuildTextProfile.Resolve(new Settings());
+Check(BuildTextCache.Key("Fresh title",promptProfile,true,"glossary","scope",true)!=BuildTextCache.Key("Fresh title",promptProfile,true,"glossary","scope"),"quality title cache cannot reuse a generic field interpretation");
 byte[] Join(params byte[][] parts)=>parts.SelectMany(p=>p).ToArray();
 byte[] Int(ulong n){var bytes=new List<byte>();while(n>=128){bytes.Add((byte)((n&127)|128));n>>=7;}bytes.Add((byte)n);return bytes.ToArray();}
 byte[] Number(int field,uint n)=>Join(Int((ulong)(field<<3)),Int(n));
@@ -58,6 +64,7 @@ try{LocalBuildCatalog.Parse(Data(1,Data(5,[0xFF])));throw new Exception("Accepte
 
 var folder=Path.Combine(Path.GetTempPath(),"dlt-catalog-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
 try{
+    await BuildPromptFixture.Run(folder,Check);
     var reviewFolder=Path.Combine(folder,"review");var snapshots=Path.Combine(reviewFolder,"build-sources-v2");Directory.CreateDirectory(snapshots);
     var invalidKey=new string('F',64);var invalidFile=Path.Combine(snapshots,invalidKey+".json");
     File.WriteAllBytes(invalidFile,System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new{Account=LocalBuildCatalog.LocateCurrentCache()??"",Plan=plan with{Name="Wrong title",Fingerprint=invalidKey}}));
