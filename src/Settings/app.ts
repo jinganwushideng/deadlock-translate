@@ -14,7 +14,7 @@ type Term={source:string,target:string,english:string,kind:string,ambiguous:bool
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
 type ModelProfile='common'|'incoming'|'outgoing';
 let activeModelProfile:ModelProfile='common';
-const fields=['buildTextAutoEnabled','buildTextContextChars','buildTextMaxTokens','buildTextMode','buildTextTargetLanguage','buildTextCustomLanguage','buildTextCustomLanguageCode','buildTextFastProvider','buildTextModel','buildTextThinking','settingsBackgroundMode','llmKeepAliveEnabled','llmKeepAliveSeconds','llmIndependentProfiles','incomingModel','outgoingModel','incomingThinking','outgoingThinking','outgoingSeparateBilingual','outgoingSplitLong','incomingTone','incomingCustomTone','incomingShowOwnTranslations','incomingShowHeroName','incomingShowAccountName','incomingHeroNamePosition','incomingOpacity','incomingFeedWidth','incomingFeedPosition','incomingFeedOffsetX','incomingFeedOffsetY','incomingDisplayMode','incomingFeedSeconds','incomingFeedLines','incomingTargetLanguage','incomingCustomLanguage','incomingCustomLanguageCode','outgoingTargetLanguage','outgoingCustomLanguage','outgoingCustomLanguageCode','enabled','incomingScope','mode','fastProvider','azureRegion','llmBaseUrl','model','llmMaxTokens','llmThinkingEnabled','llmThinkingApi','llmStreaming','outgoingUseContext','outgoingContextCount','outgoingContextSeconds','fontSize','bilingualNames','chineseNameStyle','scanIntervalMs','llmConcurrency','fastConcurrency','outgoingConcurrency','outgoingQueueLimit','fastTimeoutSeconds','llmTimeoutSeconds','transport','outgoingEnabled','outgoingHotkey','reserveSendSlot','outgoingMode','outgoingDisplayMode','outgoingTone','outgoingCustomTone','outgoingEnglishCase','outgoingTimeoutSeconds','outgoingFallbackFast'];
+const fields=['buildTextAutoEnabled','buildTextContextChars','buildTextMaxTokens','buildTextMode','buildTextTargetLanguage','buildTextCustomLanguage','buildTextCustomLanguageCode','buildTextFastProvider','buildTextModel','buildTextThinking','settingsBackgroundMode','llmKeepAliveEnabled','llmKeepAliveSeconds','llmIndependentProfiles','incomingModel','outgoingModel','incomingThinking','outgoingThinking','outgoingSeparateBilingual','outgoingSplitLong','incomingTone','incomingCustomTone','incomingShowOwnTranslations','incomingShowHeroName','incomingShowAccountName','incomingHeroNamePosition','incomingOpacity','incomingFeedWidth','incomingFeedPosition','incomingFeedOffsetX','incomingFeedOffsetY','incomingDisplayMode','incomingFeedSeconds','incomingFeedLines','incomingTargetLanguage','incomingCustomLanguage','incomingCustomLanguageCode','outgoingTargetLanguage','outgoingCustomLanguage','outgoingCustomLanguageCode','enabled','incomingScope','mode','fastProvider','azureRegion','llmPreset','llmCustomBaseUrl','llmCustomModel','llmCustomIncomingModel','llmCustomOutgoingModel','llmCustomBuildTextModel','llmBaseUrl','model','llmMaxTokens','llmThinkingEnabled','llmThinkingApi','llmStreaming','outgoingUseContext','outgoingContextCount','outgoingContextSeconds','fontSize','bilingualNames','chineseNameStyle','scanIntervalMs','llmConcurrency','fastConcurrency','outgoingConcurrency','outgoingQueueLimit','fastTimeoutSeconds','llmTimeoutSeconds','transport','outgoingEnabled','outgoingHotkey','reserveSendSlot','outgoingMode','outgoingDisplayMode','outgoingTone','outgoingCustomTone','outgoingEnglishCase','outgoingTimeoutSeconds','outgoingFallbackFast'];
 type QuickMessage={id:string,text:string,hotkey:string,channel:string,enabled:boolean};
 let quickMessages:QuickMessage[]=[];
 let terms:Term[]=[];let current:Record<string,unknown>={};let clearAzure=false,clearLlm=false;
@@ -26,7 +26,68 @@ async function api(path:string,method='GET',data?:unknown){
  const timer=controller?setTimeout(()=>controller.abort(),5000):null;
  try{const res=await fetch('/api/'+path,{method,signal:controller?.signal,headers:{'Content-Type':'application/json','X-DLT-Request':'1',...(path==='config'&&method==='PUT'&&settingsRevision?{'If-Match':'"'+settingsRevision+'"'}:{})},body:data===undefined?undefined:JSON.stringify(data)});let body:any;try{body=await res.json();}catch{body={};}if(!res.ok)throw new ApiError(body.error||'连接失败，请重新通过设置按钮打开页面',res.status,body);return body;}finally{if(timer!==null)clearTimeout(timer);}
 }
-function loadFields(data:any){current={buildTextAutoEnabled:false,buildTextContextChars:6000,buildTextMaxTokens:8192,buildTextMode:'fast',buildTextTargetLanguage:'zh-Hans',buildTextCustomLanguage:'',buildTextCustomLanguageCode:'',buildTextFastProvider:'common',buildTextModel:'',buildTextThinking:null,settingsBackgroundMode:'static',llmKeepAliveEnabled:false,llmKeepAliveSeconds:120,llmIndependentProfiles:!!(data.settings.incomingModel||data.settings.outgoingModel||data.settings.incomingThinking!=null||data.settings.outgoingThinking!=null),incomingModel:'',outgoingModel:'',incomingThinking:null,outgoingThinking:null,outgoingSeparateBilingual:false,outgoingSplitLong:false,incomingTone:'none',incomingCustomTone:'',incomingShowOwnTranslations:true,incomingShowHeroName:true,incomingShowAccountName:true,incomingHeroNamePosition:'before',incomingOpacity:90,incomingFeedWidth:340,incomingFeedPosition:'center-left',incomingFeedOffsetX:28,incomingFeedOffsetY:0,incomingDisplayMode:'native',incomingFeedSeconds:8,incomingFeedLines:3,outgoingTone:'none',outgoingCustomTone:'',outgoingEnglishCase:'normal',llmMaxTokens:4096,llmThinkingEnabled:true,llmThinkingApi:'auto',llmStreaming:true,outgoingUseContext:false,outgoingContextCount:3,outgoingContextSeconds:30,chineseNameStyle:'current',outgoingHotkey:'LAlt+Space',incomingTargetLanguage:'zh-Hans',incomingCustomLanguage:'',incomingCustomLanguageCode:'',outgoingTargetLanguage:'en',outgoingCustomLanguage:'',outgoingCustomLanguageCode:'',...data.settings};for(const key of fields){const input=$<HTMLInputElement>(key);if(input.type==='checkbox')input.checked=!!current[key];else input.value=current[key]==null?'':String(current[key]);}$<HTMLInputElement>('azureKey').placeholder=data.hasAzureKey?'已保存 · 留空保持不变':'尚未配置';$<HTMLInputElement>('llmKey').placeholder=data.hasLlmKey?'已保存 · 留空保持不变':'尚未配置';quickMessages=Array.isArray(data.settings.quickMessages)?data.settings.quickMessages.map((q:QuickMessage)=>({...q})):[];drawQuickMessages();refreshSettingsBackground();refreshPreview();refreshIncomingDisplay();refreshLanguageFields();refreshBuildTextProfile();syncChordOptions();refreshContextFields();refreshToneFields();refreshIncomingToneFields();refreshModelTabs();rememberLoadedConfig(data);}
+const DEEPSEEK_URL='https://api.deepseek.com';
+function isDeepSeekAddress(value:string){
+ try{const url=new URL(value);return url.protocol==='https:'&&url.hostname.toLowerCase()==='api.deepseek.com'&&!url.port&&!url.username&&!url.password&&!url.search&&!url.hash&&['','/','/v1','/v1/','/chat/completions','/v1/chat/completions'].includes(url.pathname);}catch{return false;}
+}
+function resolveLlmPreset(saved:unknown,address:string){return saved==='custom'||!isDeepSeekAddress(address)?'custom':'deepseek';}
+function validCustomAddress(value:string){
+ try{const url=new URL(value);return value.length<=2048&&(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))&&!url.username&&!url.password&&!url.search&&!url.hash;}catch{return false;}
+}
+const customModelControls=new Map<string,HTMLInputElement>();
+const presetModelControls=new Map<string,HTMLSelectElement>();
+const modelPresetFields=[['model','llmCustomModel'],['incomingModel','llmCustomIncomingModel'],['outgoingModel','llmCustomOutgoingModel'],['buildTextModel','llmCustomBuildTextModel']];
+function resetPresetModels(){
+ for(const [id,input] of customModelControls){const shown=$(id);if(shown!==input)shown.replaceWith(input);}
+ customModelControls.clear();presetModelControls.clear();
+}
+function refreshPresetModels(deepseek:boolean,changing:boolean){
+ for(const [id,backup] of modelPresetFields){
+  const shown=$<HTMLInputElement|HTMLSelectElement>(id);
+  if(deepseek&&shown instanceof HTMLInputElement){
+   if(changing)$<HTMLInputElement>(backup).value=shown.value;
+   customModelControls.set(id,shown);
+   let select=presetModelControls.get(id);
+   if(!select){
+    select=document.createElement('select');select.id=id;
+    if(id!=='model'){const inherit=document.createElement('option');inherit.value='';inherit.textContent='跟随通用模型';select.append(inherit);}
+    for(const name of ['deepseek-flash','deepseek-v4-pro']){
+     const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);
+    }
+    select.value=['deepseek-flash','deepseek-v4-pro'].includes(shown.value)?shown.value:id==='model'?'deepseek-flash':'';
+    select.addEventListener('change',()=>{resetApiReport('llm');refreshModelSummary();});
+    presetModelControls.set(id,select);
+   }
+   shown.replaceWith(select);
+  }else if(!deepseek&&shown instanceof HTMLSelectElement){
+   const input=customModelControls.get(id)!;
+   const saved=$<HTMLInputElement>(backup).value;
+   if(saved||id!=='model')input.value=saved;
+   shown.replaceWith(input);
+  }
+ }
+}
+function refreshLlmPreset(changing=false){
+ const deepseek=$<HTMLSelectElement>('llmPreset').value==='deepseek';
+ $('llmCustomAddressRow').hidden=deepseek;$('deepseekKeyRow').hidden=!deepseek;
+ $<HTMLInputElement>('llmBaseUrl').disabled=deepseek;refreshPresetModels(deepseek,changing);refreshModelSummary();
+}
+$('llmPreset').addEventListener('change',()=>{
+ const address=$<HTMLInputElement>('llmBaseUrl');
+ if($<HTMLSelectElement>('llmPreset').value==='deepseek'){
+  if(validCustomAddress(address.value))$<HTMLInputElement>('llmCustomBaseUrl').value=address.value;
+  address.value=DEEPSEEK_URL;
+ }else address.value=String($<HTMLInputElement>('llmCustomBaseUrl').value||address.value||DEEPSEEK_URL);
+ refreshLlmPreset(true);resetApiReport('llm');
+});
+$('llmBaseUrl').addEventListener('input',()=>{
+ if($<HTMLSelectElement>('llmPreset').value==='custom'&&validCustomAddress($<HTMLInputElement>('llmBaseUrl').value))
+  $<HTMLInputElement>('llmCustomBaseUrl').value=$<HTMLInputElement>('llmBaseUrl').value;
+});
+bind('deepseekGetKey',async()=>{
+ await api('providers/deepseek/key','POST',{});notice('已在系统默认浏览器打开 DeepSeek 平台。');
+});
+function loadFields(data:any){resetPresetModels();current={llmPreset:'auto',llmCustomBaseUrl:'',llmCustomModel:'',llmCustomIncomingModel:'',llmCustomOutgoingModel:'',llmCustomBuildTextModel:'',llmBaseUrl:DEEPSEEK_URL,model:'deepseek-flash',buildTextAutoEnabled:false,buildTextContextChars:6000,buildTextMaxTokens:8192,buildTextMode:'fast',buildTextTargetLanguage:'zh-Hans',buildTextCustomLanguage:'',buildTextCustomLanguageCode:'',buildTextFastProvider:'common',buildTextModel:'',buildTextThinking:null,settingsBackgroundMode:'static',llmKeepAliveEnabled:false,llmKeepAliveSeconds:120,llmIndependentProfiles:!!(data.settings.incomingModel||data.settings.outgoingModel||data.settings.incomingThinking!=null||data.settings.outgoingThinking!=null),incomingModel:'',outgoingModel:'',incomingThinking:null,outgoingThinking:null,outgoingSeparateBilingual:false,outgoingSplitLong:false,incomingTone:'none',incomingCustomTone:'',incomingShowOwnTranslations:true,incomingShowHeroName:true,incomingShowAccountName:true,incomingHeroNamePosition:'before',incomingOpacity:90,incomingFeedWidth:340,incomingFeedPosition:'center-left',incomingFeedOffsetX:28,incomingFeedOffsetY:0,incomingDisplayMode:'native',incomingFeedSeconds:8,incomingFeedLines:3,outgoingTone:'none',outgoingCustomTone:'',outgoingEnglishCase:'normal',llmMaxTokens:4096,llmThinkingEnabled:true,llmThinkingApi:'auto',llmStreaming:true,outgoingUseContext:false,outgoingContextCount:3,outgoingContextSeconds:30,chineseNameStyle:'current',outgoingHotkey:'LAlt+Space',incomingTargetLanguage:'zh-Hans',incomingCustomLanguage:'',incomingCustomLanguageCode:'',outgoingTargetLanguage:'en',outgoingCustomLanguage:'',outgoingCustomLanguageCode:'',...data.settings};current.llmPreset=resolveLlmPreset(current.llmPreset,String(current.llmBaseUrl));for(const key of fields){const input=$<HTMLInputElement>(key);if(input.type==='checkbox')input.checked=!!current[key];else input.value=current[key]==null?'':String(current[key]);}$<HTMLInputElement>('azureKey').placeholder=data.hasAzureKey?'已保存 · 留空保持不变':'尚未配置';$<HTMLInputElement>('llmKey').placeholder=data.hasLlmKey?'已保存 · 留空保持不变':'尚未配置';quickMessages=Array.isArray(data.settings.quickMessages)?data.settings.quickMessages.map((q:QuickMessage)=>({...q})):[];drawQuickMessages();refreshSettingsBackground();refreshPreview();refreshIncomingDisplay();refreshLanguageFields();refreshBuildTextProfile();syncChordOptions();refreshContextFields();refreshToneFields();refreshIncomingToneFields();refreshModelTabs();refreshLlmPreset();rememberLoadedConfig(data);}
 const titles:Record<string,string>={overview:'概览',incoming:'接收翻译',outgoing:'发送翻译',buildText:'出装翻译',shortcuts:'快捷键与短语',providers:'翻译服务',glossary:'游戏词库',appearance:'显示样式',performance:'性能与队列',diagnostics:'诊断与日志'};
 let navigationIntent=0;
 async function selectPage(page:string,section?:string){

@@ -140,6 +140,13 @@ internal sealed class BuildTextCache {
 
 public sealed partial class Translators {
     internal async Task<string[]> TranslateBuildFast(string[] texts, Settings settings, CancellationToken ct) {
+        if(!TranslationLanguages.Incoming(settings).ChineseGlossary||!texts.Any(BuildRankNames.Contains))
+            return await TranslateBuildFastCore(texts,settings,ct);
+        var prepared=texts.Select(text=>BuildRankNames.Protect(new(text,[],[]))).ToArray();
+        var translated=await TranslateBuildFastCore(prepared.Select(p=>p.Text).ToArray(),settings,ct);
+        return translated.Select((value,index)=>Terms.Restore(value,prepared[index].Map)).ToArray();
+    }
+    private async Task<string[]> TranslateBuildFastCore(string[] texts, Settings settings, CancellationToken ct) {
         var language=TranslationLanguages.Incoming(settings);
         if(texts.Length==1)return [await Fast(texts[0],settings,ct,background:true)];
         if(settings.FastProvider=="azure"){
@@ -170,7 +177,7 @@ public sealed partial class Translators {
         CheckCooldown("llm");
         using var lease=TryEnterBuildLlm(settings.Model)??throw new FastProviderBusyException();
         ct.ThrowIfCancellationRequested();
-        var prepared=texts.Select(text=>language.ChineseGlossary?terms.Prepare(text,settings.BilingualNames):terms.PrepareOutgoingNames(text)).ToArray();
+        var prepared=texts.Select(text=>language.ChineseGlossary?BuildRankNames.Protect(terms.Prepare(text,settings.BilingualNames)):terms.PrepareOutgoingNames(text)).ToArray();
         var items=prepared.Select((value,index)=>new{
             id=index,kind=BuildTextLanguage.FieldKind(texts[index],buildTitle,fields,titlesOnly),text=protectNames?value.Text:Terms.Restore(value.Text,value.Map),
             requiredNames=protectNames?value.Map.Keys: value.Map.Values.Distinct(),

@@ -203,6 +203,7 @@ IResult OpenCommunityLink(string url, string linkName, bool showAddress = false)
 }
 app.MapPost("/api/community/bilibili",()=>OpenCommunityLink("https://space.bilibili.com/332089385", "主页链接"));
 app.MapPost("/api/community/github",()=>OpenCommunityLink(CommunityLinks.GitHubProject, "项目地址"));
+app.MapPost("/api/providers/deepseek/key",()=>OpenCommunityLink("https://platform.deepseek.com/usage","DeepSeek 密钥平台链接",true));
 app.MapGet("/api/config",()=>config.Public());
 async Task<IResult> MaintenanceResult(Func<Task<object?>> work){
     try{return Results.Ok(await work());}
@@ -534,6 +535,7 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
                 id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,texts=plan.Texts,groups=plan.Groups,fingerprint=plan.Fingerprint}});
         }
         var profile=BuildTextProfile.Resolve(settings);
+        var useChineseRanks=TranslationLanguages.Incoming(profile.Fast).ChineseGlossary;
         var quality=profile.Mode=="quality"||(profile.Mode=="hybrid"&&input.Refine);
         var context=input.Context??"";
         if(context.Length>settings.BuildTextContextChars)context=context[..settings.BuildTextContextChars];
@@ -549,22 +551,33 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         var cacheHits=0;
         var localHits=0;
         var migrated=false;
+        bool NormalizeCachedRank(string text,string key,ref string? value){
+            if(!useChineseRanks||value is null)return true;
+            if(!BuildRankNames.TryNormalize(text,value,out var localized))return false;
+            if(localized!=value){value=localized;buildTextCache.Store(key,localized);migrated=true;}
+            return true;
+        }
         bool ReadCached(string text,bool refined,out string? value){
             var isTitle=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list")=="title";
             var key=BuildTextCache.Key(text,profile,refined,glossary,refined?scope:null,isTitle);
             if(buildTextCache.TryGet(key,out value)){
+                if(!NormalizeCachedRank(text,key,ref value))return false;
                 migrated|=buildTextCache.Remember(refined?qualityPlan:fastPlan,text,key);return true;
             }
             // Old cache entries have no source metadata. Reuse them when the
             // original context still matches, then add the stable namespace.
-            if(isTitle||!refined||input.Fingerprint!=null||!buildTextCache.TryGet(BuildTextCache.Key(text,profile,true,glossary,legacyContext),out value))return false;
+            if(isTitle||!refined||input.Fingerprint!=null||!buildTextCache.TryGet(BuildTextCache.Key(text,profile,true,glossary,legacyContext),out value)||
+                !NormalizeCachedRank(text,key,ref value))return false;
             buildTextCache.Store(key,value!);
             buildTextCache.Remember(qualityPlan,text,key);migrated=true;return true;
         }
         foreach(var text in input.Texts.Select(text=>text.Trim()).Distinct(StringComparer.Ordinal)){
             if(!text.Any(char.IsLetter)){values[text]="";continue;}
             var kind=BuildTextLanguage.FieldKind(text,input.Build,promptFields,input.Action=="list");
-            if(TranslationLanguages.Incoming(profile.Fast).ChineseGlossary){
+            if(useChineseRanks){
+                if(BuildRankNames.TryExact(text,out var rank)){
+                    values[text]=rank;localHits++;continue;
+                }
                 if(kind=="item-note"&&BuildTextLanguage.TryItemStats(text,out var stats)){
                     values[text]=stats;localHits++;continue;
                 }
@@ -589,10 +602,16 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
             if(migrated)buildTextCache.Flush();
             completedBatch=true;
             var snapshot=new Dictionary<string,BuildTextCached>(StringComparer.Ordinal);
+            void AddSnapshot(string plan,bool refine){
+                foreach(var (text,value) in buildTextCache.Snapshot(plan)){
+                    if(!useChineseRanks)snapshot[text]=new(value,refine);
+                    else if(BuildRankNames.TryNormalize(text,value,out var localized))snapshot[text]=new(localized,refine);
+                }
+            }
             if(input.IncludeSnapshot&&profile.Mode!="quality")
-                foreach(var (text,value) in buildTextCache.Snapshot(fastPlan))snapshot[text]=new(value,profile.Mode=="hybrid"&&hasLlm);
+                AddSnapshot(fastPlan,profile.Mode=="hybrid"&&hasLlm);
             if(input.IncludeSnapshot&&profile.Mode!="fast")
-                foreach(var (text,value) in buildTextCache.Snapshot(qualityPlan))snapshot[text]=new(value,false);
+                AddSnapshot(qualityPlan,false);
             return Results.Json(new{id=input.Id,revision,
                 translations=input.Texts.Select(text=>values.TryGetValue(text.Trim(),out var value)?value:null).ToArray(),
                 cacheHits,localHits,translated=0,refine=false,snapshot,
@@ -611,6 +630,10 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
             for(var i=0;i<results.Length;i++){
                 if(string.IsNullOrWhiteSpace(results[i]))continue;
                 var value=results[i].Trim();
+                if(useChineseRanks){
+                    if(!BuildRankNames.TryNormalize(source[i],value,out var localized))continue;
+                    value=localized;
+                }
                 values[source[i]]=value==source[i]?"":value;
                 buildTextCache.Store(misses[i].Key,values[source[i]]);
                 buildTextCache.Remember(quality?qualityPlan:fastPlan,source[i],misses[i].Key);

@@ -11,6 +11,14 @@ var passed=0;
 void Check(bool valid,string name){if(!valid)throw new Exception(name);Console.WriteLine("PASS "+name);passed++;}
 Check(BuildTextLanguage.TryLabel("Core Build",out var core)&&core=="核心出装"&&BuildTextLanguage.TryLabel(" Mid   Options ",out var options)&&options=="中期备选","common build headings translate locally with whitespace normalization");
 Check(!BuildTextLanguage.TryLabel("Buy Core Build later",out _)&&!BuildTextLanguage.TryLabel("Tankbuster",out _),"local headings never replace substrings or equipment names");
+Check(BuildRankNames.TryExact("eTeRnUs",out var rank)&&rank=="不朽之星","official rank localizes without calling a provider");
+Check(BuildRankNames.TryNormalize("uhh Eternus Infernus","呃，Eternus 炽焱（Infernus）",out var cachedRank)&&cachedRank=="呃，不朽之星 炽焱（Infernus）","cached mixed-language title is repaired without translating it again");
+Check(BuildRankNames.TryNormalize("Eternus VI / Eternus+","Eternus VI / Eternus+",out var tier)&&tier=="不朽之星 VI / 不朽之星+","local rank repair preserves tier and plus suffixes");
+Check(BuildRankNames.TryNormalize("Eternus+ guide","仅供高段位",out _)==false,"a cached title that dropped the rank may not be reused");
+Check(!BuildRankNames.Contains("EternusGaming @Eternus Eternus's build https://twitch.tv/Eternus Eternus.gg twitch.tv/Eternus"),"rank protection skips handles, URLs and possessive author names");
+var protectedRank=BuildRankNames.Protect(new("Renon's Eternus VI Infernus (twitch.tv/renon)",[],[]));
+Check(protectedRank.Map.Values.SequenceEqual(new[]{"不朽之星"})&&Terms.Restore(protectedRank.Text,protectedRank.Map)=="Renon's 不朽之星 VI Infernus (twitch.tv/renon)","fast and retry placeholders restore the exact official name without altering title metadata");
+Check(BuildRankNames.TryNormalize("Eternus","不朽之星（Eternus）",out var noDuplicate)&&noDuplicate=="不朽之星","official name is not shown twice when bilingual names are enabled");
 Check(BuildTextLanguage.Hints("L>R, poke then sustain; CC").Select(hint=>hint.Source).ToHashSet().SetEquals(new[]{"L>R","poke","sustain","CC"}),"build tactical hints preserve purchase order and combat context");
 Check(BuildTextLanguage.Hints("showcase farmer sustainment").Length==0,"tactical hints use whole tokens rather than arbitrary substrings");
 Check(BuildTextLanguage.FieldKind("Shared", "Current build", [new("item:7","item-note","Shared",99)])=="item-note"&&

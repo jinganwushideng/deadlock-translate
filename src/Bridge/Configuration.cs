@@ -18,8 +18,15 @@ public record Settings {
     public int BuildTextContextChars { get; init; } = 6000;
     public int BuildTextMaxTokens { get; init; } = 8192;
     public string AzureRegion { get; init; } = "";
-    public string LlmBaseUrl { get; init; } = "https://api.deepseek.com/v1";
-    public string Model { get; init; } = "deepseek-chat";
+    public string LlmBaseUrl { get; init; } = "https://api.deepseek.com";
+    // auto preserves endpoint selection for configurations written before presets.
+    public string LlmPreset { get; init; } = "auto";
+    public string LlmCustomBaseUrl { get; init; } = "";
+    public string LlmCustomModel { get; init; } = "";
+    public string LlmCustomIncomingModel { get; init; } = "";
+    public string LlmCustomOutgoingModel { get; init; } = "";
+    public string LlmCustomBuildTextModel { get; init; } = "";
+    public string Model { get; init; } = "deepseek-flash";
     public int LlmMaxTokens { get; init; } = 4096;
     public bool LlmThinkingEnabled { get; init; } = true;
     public string LlmThinkingApi { get; init; } = "auto";
@@ -176,6 +183,14 @@ public sealed class ConfigStore {
         DisplayPreviewOptions.From(s).Validate();
         if(!LlmRequestOptions.ValidBudget(s.LlmMaxTokens))throw new ArgumentException("模型输出上限须在 512 到 16384 token 之间");
         if(!LlmRequestOptions.ValidThinkingApi(s.LlmThinkingApi))throw new ArgumentException("无效的思考接口格式");
+        if(s.LlmPreset is not ("auto" or "deepseek" or "custom"))throw new ArgumentException("请选择 DeepSeek 或自定义服务。");
+        if(new[]{s.LlmCustomModel,s.LlmCustomIncomingModel,s.LlmCustomOutgoingModel,s.LlmCustomBuildTextModel}
+            .Any(value=>value==null||value.Length>150||value.Any(char.IsControl)))throw new ArgumentException("自定义模型 ID 无效。");
+        if(s.LlmCustomBaseUrl==null||s.LlmCustomBaseUrl.Length>2048||
+            s.LlmCustomBaseUrl.Length>0&&(!Uri.TryCreate(s.LlmCustomBaseUrl,UriKind.Absolute,out var customUrl)||
+            (customUrl.Scheme!="https"&&!(customUrl.Scheme=="http"&&customUrl.IsLoopback))||
+            customUrl.UserInfo!=""||customUrl.Query!=""||customUrl.Fragment!=""))
+            throw new ArgumentException("自定义 API 地址须为 HTTPS 或本机 HTTP 地址，且不能包含密钥或参数。");
         if(s.LlmKeepAliveSeconds is <60 or >1800)throw new ArgumentException("大模型保活间隔须为 60～1800 秒");
         if(s.OutgoingContextCount is <1 or >3 || s.OutgoingContextSeconds is <15 or >30)throw new ArgumentException("发送上下文须为 1～3 条、15～30 秒");
         HotkeyChord.Parse(s.OutgoingHotkey);

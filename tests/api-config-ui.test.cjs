@@ -11,7 +11,7 @@ const server=http.createServer(async(req,res)=>{
  else if(url==='/api/config')res.end(JSON.stringify({settings,hasLlmKey:true,hasAzureKey:true}));
  else if(url==='/api/terms')res.end('[]');
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:0,pending:0,connected:true},terms:1,diagnostics:{version,clientVersion:version,phase:'connected',certificate:{state:'ready',message:'正常'},gamePrivileges:{detected:false},sending:{state:'idle'}}}));
- else if(url==='/app.js'||url==='/style.css'){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{

@@ -28,6 +28,10 @@ internal static class BuildPromptFixture {
         var retry=await translators.TranslateBuildQuality([annotation[0]],"",BuildTextProfile.Resolve(config.Current),default,partial:true,protectNames:true);
         check(handler.Input!.RootElement.GetProperty("items")[0].GetProperty("text").GetString()=="Buy DLTERM0X first"&&retry[0]=="先出 重装克星（Tankbuster）",
             "retry masks the required item name and restores its exact glossary spelling locally");
+        handler.Reply=[new(0,"不朽之星 VI 的出装")];
+        var ranked=await translators.TranslateBuildQuality(["Eternus VI guide"],"",BuildTextProfile.Resolve(config.Current),default,titlesOnly:true);
+        var rankRequired=handler.Input!.RootElement.GetProperty("items")[0].GetProperty("requiredNames");
+        check(rankRequired.GetArrayLength()==1&&rankRequired[0].GetString()=="不朽之星"&&ranked[0]=="不朽之星 VI 的出装","the build-browser prompt requires the official rank even with bilingual hero names enabled");
         check(BuildTextLanguage.TryItemStats("Pick Rate: 32%\r\nWR: +2%",out var stats)&&stats=="装备购买率：32%\n胜率：+2%"&&
             !BuildTextLanguage.TryItemStats("Pick Rate: 32%\nWR: +2%\nOnly in the late game",out _),"known equipment stat format translates locally without eating additional prose");
         terms.Save([new("Tankbuster","自定重装名","Tankbuster"),new("Toxic Bullets","自定毒弹名","Toxic Bullets"),

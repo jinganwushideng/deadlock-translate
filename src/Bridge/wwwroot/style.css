@@ -68,3 +68,5 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 .steam-account-list:empty,#steamAccountPreview:empty{display:none}.steam-account-list{display:grid;gap:8px;margin:14px 0}.steam-account-option{display:flex;gap:10px;align-items:center;overflow-wrap:anywhere}.steam-account-option input{flex:none;margin:0}#steamAccountPreview{padding-inline-start:1.3em}
 
 .build-cost-notice{margin:0 0 25px;padding:18px 23px;border-left:4px solid #d4b16e;background:#302a20d9;color:#f2d59e}.build-cost-notice strong{display:block;font-size:clamp(23px,1.55vw,34px);line-height:1.4;font-weight:900}.build-cost-notice p{margin:9px 0 0;font-size:clamp(16px,1.05vw,23px);line-height:1.65;color:#e4dcc8}.build-cost-notice p.build-cost-detail{font-size:clamp(14px,.9vw,18px);color:#c9c1ae}
+
+.llm-provider-action{display:grid;grid-template-columns:minmax(180px,26%) minmax(0,1fr);align-items:center;gap:18px;min-height:78px;padding:18px 0;border-bottom:1px solid #54554e;color:var(--text);font-weight:600}.llm-provider-action button{justify-self:start;max-width:100%}@media(max-width:760px){.llm-provider-action{grid-template-columns:minmax(0,1fr);gap:10px}}
