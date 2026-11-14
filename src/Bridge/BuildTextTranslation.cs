@@ -168,7 +168,7 @@ public sealed partial class Translators {
         var key=store.LlmSecretFor(profile.Fast);
         if(key.Length==0)throw new InvalidOperationException("未配置大模型密钥");
         CheckCooldown("llm");
-        using var lease=llmSlots.TryEnterIdle()??throw new FastProviderBusyException();
+        using var lease=TryEnterBuildLlm(settings.Model)??throw new FastProviderBusyException();
         ct.ThrowIfCancellationRequested();
         var prepared=texts.Select(text=>language.ChineseGlossary?terms.Prepare(text,settings.BilingualNames):terms.PrepareOutgoingNames(text)).ToArray();
         var items=prepared.Select((value,index)=>new{

@@ -24,6 +24,12 @@ public sealed partial class Translators : ILlmKeepAliveProvider {
         finally{previous?.Cancel();}
         var lease=await pending.ConfigureAwait(false);return new ActivityLease(this,lease,model);
     }
+    private IDisposable? TryEnterBuildLlm(string model){
+        WarmFlight? previous=null;IDisposable? lease;
+        try{lock(warmGate){previous=warmFlight;warmFlight=null;previous?.Lease.Dispose();lease=llmSlots.TryEnterBackground();}}
+        finally{previous?.Cancel();}
+        return lease==null?null:new ActivityLease(this,lease,model);
+    }
     private sealed class ActivityLease(Translators owner,IDisposable lease,string? model):IDisposable {
         private IDisposable? current=lease;
         public void Dispose(){var held=Interlocked.Exchange(ref current,null);if(held==null)return;owner.TouchModel(model);held.Dispose();}

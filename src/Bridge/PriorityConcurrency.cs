@@ -5,9 +5,9 @@ namespace DeadlockTranslate;
 public sealed class PriorityConcurrency(int limit, bool reserveSend) {
     private readonly object gate=new();
     private readonly Queue<TaskCompletionSource<IDisposable>> normal=new(), urgent=new();
-    private int active,incoming,maximum=limit,urgentBurst;
+    private int active,incoming,background,maximum=limit,urgentBurst;
     private bool reserve=reserveSend;
-    public object Stats {get{lock(gate)return new{active,waiting=normal.Count(x=>!x.Task.IsCompleted)+urgent.Count(x=>!x.Task.IsCompleted),limit=maximum,incomingLimit=IncomingLimit,outgoingWaiting=urgent.Count(x=>!x.Task.IsCompleted)};}}
+    public object Stats {get{lock(gate)return new{active,background,waiting=normal.Count(x=>!x.Task.IsCompleted)+urgent.Count(x=>!x.Task.IsCompleted),limit=maximum,incomingLimit=IncomingLimit,outgoingWaiting=urgent.Count(x=>!x.Task.IsCompleted)};}}
     private int IncomingLimit=>reserve&&maximum>1?maximum-1:maximum;
     public void Configure(int limit,bool reserveSend){if(limit<1)throw new ArgumentOutOfRangeException(nameof(limit));lock(gate){maximum=limit;reserve=reserveSend;Drain();}}
     public async Task<IDisposable> Enter(CancellationToken token,bool priority=false){
@@ -19,6 +19,14 @@ public sealed class PriorityConcurrency(int limit, bool reserveSend) {
     }
     // Maintenance never queues ahead of real work, and runs only with no active requests.
     public IDisposable? TryEnterIdle(){lock(gate){Trim(normal);Trim(urgent);if(active!=0||normal.Count!=0||urgent.Count!=0)return null;active++;incoming++;return new Lease(this,false);}}
+    // Build translation uses spare capacity and leaves space for live receives
+    // as well as the configured send reservation. It never queues ahead of either.
+    internal IDisposable? TryEnterBackground(){lock(gate){
+        Trim(normal);Trim(urgent);
+        var budget=Math.Max(1,IncomingLimit-1);
+        if(active>=maximum||incoming>=budget||background>=BuildTextJobs.MaxParallelBatches||normal.Count!=0||urgent.Count!=0)return null;
+        active++;incoming++;background++;return new Lease(this,false,true);
+    }}
     private static void Trim(Queue<TaskCompletionSource<IDisposable>> queue){while(queue.TryPeek(out var first)&&first.Task.IsCompleted)queue.Dequeue();}
     private void Drain(){
         while(active<maximum){
@@ -30,9 +38,9 @@ public sealed class PriorityConcurrency(int limit, bool reserveSend) {
             if(waiter.TrySetResult(new Lease(this,priority))){active++;if(priority)urgentBurst++;else{incoming++;urgentBurst=0;}}
         }
     }
-    private void Release(bool priority){lock(gate){active--;if(!priority)incoming--;Drain();}}
-    private sealed class Lease(PriorityConcurrency owner,bool priority):IDisposable{
+    private void Release(bool priority,bool isBackground){lock(gate){active--;if(!priority)incoming--;if(isBackground)background--;Drain();}}
+    private sealed class Lease(PriorityConcurrency owner,bool priority,bool isBackground=false):IDisposable{
         private PriorityConcurrency? current=owner;
-        public void Dispose()=>Interlocked.Exchange(ref current,null)?.Release(priority);
+        public void Dispose()=>Interlocked.Exchange(ref current,null)?.Release(priority,isBackground);
     }
 }

@@ -7,6 +7,7 @@ internal sealed record BuildJobField(string Source, string Value,string? FieldId
 
 // Owned by the backend. The shop can disappear while the worker is still running.
 internal sealed class BuildTextJobs(CancellationToken stopping) {
+    internal const int MaxParallelBatches=2;
     private readonly object gate = new();
     private readonly Dictionary<string, Job> jobs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Job> canonical = new(StringComparer.Ordinal);
@@ -80,7 +81,7 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
 
         internal void SetPlan(BuildJobPlan value) { lock (gate) { plan = value; total = value.Texts.Length; } }
         internal void BeginTranslation() { lock (gate) working = true; }
-        internal void Fail(string code) { lock (gate) error = code; }
+        internal void Fail(string code) { lock (gate) error ??= code; }
         internal void FailedFields(int count) { lock (gate) failed += count; }
         internal void Finish() { lock (gate) { ended = true; working = false; lastSeen = DateTime.UtcNow; } }
         internal void Cancel() { try { Lifetime.Cancel(); } catch (ObjectDisposedException) {} }
@@ -133,6 +134,16 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
             size += text.Length;
         }
         if (batch.Count > 0) yield return batch.ToArray();
+    }
+    internal static async Task RunBatches(IEnumerable<string[]> batches,Func<string[],Task> translate,Func<bool> stopped,CancellationToken token){
+        var queue=new System.Collections.Concurrent.ConcurrentQueue<string[]>(batches);
+        async Task Worker(){
+            while(!stopped()&&queue.TryDequeue(out var batch)){
+                token.ThrowIfCancellationRequested();
+                await translate(batch);
+            }
+        }
+        await Task.WhenAll(Enumerable.Range(0,MaxParallelBatches).Select(_=>Worker()));
     }
     internal static string[] PrioritizeSource(LocalHeroBuild source,IEnumerable<string> visible) {
         var shown=visible.ToHashSet(StringComparer.Ordinal);

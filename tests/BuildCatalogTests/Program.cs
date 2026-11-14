@@ -65,6 +65,7 @@ try{LocalBuildCatalog.Parse(Data(1,Data(5,[0xFF])));throw new Exception("Accepte
 var folder=Path.Combine(Path.GetTempPath(),"dlt-catalog-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
 try{
     await BuildPromptFixture.Run(folder,Check);
+    await BuildParallelFixture.Run(folder,Check);
     var reviewFolder=Path.Combine(folder,"review");var snapshots=Path.Combine(reviewFolder,"build-sources-v2");Directory.CreateDirectory(snapshots);
     var invalidKey=new string('F',64);var invalidFile=Path.Combine(snapshots,invalidKey+".json");
     File.WriteAllBytes(invalidFile,System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new{Account=LocalBuildCatalog.LocateCurrentCache()??"",Plan=plan with{Name="Wrong title",Fingerprint=invalidKey}}));

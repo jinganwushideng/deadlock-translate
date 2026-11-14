@@ -96,7 +96,7 @@ await using var outgoing=new OutgoingService(config,translators.TranslateOutgoin
 using var hotkey=args.Contains("--no-hotkey")?null:new NativeHotkey(config,audit);
 await using var app=builder.Build();
 using var releaseUpdates=new ReleaseUpdates(dataDir,BuildInfo.Version);
-using var buildTextSlot=new SemaphoreSlim(1);
+using var buildTextSlot=new SemaphoreSlim(BuildTextJobs.MaxParallelBatches,BuildTextJobs.MaxParallelBatches);
 var buildTextCache=new BuildTextCache(dataDir);
 var buildTextJobs=new BuildTextJobs(app.Lifetime.ApplicationStopping);
 using var buildSourceCapture=new BuildSourceCapture(dataDir);
@@ -460,21 +460,22 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     if(source!=null)request=request with{Fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("source-v2:"+LocalBuildCatalog.LocateCurrentCache()+":"+source.Id+":"+source.Hero+(buildSourceCapture.NeedsCacheRefresh(source)?":title-checked-v3":""))))};
     else if(input.Action=="list")request=request with{Fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("browser-titles-v2")))};
     var missing=new List<string>();
-    var refine=new HashSet<string>(StringComparer.Ordinal);
+    var refine=new System.Collections.Concurrent.ConcurrentDictionary<string,byte>(StringComparer.Ordinal);
     foreach(var batch in BuildTextJobs.Batches(plan.Texts,48,10000)){
         var cached=await Execute(request with{Texts=batch,CacheOnly=true});
         if(cached.TryGetProperty("error",out var error)){job.Fail(error.GetString()??"unavailable");return;}
         job.Apply(batch,cached,false);
         var values=cached.GetProperty("translations");
         for(var i=0;i<batch.Length;i++)if(values[i].ValueKind==JsonValueKind.Null)missing.Add(batch[i]);
-        foreach(var index in cached.GetProperty("refineIndices").EnumerateArray())refine.Add(batch[index.GetInt32()]);
+        foreach(var index in cached.GetProperty("refineIndices").EnumerateArray())refine.TryAdd(batch[index.GetInt32()],0);
     }
     async Task TranslateBatch(string[] batch,bool refining,int attempt=0){
         await buildTextJobs.WaitTurn(job,token);
         var translated=await Execute(request with{Texts=batch,CacheOnly=false,Refine=refining,Context=context});
+        token.ThrowIfCancellationRequested();
         if(translated.TryGetProperty("error",out var error)){
             var code=error.GetString();
-            if(code is "settings-changed" or "disabled" or "busy"){job.Fail(code);return;}
+            if(code is "settings-changed" or "disabled" or "busy"){job.Fail(code);job.Cancel();return;}
             if(code=="batch-incomplete"&&batch.Length>1){
                 var middle=batch.Length/2;
                 await TranslateBatch(batch[..middle],refining);
@@ -488,17 +489,12 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
             if(attempt<2)await TranslateBatch(missingFields,refining,attempt+1);
             else job.FailedFields(missingFields.Length);
         }
-        if(!refining&&translated.GetProperty("refine").GetBoolean())foreach(var text in batch)refine.Add(text);
+        if(!refining&&translated.GetProperty("refine").GetBoolean())foreach(var text in batch)refine.TryAdd(text,0);
     }
     if(missing.Count>0||refine.Count>0)job.BeginTranslation();
-    foreach(var batch in BuildTextJobs.Batches(missing,12,3500)){
-        await TranslateBatch(batch,false);
-        if(job.HasError)return;
-    }
-    foreach(var batch in BuildTextJobs.Batches(refine,12,3500)){
-        await TranslateBatch(batch,true);
-        if(job.HasError)return;
-    }
+    await BuildTextJobs.RunBatches(BuildTextJobs.Batches(missing,12,3500),batch=>TranslateBatch(batch,false),()=>job.HasError,token);
+    if(job.HasError)return;
+    await BuildTextJobs.RunBatches(BuildTextJobs.Batches(refine.Keys,12,3500),batch=>TranslateBatch(batch,true),()=>job.HasError,token);
 }
 
 async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken requestAborted,BuildSourceField[]? promptFields=null){
