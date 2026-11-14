@@ -126,3 +126,27 @@ changedGroup.second.text = 'New content'; contentChanged.frame(50);
 contentChanged.capture(601, 1, '9'.repeat(64));
 assert.equal(contentChanged.scene.__dltBuildText.job.done, 0, 'a changed complete source cannot reuse fields solely from matching native metadata');
 console.log('PASS complete source fingerprints distinguish changed content even when native metadata is unchanged');
+
+const disconnected=sourceFixture();
+disconnected.click();disconnected.frame();
+for(let i=0;i<3;i++){disconnected.frame(11000);disconnected.frame(800);}
+assert.equal(disconnected.scene.__dltBuildText.job.failed,1);
+assert.match(disconnected.status.text,/后台连接中断/);
+assert.equal(disconnected.translate.text,'重试翻译');
+const failedRequests=disconnected.sent.length;
+disconnected.frame(60000);
+assert.equal(disconnected.sent.length,failedRequests,'a dead backend cannot cause infinite source requests');
+disconnected.click();disconnected.frame();
+assert.equal(disconnected.scene.__dltBuildText.enabled,true);
+assert.equal(disconnected.sent.length,failedRequests+1,'one retry click keeps translation enabled and starts a fresh attempt');
+console.log('PASS backend loss ends the loading state and exposes a bounded single-click retry');
+
+const resumedManual=sourceFixture();
+resumedManual.click();resumedManual.frame();
+resumedManual.reply({capture:{token:'a'.repeat(32),manual:true}});resumedManual.frame(110);
+resumedManual.root.visible=false;resumedManual.frame(50);
+resumedManual.root.visible=true;resumedManual.frame(50);
+assert.equal(resumedManual.scene.__dltBuildText.job.manualCapture,true);
+assert.match(resumedManual.status.text,/复制到剪贴板/,'manual export instructions survive owner/surface handoff');
+assert.equal(resumedManual.dispatched.length,0,'resuming a manual capture never silently overwrites the clipboard');
+console.log('PASS manual source capture resumes its original instructions and deadline after surface handoff');

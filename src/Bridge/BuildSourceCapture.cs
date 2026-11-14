@@ -18,7 +18,8 @@ internal sealed class BuildSourceCapture : IDisposable {
     private sealed record StoredSource(string Account,LocalHeroBuild Plan);
     private readonly ConcurrentDictionary<string,StoredSource> sources=new(StringComparer.Ordinal);
 
-    private sealed record ClipboardFormat(uint Format,IntPtr Data);
+    internal enum ClipboardKind { Unsupported, Internal, Memory, Bitmap }
+    private sealed record ClipboardFormat(uint Format,IntPtr Data,ClipboardKind Kind);
     private sealed record Session(string Token,uint Sequence,List<ClipboardFormat> Original,string Title,uint? Id,uint? Version,DateTime Expires,bool Manual);
     private IntPtr window;
     internal BuildSourceCapture(string state) {
@@ -202,17 +203,50 @@ internal sealed class BuildSourceCapture : IDisposable {
         if(window==IntPtr.Zero||!OpenClipboard(window))throw new InvalidOperationException("Clipboard is busy");
         var result=new List<ClipboardFormat>();
         try {
-            uint format=0;
+            uint currentFormat=0;
+            var available=new List<uint>();
+            while((currentFormat=EnumClipboardFormats(currentFormat))!=0){
+                if(available.Count>=128)throw new InvalidOperationException("Too many clipboard formats");
+                available.Add(currentFormat);
+            }
+            // Windows can synthesize bitmap/DIB views from DIBV5. Retaining all
+            // three wastes tens of megabytes for one screenshot and forces fallback.
+            var image=available.Contains(17)?17u:available.Contains(8)?8u:0u;
             long size=0;
-            while((format=EnumClipboardFormats(format))!=0){
-                if(result.Count>=128||format==0x80||format is >=0x200 and <=0x2ff)
-                    throw new InvalidOperationException("Clipboard format cannot be safely retained");
+            foreach(var format in available){
+                if(image!=0&&format is 2 or 8 or 9 or 17&&format!=image)continue;
+                var name=new StringBuilder(256);
+                if(format>=0xc000)GetClipboardFormatName(format,name,name.Capacity);
+                var kind=ClassifyClipboardFormat(format,name.ToString());
+                if(kind==ClipboardKind.Internal)continue;
+                if(kind==ClipboardKind.Unsupported)throw new InvalidOperationException("Clipboard format cannot be safely retained");
                 var original=GetClipboardData(format);
-                size+=(long)GlobalSize(original);
-                if(original==IntPtr.Zero||size>64*1024*1024)throw new InvalidOperationException("Clipboard cannot be retained");
-                var duplicate=OleDuplicateData(original,(ushort)format,0);
+                if(original==IntPtr.Zero)throw new InvalidOperationException("Clipboard cannot be retained");
+                IntPtr duplicate;
+                if(kind==ClipboardKind.Bitmap){
+                    // HBITMAP/HPALETTE/OLE metadata are not HGLOBAL. Passing them
+                    // to GlobalSize can fail fast with heap corruption on Windows.
+                    if(GetObject(original,Marshal.SizeOf<NativeBitmap>(),out var bitmap)==0)throw new InvalidOperationException("Invalid bitmap");
+                    size+=checked((long)bitmap.WidthBytes*Math.Abs((long)bitmap.Height));
+                    if(size>64*1024*1024)throw new InvalidOperationException("Clipboard bitmap too large");
+                    duplicate=CopyImage(original,0,0,0,0x2000);
+                }else{
+                    var bytes=GlobalSize(original);
+                    size+=checked((long)bytes);
+                    if(bytes==0||size>64*1024*1024)throw new InvalidOperationException("Clipboard memory too large");
+                    duplicate=GlobalAlloc(2,bytes);
+                    if(duplicate!=IntPtr.Zero){
+                        var source=GlobalLock(original);var target=GlobalLock(duplicate);
+                        if(source==IntPtr.Zero||target==IntPtr.Zero){
+                            if(source!=IntPtr.Zero)GlobalUnlock(original);
+                            if(target!=IntPtr.Zero)GlobalUnlock(duplicate);
+                            GlobalFree(duplicate);throw new InvalidOperationException("Clipboard memory cannot be locked");
+                        }
+                        try{CopyMemory(target,source,bytes);}finally{GlobalUnlock(duplicate);GlobalUnlock(original);}
+                    }
+                }
                 if(duplicate==IntPtr.Zero)throw new InvalidOperationException("Clipboard duplication failed");
-                result.Add(new(format,duplicate));
+                result.Add(new(format,duplicate,kind));
             }
             return result;
         }catch {FreeFormats(result);throw;}
@@ -221,19 +255,29 @@ internal sealed class BuildSourceCapture : IDisposable {
     private static void FreeFormats(List<ClipboardFormat> formats) {
         foreach(var format in formats){
             if(format.Data==IntPtr.Zero)continue;
-            var medium=new System.Runtime.InteropServices.ComTypes.STGMEDIUM {
-                tymed=format.Format is 2 or 9 or 0x82?System.Runtime.InteropServices.ComTypes.TYMED.TYMED_GDI:
-                    format.Format is 3 or 0x83?System.Runtime.InteropServices.ComTypes.TYMED.TYMED_MFPICT:
-                    format.Format is 14 or 0x8e?System.Runtime.InteropServices.ComTypes.TYMED.TYMED_ENHMF:
-                    System.Runtime.InteropServices.ComTypes.TYMED.TYMED_HGLOBAL,
-                unionmember=format.Data
-            };
-            ReleaseStgMedium(ref medium);
+            if(format.Kind==ClipboardKind.Bitmap)DeleteObject(format.Data);else GlobalFree(format.Data);
         }
     }
+    internal static ClipboardKind ClassifyClipboardFormat(uint format,string name) {
+        if(format is 2 or 0x82)return ClipboardKind.Bitmap;
+        if(format is 1 or 4 or 5 or 6 or 7 or 8 or 10 or 11 or 12 or 13 or 15 or 16 or 17)return ClipboardKind.Memory;
+        if(format<0xc000)return ClipboardKind.Unsupported;
+        if(name is "DataObject" or "Ole Private Data")return ClipboardKind.Internal;
+        return name is "PNG" or "image/png" or "HTML Format" or "Rich Text Format" or "Rich Text Format Without Objects" or
+            "text/html" or "text/plain" or "text/plain;charset=utf-8" or "text/plain;charset=utf-16" or
+            "UniformResourceLocator" or "UniformResourceLocatorW" or "Preferred DropEffect" or "FileName" or "FileNameW" or
+            "Shell IDList Array" or "CanIncludeInClipboardHistory" or "CanUploadToCloudClipboard"
+            ?ClipboardKind.Memory:ClipboardKind.Unsupported;
+    }
     public void Dispose(){commands.CompleteAdding();thread.Join(4000);}
-    [DllImport("ole32.dll")] private static extern IntPtr OleDuplicateData(IntPtr source,ushort format,uint flags);
-    [DllImport("ole32.dll")] private static extern void ReleaseStgMedium(ref System.Runtime.InteropServices.ComTypes.STGMEDIUM medium);
+    [StructLayout(LayoutKind.Sequential)] private struct NativeBitmap {internal int Type,Width,Height,WidthBytes;internal ushort Planes,BitsPixel;internal IntPtr Bits;}
+    [DllImport("gdi32.dll",EntryPoint="GetObjectW")] private static extern int GetObject(IntPtr handle,int size,out NativeBitmap bitmap);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
+    [DllImport("user32.dll")] private static extern IntPtr CopyImage(IntPtr handle,uint type,int x,int y,uint flags);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClipboardFormatName(uint format,StringBuilder name,int capacity);
+    [DllImport("kernel32.dll")] private static extern IntPtr GlobalAlloc(uint flags,nuint bytes);
+    [DllImport("kernel32.dll")] private static extern IntPtr GlobalFree(IntPtr memory);
+    [DllImport("kernel32.dll",EntryPoint="RtlMoveMemory")] private static extern void CopyMemory(IntPtr target,IntPtr source,nuint bytes);
     [DllImport("user32.dll")] private static extern uint EnumClipboardFormats(uint previous);
     [DllImport("user32.dll")] private static extern bool EmptyClipboard();
     [DllImport("user32.dll")] private static extern IntPtr SetClipboardData(uint format,IntPtr data);

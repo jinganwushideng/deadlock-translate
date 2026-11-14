@@ -189,7 +189,7 @@ function DLTBuildTextAction() {
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));
-                    var label = state.enabled ? '显示原文' : '翻译当前出装';
+                    var label = state.enabled ? job && job.bg && job.failed ? '重试翻译' : '显示原文' : '翻译当前出装';
                     DLTSetButtonCaption(toggle, label);
                     var now = Date.now();
                     var needsTranslation = job && (job.bg ? !job.finishedAt && (job.working || job.receiving || job.downloadComplete) :
@@ -211,8 +211,9 @@ function DLTBuildTextAction() {
                         'ambiguous': '正在核对同名方案', 'mismatch': '正在核对当前方案内容',
                         'capture-expired': '读取超时，请重新点击翻译', 'export-format': '游戏未导出完整方案，请重试',
                         'selection-changed': '方案已切换，请重新点击翻译', 'clipboard-busy': '剪贴板正在使用，请重试',
+                        'bridge-unavailable': '后台连接中断，请重启后台后重试', 'source-timeout': '读取出装超时，请点击重试翻译',
                         'unavailable': '读取整套出装失败，请重试' };
-                    var caption = state.error ? '出装界面读取异常，请重新打开商店' :
+                    var caption = state.error ? '出装界面读取异常，请重新打开商店' : job && job.failed && sourceErrors[job.sourceStatus] ? sourceErrors[job.sourceStatus] :
                         !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : job.manualCapture ?
                         '请在出装选项中点击「复制到剪贴板」' : job.receiving ?
                         '接收译文 ' + job.cursor + (job.fieldCount ? '/' + job.fieldCount : '') : job.downloadComplete && !job.finishedAt ?
@@ -230,7 +231,7 @@ function DLTBuildTextAction() {
             root.__dltBuildTextAction = function () {
                 if (!eligibleController()) return;
                 var config = syncSettings();
-                var showOriginal = state.enabled;
+                var showOriginal = state.enabled && !(state.job && state.job.bg && state.job.failed);
                 var background = state.job && state.job.bg;
                 state.error = false;
                 state.clicks++;
@@ -362,11 +363,24 @@ function DLTBuildTextAction() {
             }
             job.bg.source = capture.source;
             job.bg.captureToken = null;
+            job.bg.captureManual = false;
+            job.bg.captureDeadline = null;
             job.manualCapture = false;
         }
         function advanceBackground(job, config) {
             if (job.finishedAt || job.downloadComplete) return;
             var now = Date.now();
+            if (job.bg.captureToken) {
+                job.manualCapture = job.bg.captureManual === true;
+                if (job.bg.captureDeadline) job.sourceDeadline = job.bg.captureDeadline;
+            }
+            function fail(code) {
+                job.failed = Math.max(1, job.failed || 0); job.sourceStatus = code;
+                job.finishedAt = now; job.bg.failed = true; job.bg.ended = true;
+                job.pending = null;
+                state.owner.cancel();
+            }
+            if (!job.bg.source && job.sourceDeadline && now > job.sourceDeadline) { fail('source-timeout'); return; }
             if (job.pending) {
                 var pending = job.pending;
                 var reply = state.owner.receive(pending);
@@ -374,9 +388,12 @@ function DLTBuildTextAction() {
                 job.pending = null;
                 if (!reply) {
                     state.timeouts++;
+                    job.bridgeFailures = (job.bridgeFailures || 0) + 1;
+                    if (job.bridgeFailures >= 3) { fail('bridge-unavailable'); return; }
                     job.pollAfter = now + 750;
                     return;
                 }
+                job.bridgeFailures = 0;
                 if (reply.error === 'settings-changed') { restartJob(); return; }
                 if (reply.error === 'job-missing') {
                     if (job.parentKey) { job.failed = 1; job.finishedAt = now; return; }
@@ -388,13 +405,14 @@ function DLTBuildTextAction() {
                 }
                 if (reply.error === 'busy') { job.pollAfter = now + 1000; return; }
                 if (reply.error === 'source-expired') {
-                    job.bg.source = null; job.bg.captureToken = null; job.pollAfter = now + 100; return;
+                    job.bg.source = null; job.bg.captureToken = null; job.sourceDeadline = now + 45000; job.pollAfter = now + 100; return;
                 }
                 if (reply.error && !Array.isArray(reply.fields)) {
                     job.failed = reply.failed || 1;
                     job.finishedAt = now;
                     job.bg.ended = true;
                     job.bg.failed = true;
+                    job.sourceStatus = reply.error === 'unavailable' ? 'bridge-unavailable' : reply.error;
                     return;
                 }
                 if (pending.batch.action === 'source-prepare' || pending.batch.action === 'source-read') {
@@ -402,6 +420,9 @@ function DLTBuildTextAction() {
                     if (capture && capture.token) {
                         job.bg.captureToken = capture.token;
                         job.manualCapture = capture.manual === true;
+                        job.sourceDeadline = now + (job.manualCapture ? 125000 : 35000);
+                        job.bg.captureManual = job.manualCapture;
+                        job.bg.captureDeadline = job.sourceDeadline;
                         try { if (!job.manualCapture) $.DispatchEvent('CitadelCopySelectedBuildContentsToClipboard', 0); }
                         catch (_) { job.failed = 1; job.finishedAt = now; }
                     } else if (capture && capture.source) {
@@ -734,7 +755,7 @@ function DLTBuildTextAction() {
                                             bg: background, sources: visible, cursor: 0, pollAfter: 0, reopened: !!(background && background.accepted),
                                             queue: background ? [] : [{ texts: visible, plan: true, attempts: 0, after: 0 }], pending: null,
                                             refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0,
-                                            startedAt: Date.now(), progressShown: false };
+                                            startedAt: Date.now(), sourceDeadline: Date.now() + 45000, progressShown: false };
                                         var savedView = background && Array.from(state.sourceViews.values()).find(function (saved) {
                                             return saved.bg === background && !saved.failed;
                                         });

@@ -5,6 +5,7 @@ using DeadlockTranslate;
 using ValveKeyValue;
 using ValveResourceFormat;
 using ValveResourceFormat.ResourceTypes;
+if(args.FirstOrDefault()=="--clipboard-child"){await ClipboardNativeFixture.Run(args[1],args[2]);return;}
 
 var passed=0;
 void Check(bool valid,string name){if(!valid)throw new Exception(name);Console.WriteLine("PASS "+name);passed++;}
@@ -23,6 +24,8 @@ Check(BuildSourceCapture.MatchesExportTitle("[Haze build [55% WR]]的副本","Ha
 Check(!BuildSourceCapture.MatchesExportTitle("[Vindicta build]的副本","Haze build"),"a native ID cannot authorize renaming another hero's exported source");
 Check(!BuildSourceCapture.MatchesExportTitle("[Haze build [61% WR]]的副本","Haze build [55% WR]"),"source validation retains title numbers");
 Check(BuildSourceCapture.IsConsistent(plan)&&!BuildSourceCapture.IsConsistent(plan with{Name="Wrong title"})&&!BuildSourceCapture.IsConsistent(plan with{Hero=3}),"stored sources retain their original native title and hero identity");
+Check(BuildSourceCapture.ClassifyClipboardFormat(2,"")==BuildSourceCapture.ClipboardKind.Bitmap&&BuildSourceCapture.ClassifyClipboardFormat(13,"")==BuildSourceCapture.ClipboardKind.Memory,"bitmap and text handles use distinct native clipboard operations");
+Check(BuildSourceCapture.ClassifyClipboardFormat(0xc009,"DataObject")==BuildSourceCapture.ClipboardKind.Internal&&BuildSourceCapture.ClassifyClipboardFormat(0xc010,"Unknown OLE object")==BuildSourceCapture.ClipboardKind.Unsupported,"opaque OLE clipboard formats never reach GlobalSize or byte copying");
 var sourceOrder=BuildTextJobs.PrioritizeSource(plan with{Texts=["Unseen item annotation","Group note","Test build","Ability note","Build introduction","Early group"]},["Group note"]);
 Check(sourceOrder[0]=="Test build"&&sourceOrder[1]=="Early group"&&Array.IndexOf(sourceOrder,"Group note")<Array.IndexOf(sourceOrder,"Unseen item annotation"),"native title, group names and visible instructions precede equipment annotations");
 Check(BuildSourceCapture.SourceFingerprint(plan)==BuildSourceCapture.SourceFingerprint(plan with{Texts=plan.Texts.Reverse().ToArray(),Fields=plan.Fields?.Reverse().ToArray()}),"local cache and export text enumeration produce the same complete source fingerprint");
