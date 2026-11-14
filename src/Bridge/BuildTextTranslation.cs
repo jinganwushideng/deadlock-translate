@@ -25,8 +25,9 @@ internal sealed record BuildTextProfile(string Mode, Settings Fast, Settings Qua
 // repeated title can be reused even when the annotation or panel changes.
 internal sealed record BuildTextCached(string Value,bool Refine);
 internal sealed class BuildTextCache {
+    private readonly object gate=new();
     private const int Limit=1024;
-    private const int MaxResultLength=4096;
+    internal const int MaxResultLength=12000;
     private readonly string path;
     private readonly Dictionary<string,string> entries=new(StringComparer.Ordinal);
     private readonly string indexPath;
@@ -37,7 +38,7 @@ internal sealed class BuildTextCache {
         indexPath=Path.Combine(directory,"build-text-plans-v1.json");
         try{
             var file=new FileInfo(path);
-            var stored=file.Exists&&file.Length<=32L*1024*1024
+            var stored=file.Exists&&file.Length<=64L*1024*1024
                 ?JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllBytes(path)):null;
             foreach(var (key,value) in stored?.TakeLast(Limit)??[]){
                 if(key.Length==64&&key.All(Uri.IsHexDigit)&&value is {Length:<=MaxResultLength})entries[key]=value;
@@ -78,12 +79,13 @@ internal sealed class BuildTextCache {
         return "context:"+Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n",lines))));
     }
 
-    internal bool TryGet(string key, out string? translation)=>entries.TryGetValue(key,out translation);
+    internal bool TryGet(string key, out string? translation){lock(gate)return entries.TryGetValue(key,out translation);}
 
     internal static string PlanKey(string scope, BuildTextProfile profile, bool quality, string glossary)=>
         Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(scope+"\0"+Key("",profile,quality,glossary,quality?scope:null))));
 
     internal bool Remember(string plan, string text, string key) {
+        lock(gate){
         if(!plans.TryGetValue(plan,out var fields)){
             if(plans.Count>=16)plans.Remove(plans.Keys.First());
             fields=new(StringComparer.Ordinal);plans.Add(plan,fields);
@@ -92,9 +94,11 @@ internal sealed class BuildTextCache {
         fields[text]=key;
         if(fields.Count>256)fields.Remove(fields.Keys.First());
         return true;
+        }
     }
 
     internal Dictionary<string,string> Snapshot(string plan) {
+        lock(gate){
         var result=new Dictionary<string,string>(StringComparer.Ordinal);
         if(!plans.TryGetValue(plan,out var fields))return result;
         var size=0;
@@ -104,9 +108,11 @@ internal sealed class BuildTextCache {
             result[text]=value;size+=text.Length+value.Length;
         }
         return result;
+        }
     }
 
     internal void Store(string key, string translation) {
+        lock(gate){
         if(translation.Length>MaxResultLength)return;
         entries[key]=translation;
         if(entries.Count>Limit){
@@ -116,13 +122,16 @@ internal sealed class BuildTextCache {
             foreach(var entry in recent)entries.Add(entry.Key,entry.Value);
             entries.Add(key,translation);
         }
+        }
     }
     internal void Flush() {
+        lock(gate){
         try{
             ConfigStore.WriteAtomic(path,JsonSerializer.SerializeToUtf8Bytes(entries));
             ConfigStore.WriteAtomic(indexPath,JsonSerializer.SerializeToUtf8Bytes(plans));
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){}
+        }
     }
 }
 
@@ -149,7 +158,7 @@ public sealed partial class Translators {
             throw new InvalidDataException("Fast translator did not preserve batch boundaries");
         return values;
     }
-    internal async Task<string[]> TranslateBuildQuality(string[] texts, string context, BuildTextProfile profile, CancellationToken ct) {
+    internal async Task<string[]> TranslateBuildQuality(string[] texts, string context, BuildTextProfile profile, CancellationToken ct,bool partial=false) {
         var settings=profile.Quality;
         var language=TranslationLanguages.Incoming(profile.Fast);
         var key=store.LlmSecretFor(profile.Fast);
@@ -173,17 +182,23 @@ public sealed partial class Translators {
             using var request=new HttpRequestMessage(HttpMethod.Post,ApiConfigurationDiagnostics.ChatEndpoint(settings.LlmBaseUrl));
             request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",key);
             request.Content=LlmRequestOptions.Create(settings,prompt,input);
-            var result=await ReadCompletion(request,epoch,trace,ct,input.Length);
+            var result=await ReadCompletion(request,epoch,trace,ct,input.Length,maximumCharacters:1000000);
             using var response=JsonDocument.Parse(result);
-            if(response.RootElement.ValueKind!=JsonValueKind.Array||response.RootElement.GetArrayLength()!=texts.Length)
+            if(response.RootElement.ValueKind!=JsonValueKind.Array||!partial&&response.RootElement.GetArrayLength()!=texts.Length)
                 throw new InvalidDataException("Incomplete build translation batch");
             var translations=new string[texts.Length];
             foreach(var entry in response.RootElement.EnumerateArray()){
-                var id=entry.GetProperty("id").GetInt32();
-                var translation=entry.GetProperty("translation").GetString();
-                if(id<0||id>=texts.Length||translations[id]!=null||string.IsNullOrWhiteSpace(translation)||translation.Length>4096)
+                if(!entry.TryGetProperty("id",out var index)||!index.TryGetInt32(out var id)||
+                    !entry.TryGetProperty("translation",out var text)||text.ValueKind!=JsonValueKind.String){
+                    if(partial)continue;
                     throw new InvalidDataException("Invalid build translation entry");
-                translations[id]=terms.RenderChineseStyle(NormalizeNames(translation,prepared[id].Map),texts[id],language.ChineseGlossary&&settings.ChineseNameStyle=="legacy");
+                }
+                var translation=text.GetString();
+                if(id<0||id>=texts.Length||translations[id]!=null||string.IsNullOrWhiteSpace(translation)||translation.Length>BuildTextCache.MaxResultLength)
+                { if(partial)continue;throw new InvalidDataException("Invalid build translation entry"); }
+                try {
+                    translations[id]=terms.RenderChineseStyle(NormalizeNames(translation,prepared[id].Map),texts[id],language.ChineseGlossary&&settings.ChineseNameStyle=="legacy");
+                }catch(TranslationOutputException) when(partial){}
             }
             trace.Finish("done");ClearIssue("llm",previous,epoch);
             return translations;

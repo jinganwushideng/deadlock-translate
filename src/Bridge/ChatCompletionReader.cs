@@ -3,19 +3,22 @@ using System.Text.Json;
 
 namespace DeadlockTranslate;
 public static class ChatCompletionReader {
-    private sealed class Answer {
+    private sealed class Answer(int maximumCharacters) {
         public readonly StringBuilder Text=new();public string? Finish;public bool Reasoning,Done,Finished;
-        public void Add(string? content,LlmTelemetry.Trace trace){if(string.IsNullOrEmpty(content))return;if(Finished||Text.Length+content.Length>2500)throw new InvalidDataException("API text exceeds the bounded response");Text.Append(content);trace.Content();}
+        public void Add(string? content,LlmTelemetry.Trace trace){if(string.IsNullOrEmpty(content))return;if(Finished||Text.Length+content.Length>maximumCharacters)throw new InvalidDataException("API text exceeds the bounded response");Text.Append(content);trace.Content();}
     }
-    public static async Task<string> Read(HttpResponseMessage response,LlmTelemetry.Trace trace,CancellationToken ct){
+    public static async Task<string> Read(HttpResponseMessage response,LlmTelemetry.Trace trace,CancellationToken ct,int maximumCharacters=2500){
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumCharacters,1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumCharacters,1000000);
         var stream=response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream",StringComparison.OrdinalIgnoreCase)==true;
-        trace.Response(stream?"stream":"json");var answer=new Answer();
+        trace.Response(stream?"stream":"json");var answer=new Answer(maximumCharacters);
+        var maximumEvent=Math.Max(65536,Math.Min(2*1024*1024,maximumCharacters*6+1024));
         await using var raw=await response.Content.ReadAsStreamAsync(ct);await using var limited=new LimitedReadStream(raw,2*1024*1024);
         if(stream){
             using var reader=new StreamReader(limited,Encoding.UTF8,true,4096,leaveOpen:true);var data=new StringBuilder();
-            while(true){var line=await reader.ReadLineAsync(ct);if(line==null){if(data.Length>0)Consume(data.ToString(),answer,trace);break;}if(line.Length>65536)throw new InvalidDataException("SSE line too long");
+            while(true){var line=await reader.ReadLineAsync(ct);if(line==null){if(data.Length>0)Consume(data.ToString(),answer,trace);break;}if(line.Length>maximumEvent)throw new InvalidDataException("SSE line too long");
                 if(line.Length==0){if(data.Length>0){Consume(data.ToString(),answer,trace);data.Clear();if(answer.Done)break;}continue;}
-                if(line.StartsWith("data:",StringComparison.Ordinal)){if(data.Length>0)data.Append('\n');data.Append(line.AsSpan(5).TrimStart());if(data.Length>65536)throw new InvalidDataException("SSE event too long");}
+                if(line.StartsWith("data:",StringComparison.Ordinal)){if(data.Length>0)data.Append('\n');data.Append(line.AsSpan(5).TrimStart());if(data.Length>maximumEvent)throw new InvalidDataException("SSE event too long");}
             }
             if(!answer.Done||!answer.Finished)throw new IOException("Incomplete streaming response");
         }else{

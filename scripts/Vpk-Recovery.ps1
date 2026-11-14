@@ -3,7 +3,9 @@ function Test-DltIndependentResources([string[]]$Resources) {
     $base=@('panorama/layout/chat.vxml_c','panorama/layout/dlt_menu.vxml_c','panorama/layout/dlt_settings_window.vxml_c','panorama/scripts/dlt_chat.vjs_c','panorama/scripts/dlt_menu.vjs_c','panorama/scripts/dlt_settings_window.vjs_c','panorama/styles/dlt_chat.vcss_c','panorama/styles/dlt_menu.vcss_c','panorama/styles/dlt_settings_window.vcss_c')
     $native=@('panorama/layout/citadel_hud_top_bar_chat.vxml_c','panorama/styles/dlt_native_bubble.vcss_c','panorama/scripts/dlt_native_bubble.vjs_c')
     $buildText=@('panorama/scripts/dlt_build_text.vjs_c','panorama/styles/dlt_build_text.vcss_c','panorama/layout/citadel_ui_build_details.vxml_c','panorama/layout/citadel_shop_mods_build.vxml_c','panorama/layout/citadel_shop_mods_build_category.vxml_c','panorama/layout/tooltips/citadel_tooltip_mod_details.vxml_c')
-    if($Resources.Count -eq 18){$base+=$native+$buildText}
+    $browser=@('panorama/scripts/dlt_build_transport.vjs_c','panorama/scripts/dlt_build_browser.vjs_c','panorama/layout/citadel_ui_build_selector.vxml_c')
+    if($Resources.Count -eq 21){$base+=$native+$buildText+$browser}
+    elseif($Resources.Count -eq 18){$base+=$native+$buildText}
     elseif($Resources.Count -notin @(9,11,12)){return $false}
     $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach($path in $Resources){if($path -notin ($base+$native) -or -not $seen.Add($path)){return $false}}

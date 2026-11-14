@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../mod/panorama/scripts/dlt_build_text.js'), 'utf8');
 
 function fixture(autoEnabled, withText = true) {
-    const tasks = [], sent = [], navigations = [];
+    const tasks = [], sent = [], navigations = [], dispatched = [];
     let now = 0;
     function panel(id, parent, text = '') {
         const item = {
@@ -39,11 +39,12 @@ function fixture(autoEnabled, withText = true) {
     const scope = { Date: { now: () => now }, $: {
         GetContextPanel: () => root,
         Schedule: (_, action) => tasks.push(action),
+        DispatchEvent: (...args) => dispatched.push(args),
         RegisterEventHandler() {}
     } };
-    vm.runInNewContext(source, scope);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../mod/panorama/scripts/dlt_build_transport.js'), 'utf8') + '\n' + source, scope);
     function initializePanel(group) {
-        vm.runInNewContext(source, {
+        vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../mod/panorama/scripts/dlt_build_transport.js'), 'utf8') + '\n' + source, {
             Date: { now: () => now }, $: {
                 GetContextPanel: () => group,
                 Schedule: (_, action) => tasks.push(action),
@@ -72,7 +73,7 @@ function fixture(autoEnabled, withText = true) {
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, translate, progress, status, sent, navigations, tasks, frame, scene, category, addTooltip,
+    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip,
         click: () => scope.DLTBuildTextAction(),
         showOriginal: () => scope.DLTBuildTextAction() };
 }
@@ -281,4 +282,41 @@ const scans=collection.scene.__dltBuildText.collections;
 for(let i=0;i<8;i++)collection.frame(50);
 assert.equal(collection.scene.__dltBuildText.collections,scans);
 console.log('PASS immediate local request and no repeated collection during result polling');
+const exported = fixture(false);
+Object.assign(exported.scene.__dltBuildTextConfig, { backgroundJobs: true, sourceExports: true });
+exported.click(); exported.frame();
+assert.equal(exported.sent.at(-1).action, 'source-prepare');
+reply(exported, { capture: { token: 'a'.repeat(32), manual: false } });
+assert.deepEqual(exported.dispatched, [['CitadelCopySelectedBuildContentsToClipboard', 0]]);
+exported.frame(110);
+assert.equal(exported.sent.at(-1).action, 'source-read');
+reply(exported, { capture: { pending: true } });
+assert.equal(exported.scene.__dltBuildText.job.failed, 0, 'native clipboard latency is pending, not a failed export');
+exported.frame(110);
+reply(exported, { capture: { source: 'B'.repeat(64) } });
+exported.frame(110);
+assert.equal(exported.sent.at(-1).action, 'start');
+assert.equal(exported.sent.at(-1).source, 'B'.repeat(64));
+reply(exported, { accepted: true });
+exported.frame(300);
+reply(exported, { cursor: 2, total: 2, done: 2, cacheHits: 0, translated: 2, failed: 0, working: false, ended: true, more: false,
+    plan: { name: 'Build title', fingerprint: 'B'.repeat(64), groups: [], visibleOnly: false },
+    fields: [{ source: 'Build title', value: '整套出装' }, { source: 'First annotation', value: '预先翻译的注释', fieldId: 'groups/0/items/0/note' }] });
+const exportedPopup = exported.addTooltip(); exported.frame(40); exported.frame(40);
+assert.equal(exportedPopup.output.text, '预先翻译的注释');
+const requestsAfterExport = exported.sent.length;
+exportedPopup.note.text = 'Other item'; exported.frame(300); exported.frame(300);
+assert.equal(exported.sent.length, requestsAfterExport, 'hovering cannot trigger additional cloud translation');
+exported.click(); exported.frame();
+assert.ok(!exported.sent.some(request => request.action === 'cancel'), 'showing originals keeps backend work alive');
+console.log('PASS complete source handshake tolerates pending export, binds unseen annotations and never translates on hover');
+
+const manualExport = fixture(false);
+Object.assign(manualExport.scene.__dltBuildTextConfig, { backgroundJobs: true, sourceExports: true });
+manualExport.click(); manualExport.frame();
+reply(manualExport, { capture: { token: 'c'.repeat(32), manual: true } });
+assert.equal(manualExport.dispatched.length, 0, 'unsafe clipboard formats cannot trigger automatic overwrite');
+assert.equal(manualExport.progress.visible, true);
+assert.match(manualExport.status.text, /复制到剪贴板/);
+console.log('PASS unsupported clipboard contents expose manual export without overwriting clipboard');
 module.exports = { fixture };

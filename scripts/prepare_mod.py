@@ -5,6 +5,7 @@ root = pathlib.Path(__file__).resolve().parents[1]
 game = pathlib.Path(os.environ['DEADLOCK_TRANSLATE_GAME'])/'game/citadel'
 
 BUILD_TEXT_LAYOUTS = {
+    'citadel_ui_build_selector': ('<Label class="BuildName"',),
     'citadel_ui_build_details': (
         '<Label class="BuildName"', '<Label class="BuildDescription"'),
     'citadel_shop_mods_build': ('<Label class="FavoriteBuildEntryLabel SelectedBuildName"',),
@@ -14,6 +15,8 @@ BUILD_TEXT_LAYOUTS = {
         '<Label id="ModName"', '<Label class="ModifiesLabel" text="#Citadel_Item_Build_Annotation"'),
 }
 BUILD_TEXT_RESOURCES = {
+    'panorama/scripts/dlt_build_transport.vjs_c',
+    'panorama/scripts/dlt_build_browser.vjs_c',
     'panorama/scripts/dlt_build_text.vjs_c',
     'panorama/styles/dlt_build_text.vcss_c',
     *(f'panorama/layout/{name}.vxml_c' for name in BUILD_TEXT_LAYOUTS),
@@ -23,10 +26,36 @@ BUILD_TEXT_RESOURCES = {
 def patch_build_text_layout(xml, name):
     anchors = BUILD_TEXT_LAYOUTS[name]
     includes = ('<include src="s2r://panorama/styles/dlt_build_text.vcss_c" />'
-                '</styles><scripts><include src="s2r://panorama/scripts/dlt_build_text.vjs_c" /></scripts>')
+                '</styles><scripts><include src="s2r://panorama/scripts/dlt_build_transport.vjs_c" />'
+                '<include src="s2r://panorama/scripts/dlt_build_text.vjs_c" /></scripts>')
     if xml.count('</styles>') != 1 or '<scripts>' in xml:
         raise ValueError(f'Unexpected styles or scripts in {name}')
     xml = xml.replace('</styles>', includes)
+    if name == 'citadel_ui_build_selector':
+        xml = xml.replace('</scripts>', '<include src="s2r://panorama/scripts/dlt_build_browser.vjs_c" /></scripts>')
+        anchor = '<Label class="BuildName"'
+        if xml.count(anchor) != 1:
+            raise ValueError('Build browser list changed')
+        start = xml.index(anchor)
+        end = xml.index('/>', start) + 2
+        label = xml[start:end].replace('<Label ', '<Label id="DltListName" ', 1)
+        xml = xml[:start] + label + xml[end:]
+        row_anchor = '<Label class="SelectedBuild"'
+        if xml.count(row_anchor) != 1:
+            raise ValueError('Build browser row changed')
+        name_row = '<Panel class="nameRow">'
+        if xml.count(name_row) != 1:
+            raise ValueError('Build browser name row changed')
+        xml = xml.replace(name_row, '<Panel class="DltBuildListNames">' + name_row)
+        xml = xml.replace(row_anchor, '<Label id="DltListNameTranslation" class="DltListTranslation" visible="false" html="false" /></Panel>' + row_anchor)
+        anchor = '<Panel class="HeroSelectorHeader">'
+        if xml.count(anchor) != 1:
+            raise ValueError('Build browser header changed')
+        controls = ('<Panel class="DltBuildListActions"><CitadelButton id="DltListTranslate" class="Medium Fill Dark" '
+                    'text="翻译当前列表" onmouseactivate="DLTBuildListAction();" />'
+                    '<Label id="DltListStatus" class="DltBuildProgressText" /></Panel>'
+                    '<HTML id="DltListBridge" class="DltBuildBridge" hittest="false" hittestchildren="false" acceptsinput="false" acceptsfocus="false" />')
+        return xml.replace(anchor, anchor + controls)
     category = name == 'citadel_shop_mods_build_category'
     shop = name == 'citadel_shop_mods_build'
     prefix = 'DltCategory' if category else 'DltShop' if shop else 'DltBuild'

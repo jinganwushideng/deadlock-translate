@@ -9,6 +9,9 @@ Assert-Identity (Test-DltIndependentResources $taskBase) 'legacy nine resources 
 Assert-Identity (Test-DltIndependentResources ($taskBase+$taskNative[0..1])) 'eleven-resource prebuilt template is accepted'
 Assert-Identity (Test-DltIndependentResources ($taskBase+$taskNative)) 'twelve-resource native controller is accepted'
 Assert-Identity (Test-DltIndependentResources ($taskBase+$taskNative+$taskBuild)) 'eighteen-resource build translation package is accepted'
+$taskBrowser=@('panorama/scripts/dlt_build_transport.vjs_c','panorama/scripts/dlt_build_browser.vjs_c','panorama/layout/citadel_ui_build_selector.vxml_c')
+Assert-Identity (Test-DltIndependentResources ($taskBase+$taskNative+$taskBuild+$taskBrowser)) 'twenty-one-resource source and browser package is accepted'
+Assert-Identity (-not(Test-DltIndependentResources ($taskBase+$taskNative+$taskBuild+$taskBrowser[0..1]))) 'incomplete browser adapter is rejected'
 Assert-Identity (-not(Test-DltIndependentResources ($taskBase+$taskNative+$taskBuild[0..4]))) 'partial build translation package is rejected'
 Assert-Identity (-not(Test-DltIndependentResources ($taskBase+$taskNative+$taskBuild[0..4]+'models/foreign.vmdl_c'))) 'foreign resource cannot replace a build translation resource'
 Assert-Identity (-not(Test-DltIndependentResources ($taskBase+$taskNative[2]))) 'controller without native template is rejected'

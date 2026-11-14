@@ -40,14 +40,14 @@ function DLTBuildTextAction() {
                 sentParts: 0, receivedParts: 0, maxReplyChars: 0, decodeErrors: 0, timeouts: 0 };
             scene.__dltBuildText = state;
         }
-        var eventTitle = '';
-        if (bridge) ['HTMLChangedTitle', 'HTMLTitle'].forEach(function (name) {
-            try { $.RegisterEventHandler(name, bridge, function () {
-                for (var i = 0; i < arguments.length; i++) {
-                    if (typeof arguments[i] === 'string' && arguments[i].indexOf('DLTBUILD:') === 0) eventTitle = arguments[i];
-                }
-            }); } catch (_) {}
-        });
+        var priorWire = { sent: 0, received: 0, errors: 0 };
+        var transport = bridge ? DLTBuildTransport(bridge, function (stats) {
+            state.sentParts += stats.sent - priorWire.sent;
+            state.receivedParts += stats.received - priorWire.received;
+            state.decodeErrors += stats.errors - priorWire.errors;
+            state.maxReplyChars = Math.max(state.maxReplyChars, stats.maximum);
+            priorWire = { sent: stats.sent, received: stats.received, errors: stats.errors };
+        }) : null;
         var applied = [null, null], rendered = null, selectedRevision = 0;
         function normalize(text) {
             return text.replace(/\s+/g, ' ').trim();
@@ -67,7 +67,7 @@ function DLTBuildTextAction() {
         function isVisible() {
             for (var panel = root; panel; panel = panel.GetParent()) {
                 if (panel.visible === false || panel.style.visibility === 'collapse' ||
-                    panel.style.visibility === 'hidden') return false;
+                    panel.style.visibility === 'hidden' || panel.BHasClass && panel.BHasClass('Hidden')) return false;
             }
             return true;
         }
@@ -94,7 +94,8 @@ function DLTBuildTextAction() {
                 var label = originals[i];
                 if (!label || !label.IsValid()) continue;
                 var translation = translations[i];
-                if (category || shop) {
+                if (category || shop || toggle) {
+                    if (outputs[i] && outputs[i].IsValid()) outputs[i].visible = false;
                     var last = label.__dltBuildOriginal || applied[i];
                     if (translation) {
                         var originalHtml = last && last.panel === label ? last.html : label.html;
@@ -141,17 +142,17 @@ function DLTBuildTextAction() {
             var fill = progress.FindChildTraverse('DltBuildProgressFill');
             var status = progress.FindChildTraverse('DltBuildProgressText');
             var control = {
-                root: root, visible: isVisible, request: send, receive: receive, reopening: false,
-                cancel: function () { if (bridge.IsValid()) bridge.SetURL('about:blank'); },
+                root: root, visible: isVisible, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
+                cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));
                     var label = state.enabled ? '显示原文' : '翻译当前出装';
-                    if (toggle.text !== label) toggle.text = label;
+                    DLTSetButtonCaption(toggle, label);
                     var now = Date.now();
                     var needsTranslation = job && (job.bg ? job.working && !job.finishedAt :
                         job.pending && isTranslation(job.pending.batch) || job.queue.some(isTranslation));
                     var confirmation = job && !job.reopened && job.translated && job.finishedAt && now - job.finishedAt < 3500;
-                    progress.visible = state.owner === control && state.enabled && online && !!(needsTranslation || job && (job.failed || confirmation));
+                    progress.visible = state.owner === control && state.enabled && online && !!(needsTranslation || job && (job.manualCapture || job.failed || confirmation));
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
@@ -159,9 +160,13 @@ function DLTBuildTextAction() {
                     var sourceErrors = { 'account-unavailable': '未找到当前 Steam 账号', 'cache-missing': '本地出装缓存尚未生成，请先加载该方案',
                         'cache-too-large': '本地出装缓存超出读取限制', 'cache-changing': '游戏正在保存出装，请稍后重试',
                         'cache-unreadable': '本地出装缓存无法读取，请重新加载该方案', 'not-found': '本地没有此方案，请在游戏中加载后重试',
-                        'ambiguous': '正在核对同名方案', 'mismatch': '正在核对当前方案内容', 'unavailable': '读取整套出装失败，请重试' };
+                        'ambiguous': '正在核对同名方案', 'mismatch': '正在核对当前方案内容',
+                        'capture-expired': '读取超时，请重新点击翻译', 'export-format': '游戏未导出完整方案，请重试',
+                        'selection-changed': '方案已切换，请重新点击翻译', 'clipboard-busy': '剪贴板正在使用，请重试',
+                        'unavailable': '读取整套出装失败，请重试' };
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' :
-                        !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : !job.total ?
+                        !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : job.manualCapture ?
+                        '请在出装选项中点击「复制到剪贴板」' : !job.total ?
                         (sourceErrors[job.sourceStatus] || (job.failed ? '读取整套出装失败，请重试' : '正在读取本地整套出装')) : running ?
                         (looking ? '读取本地译文 ' : job.refining ? '精翻 ' : '后台翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
@@ -184,7 +189,7 @@ function DLTBuildTextAction() {
                 state.clickAt = showOriginal ? 0 : Date.now();
                 state.collectDelayMs = null;
                 state.dispatchDelayMs = null;
-                if (showOriginal && background && (!background.ended || background.failed)) {
+                if (showOriginal && background && (!background.ended || background.failed) && !(config && config.sourceExports)) {
                     state.background.delete(background.identity);
                     if (!background.ended) control.request({ bg: background }, { texts: [], action: 'cancel' }, config);
                 }
@@ -206,68 +211,20 @@ function DLTBuildTextAction() {
                 cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null, includeSnapshot: false,
                 groups: batch.plan ? job.groups : null, description: batch.plan ? job.description : null, fingerprint: job.fingerprint || null,
                 job: job.bg ? job.bg.key : null, action: batch.action, cursor: job.cursor || 0,
-                parentJob: batch.action === 'note' ? job.parentKey : null
+                parentJob: batch.action === 'note' ? job.parentKey : null,
+                source: job.bg ? job.bg.source || job.bg.captureToken : null, buildVersion: job.buildVersion || null
             }));
-            var parts = [];
-            if (input.length > 1800) for (var offset = 0; offset < input.length; offset += 1200) parts.push(input.slice(offset, offset + 1200));
-            var seconds = batch.action || batch.lookup ? 10 : batch.plan ? 30 : Math.max(config && config.fastTimeout || 15, config && config.qualityTimeout || 90) + 5;
-            job.pending = { id: id, batch: batch, deadline: Date.now() +
-                seconds * 1000 + parts.length * 150, upload: parts, uploadIndex: 0, download: null, lastMalformed: '' };
-            if (parts.length > 1024) { state.decodeErrors++; job.pending.deadline = 0; return; }
-            if (parts.length) upload(job.pending);
-            else navigate(input);
-        }
-        function navigate(encoded) {
-            eventTitle = '';
-            try {
-                bridge.SetURL('https://localhost:17866/build-text/__PAIRING__#' + encoded);
-                state.sentParts++;
-            } catch (_) { if (state.job && state.job.pending) state.job.pending.deadline = 0; }
-        }
-        function upload(pending) {
-            navigate(encodeURIComponent(JSON.stringify({ wire: 1, id: pending.id, part: pending.uploadIndex,
-                count: pending.upload.length, data: pending.upload[pending.uploadIndex] })));
+            var seconds = batch.action || batch.lookup ? 10 : batch.plan ? 30 :
+                Math.max(config && config.fastTimeout || 15, config && config.qualityTimeout || 90) + 5;
+            job.pending = { id: id, batch: batch, deadline: Date.now() + seconds * 1000 + Math.ceil(input.length / 1200) * 150 };
+            try { transport.send(id, input); }
+            catch (_) { job.pending.deadline = 0; }
         }
         function receive(pending) {
-            var candidates = [eventTitle];
-            try { candidates.push(String(bridge.title || '')); } catch (_) {}
-            try { if (bridge.GetTitle) candidates.push(String(bridge.GetTitle() || '')); } catch (_) {}
-            for (var c = 0; c < candidates.length; c++) {
-                var reply = candidates[c];
-                if (typeof reply !== 'string' || reply.indexOf('DLTBUILD:') !== 0) continue;
-                state.maxReplyChars = Math.max(state.maxReplyChars, reply.length);
-                var result;
-                try { result = JSON.parse(reply.slice(9)); }
-                catch (_) {
-                    if (pending.lastMalformed !== reply) { pending.lastMalformed = reply; state.decodeErrors++; }
-                    continue;
-                }
-                if (result.id !== pending.id) continue;
-                if (typeof result.ack === 'number') {
-                    if (result.ack === pending.uploadIndex && pending.uploadIndex + 1 < pending.upload.length) {
-                        pending.uploadIndex++; state.receivedParts++; upload(pending);
-                    }
-                    return null;
-                }
-                if (result.wire !== 1) return result;
-                if (!Number.isInteger(result.count) || result.count < 1 || result.count > 1024 ||
-                    !Number.isInteger(result.part) || result.part < 0 || result.part >= result.count ||
-                    typeof result.data !== 'string' || result.data.length > 1200) continue;
-                if (!pending.download) pending.download = { count: result.count, parts: [] };
-                var download = pending.download;
-                if (download.count !== result.count || result.part !== download.parts.length) continue;
-                download.parts.push(result.data); state.receivedParts++;
-                pending.deadline = Math.max(pending.deadline, Date.now() + 5000);
-                if (download.parts.length === download.count) {
-                    try {
-                        var complete = JSON.parse(decodeURIComponent(download.parts.join('')));
-                        if (complete.id === pending.id) return complete;
-                    } catch (_) { state.decodeErrors++; }
-                    pending.deadline = 0;
-                } else navigate(encodeURIComponent(JSON.stringify({ wire: 1, id: pending.id, read: download.parts.length })));
-                return null;
-            }
-            return null;
+            var received = state.receivedParts;
+            var result = transport.read(pending.id);
+            if (received !== state.receivedParts) pending.deadline = Math.max(pending.deadline, Date.now() + 5000);
+            return result;
         }
         function restartJob() {
             if (state.job && state.job.pending && state.owner) {
@@ -312,11 +269,12 @@ function DLTBuildTextAction() {
         }
         function makeBackground(identity) {
             var saved = state.background.get(identity);
-            if (saved) return saved;
+            if (saved && !saved.failed) return saved;
+            var source = saved && saved.source;
             var key = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'.replace(/x/g, function () {
                 return Math.floor(Math.random() * 16).toString(16);
             });
-            saved = { key: key, identity: identity, accepted: false, ended: false };
+            saved = { key: key, identity: identity, accepted: false, ended: false, source: source };
             if (state.background.size >= 12) state.background.delete(state.background.keys().next().value);
             state.background.set(identity, saved);
             return saved;
@@ -344,11 +302,36 @@ function DLTBuildTextAction() {
                     return;
                 }
                 if (reply.error === 'busy') { job.pollAfter = now + 1000; return; }
+                if (reply.error === 'source-expired') {
+                    job.bg.source = null; job.bg.captureToken = null; job.pollAfter = now + 100; return;
+                }
                 if (reply.error && !Array.isArray(reply.fields)) {
                     job.failed = reply.failed || 1;
                     job.finishedAt = now;
                     job.bg.ended = true;
                     job.bg.failed = true;
+                    return;
+                }
+                if (pending.batch.action === 'source-prepare' || pending.batch.action === 'source-read') {
+                    var capture = reply.capture;
+                    if (capture && capture.token) {
+                        job.bg.captureToken = capture.token;
+                        job.manualCapture = capture.manual === true;
+                        try { if (!job.manualCapture) $.DispatchEvent('CitadelCopySelectedBuildContentsToClipboard', 0); }
+                        catch (_) { job.failed = 1; job.finishedAt = now; }
+                    } else if (capture && capture.source) {
+                        job.bg.source = capture.source;
+                        job.bg.captureToken = null;
+                        job.manualCapture = false;
+                    } else if (capture && capture.pending) {
+                        // Clipboard export can take several native frames.
+                    } else if (!capture || capture.error) {
+                        job.failed = 1;
+                        job.sourceStatus = capture && capture.error || 'export-format';
+                        job.finishedAt = now;
+                        job.bg.failed = true;
+                    }
+                    job.pollAfter = now + 100;
                     return;
                 }
                 if (pending.batch.action === 'start' || pending.batch.action === 'note') {
@@ -387,9 +370,13 @@ function DLTBuildTextAction() {
             }
             if (now < job.pollAfter) return;
             var action = job.bg.accepted ? 'poll' : job.parentKey ? 'note' : 'start';
-            state.owner.request(job, { action: action, plan: action === 'start', texts: action === 'poll' ? [] : job.sources }, config);
+            if (config && config.sourceExports && !job.bg.source && !job.parentKey)
+                action = job.bg.captureToken ? 'source-read' : 'source-prepare';
+            state.owner.request(job, { action: action, plan: action === 'start',
+                texts: action === 'poll' || action === 'source-read' ? [] : job.sources }, config);
         }
         function advanceHoveredNote(job, config) {
+            if (config && config.sourceExports) return;
             if (!job.bg || !job.finishedAt || !job.fingerprint) return;
             var hovered = state.hoveredNote;
             if (!job.note && hovered && hovered.job === job && Date.now() - hovered.since >= 200 &&
@@ -557,8 +544,11 @@ function DLTBuildTextAction() {
         function update() {
             var config = syncSettings();
             var online = !config || config.enabled;
-            if (!state.owner || !state.owner.root.IsValid() || !state.owner.visible()) {
-                var owner = state.controls.find(function (item) { return item.root.IsValid() && item.visible(); }) || null;
+            var visibleControls = state.controls.filter(function (item) { return item.root.IsValid() && item.visible(); });
+            var preferred = visibleControls.find(function (item) { return item.kind === 'details'; }) || visibleControls[0] || null;
+            if (!state.owner || !state.owner.root.IsValid() || !state.owner.visible() ||
+                preferred && preferred.kind === 'details' && state.owner.kind !== 'details') {
+                var owner = preferred;
                 if (owner !== state.owner) {
                     restartJob();
                     state.owner = owner;
@@ -594,12 +584,15 @@ function DLTBuildTextAction() {
                             var idText = idLabels.length ? String(idLabels[0].text || '').replace(/<[^>]*>/g, '') : '';
                             var idParts = idText.match(/\d+/g);
                             var buildId = idParts && idParts.length === 1 && Number(idParts[0]) <= 4294967295 ? Number(idParts[0]) : null;
+                            var versions = root.FindChildrenWithClassTraverse ? root.FindChildrenWithClassTraverse('Version') : [];
+                            var versionParts = versions.length ? String(versions[0].text || '').match(/\d+/g) : null;
+                            var buildVersion = versionParts && versionParts.length === 1 ? Number(versionParts[0]) : null;
                             var groups = base.filter(function (entry) { return entry.view.category; }).map(function (entry) {
                                 return { name: normalize(entry.texts[0]), note: normalize(entry.texts[1]) };
                             }).filter(function (group) { return group.name || group.note; });
                             var description = read(1);
                             var structure = groupKeys(groups);
-                            var identity = JSON.stringify([titleKey(build), buildId, normalize(description), structure]);
+                            var identity = JSON.stringify([titleKey(build), buildId, buildVersion, buildId ? 0 : selectedRevision, normalize(description), structure]);
                             var selection = JSON.stringify([titleKey(build), buildId, selectedRevision, normalize(description)]);
                             var signature = JSON.stringify([selection, structure]);
                             if (signature !== state.signature) {
@@ -625,7 +618,7 @@ function DLTBuildTextAction() {
                                         var groupSize = 0;
                                         var observed = groups.slice(0, 96).filter(function (group) { groupSize += group.name.length + group.note.length; return groupSize <= 48000; });
                                         var background = config && config.backgroundJobs ? makeBackground(identity) : null;
-                                        state.job = { context: '', build: build, buildId: buildId, groups: observed, description: description,
+                                        state.job = { context: '', build: build, buildId: buildId, buildVersion: buildVersion, groups: observed, description: description,
                                             selection: selection, identity: identity, structure: structure, memo: Object.create(null), sourceStatus: '',
                                             values: Object.create(null), normalized: Object.create(null), normalizedSource: Object.create(null),
                                             bg: background, sources: visible, cursor: 0, pollAfter: 0, reopened: !!(background && background.accepted),

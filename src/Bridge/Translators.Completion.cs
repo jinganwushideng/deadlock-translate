@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace DeadlockTranslate;
 public sealed partial class Translators {
-    private async Task<string> ReadCompletion(HttpRequestMessage request,long epoch,LlmTelemetry.Trace trace,CancellationToken ct,int promptCharacters){
+    private async Task<string> ReadCompletion(HttpRequestMessage request,long epoch,LlmTelemetry.Trace trace,CancellationToken ct,int promptCharacters,int maximumCharacters=2500){
         trace.Stage("waiting");var started=Stopwatch.GetTimestamp();
         try{
             var bytes=request.Content==null?null:await request.Content.ReadAsByteArrayAsync(ct);
@@ -21,7 +21,7 @@ public sealed partial class Translators {
                 catch(HttpRequestException ex) when(ex.StatusCode==null){throw new ProviderNetworkException("llm","llm-connect",ex);}
                 using(response){
                     trace.Response(response.Content.Headers.ContentType?.MediaType=="text/event-stream"?"stream":"json");await CheckApiResponse(response,"llm","llm-translate",epoch,ct);
-                    try{return await ChatCompletionReader.Read(response,trace,ct);}
+                    try{return await ChatCompletionReader.Read(response,trace,ct,maximumCharacters);}
                     catch(HttpRequestException ex) when(ex.StatusCode==null){throw new ProviderNetworkException("llm","llm-response",ex);}
                     catch(IOException ex){throw new ProviderNetworkException("llm","llm-response",new HttpRequestException(HttpRequestError.ResponseEnded,"Incomplete API response",ex));}
                     catch(Exception ex) when(ex is JsonException or InvalidDataException or InvalidOperationException or KeyNotFoundException or IndexOutOfRangeException){throw Failure(response.StatusCode,"llm","llm-translate",epoch,"API 响应没有完整可用的译文；请检查协议或关闭流式反馈后主动重试。",LogReason.InvalidData);}

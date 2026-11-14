@@ -17,6 +17,7 @@ byte[] Build(uint id,string name,uint version=1)=>Data(1,Join(Number(1,id),Numbe
     Data(10,Join(Data(1,Join(Text(2,"Early group"),Text(3,"Group note"),Data(1,Join(Number(1,123),Text(2,"Unseen item annotation"))))),
         Data(2,Data(1,Text(4,"Ability note")))))));
 var plan=LocalBuildCatalog.Parse(Build(101,"Test build"))!;
+Check(plan.Fields?.Any(field=>field.Text=="Unseen item annotation"&&field.ItemId==123&&field.Group==0&&field.Entry==0)==true,"unseen item annotations keep native item ID and field position");
 Check(plan.Texts.SequenceEqual(new[]{"Test build","Build introduction","Early group","Group note","Unseen item annotation","Ability note"}),"complete protobuf contains unrendered annotations and ability notes");
 Check(LocalBuildCatalog.Select([plan],"Test build [61% winrate]",null,[]).Build?.Id==101,"changing win-rate badges match the original build");
 var other=plan with{Id=102,Groups=[new("Early group","Different note"),new("New section","New note")]};
@@ -40,6 +41,29 @@ try{LocalBuildCatalog.Parse(Data(1,Data(5,[0xFF])));throw new Exception("Accepte
 
 var folder=Path.Combine(Path.GetTempPath(),"dlt-catalog-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
 try{
+    var translationCache=new BuildTextCache(folder);
+    var longTranslation=new string('译',8000);
+    translationCache.Store(new string('A',64),longTranslation);translationCache.Flush();
+    Check(new BuildTextCache(folder).TryGet(new string('A',64),out var savedLong)&&savedLong==longTranslation,"expanded long annotations survive cache flush and restart");
+    var job=new BuildTextJobs.Job("fixture",default,2);
+    var longSources=new[]{new string('a',6000),new string('b',6000),new string('c',6000)};
+    job.SetPlan(new("fixture",longSources,null,new string('B',64),false));
+    job.Apply(longSources,System.Text.Json.JsonSerializer.SerializeToElement(new{translations=new[]{longTranslation,longTranslation,longTranslation},translated=3,cacheHits=0}),false);
+    var page=System.Text.Json.JsonSerializer.SerializeToElement(job.Snapshot(0,1),ConfigStore.Json);
+    Check(page.GetProperty("fields").GetArrayLength()==1&&page.GetProperty("more").GetBoolean(),"long results paginate before overflowing native HTML transport");
+    var telemetry=new LlmTelemetry();
+    string ResponseJson(string content)=>System.Text.Json.JsonSerializer.Serialize(new{choices=new[]{new{message=new{content},finish_reason="stop"}}});
+    using(var response=new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(ResponseJson(longTranslation))}){
+        try{await ChatCompletionReader.Read(response,telemetry.Begin(new Settings(),false,0),default);throw new Exception("Chat bound was removed");}
+        catch(InvalidDataException){Check(true,"ordinary chat retains its small response bound");}
+    }
+    using(var response=new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(ResponseJson(longTranslation))}){
+        Check(await ChatCompletionReader.Read(response,telemetry.Begin(new Settings(),false,0),default,1000000)==longTranslation,"build response bound accepts complete long batch content");
+    }
+    var delta=System.Text.Json.JsonSerializer.Serialize(new{choices=new[]{new{index=0,delta=new{content=longTranslation},finish_reason="stop"}}});
+    using(var response=new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent("data: "+delta+"\n\ndata: [DONE]\n\n",Encoding.UTF8,"text/event-stream")}){
+        Check(await ChatCompletionReader.Read(response,telemetry.Begin(new Settings(),false,0),default,1000000)==longTranslation,"build streaming response uses the same explicit bound");
+    }
     var path=Path.Combine(folder,"cache.kv3");
     void Write(uint version=1){
         var root=KVObject.Collection();var section=KVObject.Array();section.Add(KVObject.Blob(Build(101,"Test build",version)));root.Add("Favorites",section);
