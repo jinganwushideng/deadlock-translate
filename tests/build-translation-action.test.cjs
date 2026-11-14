@@ -29,7 +29,7 @@ function fixture(autoEnabled, withText = true) {
     const root = panel('shop', scene), selected = panel('SelectedBuildOuter', root);
     const title = panel('DltShopTitle', selected, withText ? 'Build title' : '');
     const bridge = panel('DltShopBridge', root), translate = panel('DltShopTranslate', root);
-    const original = panel('DltShopOriginal', root), progress = panel('DltShopProgress', root);
+    const progress = panel('DltShopProgress', root);
     panel('DltBuildProgressFill', progress);
     const status = panel('DltBuildProgressText', progress);
     bridge.SetURL = url => {
@@ -60,9 +60,9 @@ function fixture(autoEnabled, withText = true) {
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, progress, status, sent, navigations, tasks, frame, scene, category,
-        click: () => scope.DLTBuildTextAction(false),
-        showOriginal: () => scope.DLTBuildTextAction(true) };
+    return { root, title, bridge, translate, progress, status, sent, navigations, tasks, frame, scene, category,
+        click: () => scope.DLTBuildTextAction(),
+        showOriginal: () => scope.DLTBuildTextAction() };
 }
 
 function reply(f, body) {
@@ -76,14 +76,23 @@ const automatic = fixture(true);
 assert.equal(automatic.sent[0].loadPlan, true);
 automatic.click(); automatic.frame();
 assert.equal(automatic.sent.length, 1);
+assert.equal(automatic.scene.__dltBuildText.enabled, false);
+assert.equal(automatic.translate.text, '翻译当前出装');
+assert.equal(automatic.progress.visible, false);
+assert.equal(automatic.navigations.at(-1), 'about:blank');
+automatic.click(); automatic.frame();
+assert.equal(automatic.sent.length, 2);
+assert.equal(automatic.translate.text, '显示原文');
 plan(automatic);
-assert.equal(automatic.sent[1].cacheOnly, true);
+assert.equal(automatic.sent[2].cacheOnly, true);
 reply(automatic, { translations: ['Translated title'], cacheHits: 1 });
 assert.equal(automatic.title.text, 'Translated title');
 automatic.showOriginal();
 assert.equal(automatic.title.text, 'Build title');
 assert.equal(automatic.progress.visible, false);
-console.log('PASS native action reads local plan first; repeated clicks cannot cancel it; original action restores text');
+assert.equal(automatic.translate.text, '翻译当前出装');
+assert.equal(automatic.root.FindChildTraverse('DltShopOriginal'), null);
+console.log('PASS one toggle starts translation, cancels pending work, restores original text and changes its caption');
 
 const empty = fixture(false, false);
 empty.click(); empty.frame();
@@ -138,6 +147,9 @@ missing.frame(); missing.frame();
 assert.equal(missing.sent.length, 1);
 assert.equal(missing.scene.__dltBuildText.job.failed, 1);
 assert.equal(missing.scene.__dltBuildText.job.total, 0);
+missing.click(); missing.frame();
+assert.equal(missing.scene.__dltBuildText.enabled, false);
+assert.equal(missing.sent.length, 1);
 missing.click(); missing.frame();
 assert.equal(missing.sent.length, 2);
 assert.equal(missing.sent[1].loadPlan, true);

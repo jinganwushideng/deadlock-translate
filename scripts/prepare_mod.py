@@ -49,8 +49,7 @@ def patch_build_text_layout(xml, name):
                 '<Label id="DltBuildProgressText" class="DltBuildProgressText" /></Panel>')
     def actions(prefix, button, classes, event):
         return ('<Panel class="DltBuildActions">'
-                f'<{button} id="{prefix}Translate" class="{classes}" text="翻译当前出装" {event}="DLTBuildTextAction(false);" />'
-                f'<{button} id="{prefix}Original" class="{classes}" text="显示原文" visible="false" {event}="DLTBuildTextAction(true);" />'
+                f'<{button} id="{prefix}Translate" class="{classes}" text="翻译当前出装" {event}="DLTBuildTextAction();" />'
                 '</Panel>')
     if name == 'citadel_ui_build_details':
         anchor = '<Panel id="BuildDetails_Overview">'

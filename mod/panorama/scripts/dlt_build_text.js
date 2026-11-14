@@ -1,7 +1,7 @@
-function DLTBuildTextAction(showOriginal) {
+function DLTBuildTextAction() {
     for (var panel = $.GetContextPanel(); panel; panel = panel.GetParent()) {
         if (panel.__dltBuildTextAction) {
-            panel.__dltBuildTextAction(showOriginal);
+            panel.__dltBuildTextAction();
             return;
         }
     }
@@ -108,7 +108,6 @@ function DLTBuildTextAction(showOriginal) {
         state.readers.push(view);
         state.forceCollect = true;
         if (toggle) {
-            var original = root.FindChildTraverse(shop ? 'DltShopOriginal' : 'DltBuildOriginal');
             var progress = root.FindChildTraverse(shop ? 'DltShopProgress' : 'DltBuildProgress');
             var fill = progress.FindChildTraverse('DltBuildProgressFill');
             var status = progress.FindChildTraverse('DltBuildProgressText');
@@ -117,10 +116,8 @@ function DLTBuildTextAction(showOriginal) {
                 cancel: function () { if (bridge.IsValid()) bridge.SetURL('about:blank'); },
                 status: function (job, online) {
                     var running = !!(job && (job.pending || job.queue.length));
-                    var label = job && job.failed && !running ? '重试翻译' : '翻译当前出装';
+                    var label = state.enabled ? '显示原文' : '翻译当前出装';
                     if (toggle.text !== label) toggle.text = label;
-                    original.visible = state.enabled;
-                    original.text = running ? '取消翻译' : '显示原文';
                     var now = Date.now();
                     var confirmation = job && (job.translated ? !job.finishedAt || now - job.finishedAt < 3500 :
                         state.clickAt && now - state.clickAt < 1200);
@@ -144,14 +141,10 @@ function DLTBuildTextAction(showOriginal) {
                 }
             };
             state.controls.push(control);
-            root.__dltBuildTextAction = function (showOriginal) {
+            root.__dltBuildTextAction = function () {
                 var config = syncSettings();
+                var showOriginal = state.enabled;
                 state.error = false;
-                if (!showOriginal && state.enabled && state.owner === control && state.job &&
-                    (state.job.pending || state.job.queue.length)) {
-                    control.status(state.job, !config || config.enabled);
-                    return;
-                }
                 state.clicks++;
                 restartJob();
                 state.enabled = !showOriginal;

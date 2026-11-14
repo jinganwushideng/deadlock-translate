@@ -14,7 +14,7 @@
 }
 
 .DltBuildActions { flow-children: right; vertical-align: center; }
-.DltBuildTranslateButton { vertical-align: center; }
+.DltBuildTranslateButton { vertical-align: center; min-width: 180px; }
 .DltBuildProgress { flow-children: down; width: 300px; }
 .DltBuildProgressPopup {
     ignore-parent-flow: true;
