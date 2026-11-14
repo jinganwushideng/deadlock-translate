@@ -68,6 +68,12 @@
 
 Bing 网页通道不是稳定性有保障的正式 API，失效时不会静默改用付费服务。聊天内容会发送给你配置的翻译服务；精翻可能携带最近 6 条、60 秒内的上下文。不要把个人密钥或完整状态目录提交到仓库。
 
+## 贡献者
+
+感谢 [niiicrain](https://github.com/niiicrain) 通过 [PR #1](https://github.com/jinganwushideng/deadlock-translate/pull/1) 提供出装浏览器、商店配装及装备注释翻译的初始实现。当前版本在这项贡献的基础上继续开发，并保留原始提交与作者署名。
+
+[查看全部 GitHub 贡献者](https://github.com/jinganwushideng/deadlock-translate/graphs/contributors)。
+
 ## 授权
 
 本项目可授权的代码和文档使用 **GPL-3.0-only**，见 [LICENSE](LICENSE)。保留第三方署名，详见 [NOTICE](NOTICE)。主要游戏接入参考 BabelTower，Steam 启动方式参考 SteamWrap。
