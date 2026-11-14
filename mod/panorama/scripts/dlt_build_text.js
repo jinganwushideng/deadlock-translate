@@ -80,16 +80,27 @@ function DLTChineseBuildTitle(title) {
 
         var scene = root;
         while (scene.GetParent()) scene = scene.GetParent();
-        var state = scene.__dltBuildText;
-        if (!state) {
-            state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
+        var cache = scene.__dltBuildTextCache;
+        if (!cache) cache = scene.__dltBuildTextCache = { revision: null, background: new Map(), sourceViews: new Map() };
+        function surfaceState(preview) {
+            var key = preview ? '__dltBuildPreview' : '__dltBuildText';
+            if (!scene[key]) scene[key] = { preview: preview, owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
                 revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [],
-                recent: Object.create(null), background: new Map(), sourceViews: new Map(),
+                recent: Object.create(null), background: cache.background, sourceViews: cache.sourceViews,
                 forceCollect: true, nextCollectAt: 0, pairs: [], collectionMs: 0, collections: 0,
                 clickAt: 0, collectDelayMs: null, dispatchDelayMs: null,
                 sentParts: 0, receivedParts: 0, maxReplyChars: 0, decodeErrors: 0, timeouts: 0 };
-            scene.__dltBuildText = state;
+            return scene[key];
         }
+        surfaceState(false);
+        function previewVisible() {
+            return scene.__dltBuildPreview && scene.__dltBuildPreview.controls.some(function (item) { return item.visible(); });
+        }
+        function belongsToPreview() {
+            if (tooltip || role === 'Details' && !eligibleController()) return !!previewVisible();
+            return ancestorRole('Selector') && (role === 'Details' || ancestorRole('Details'));
+        }
+        var state = surfaceState(belongsToPreview());
         if (typeof root.__dltReboundEnabled === 'boolean') {
             state.enabled = root.__dltReboundEnabled;
             state.keepReboundEnabled = state.autoEnabled === null;
@@ -216,6 +227,9 @@ function DLTChineseBuildTitle(title) {
         function selectionKey(build,metadata,description) {
             return JSON.stringify([normalize(build),metadata.id,metadata.version,metadata.id?0:selectedRevision,normalize(description)]);
         }
+        function previewSelection(build,metadata) {
+            return JSON.stringify([normalize(build),metadata.id,metadata.version]);
+        }
         var view = { root: root, category: !!category, visible: isVisible, read: readView, render: render };
         if (!tooltip) state.readers.push(view);
         state.forceCollect = true;
@@ -228,7 +242,8 @@ function DLTChineseBuildTitle(title) {
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));
-                    var label = state.enabled && !state.chineseSuppressed ? job && job.bg && job.failed ? '重试翻译' : '显示原文' : '翻译当前出装';
+                    var label = state.enabled && !state.chineseSuppressed ? job && job.bg && job.failed ? '重试翻译' :
+                        state.preview ? '预览原文' : '显示原文' : state.preview ? '翻译此预览' : '翻译当前出装';
                     DLTSetButtonCaption(toggle, label);
                     var now = Date.now();
                     var needsTranslation = job && (job.bg ? !job.finishedAt && (job.working || job.receiving || job.downloadComplete) :
@@ -273,6 +288,7 @@ function DLTChineseBuildTitle(title) {
                 var showOriginal = state.enabled && !state.chineseSuppressed && !(state.job && state.job.bg && state.job.failed);
                 var currentText=readView();
                 state.manualSelection=showOriginal?null:selectionKey(currentText[0],nativeIdentity(),currentText[1]);
+                if (state.preview) state.previewSelection=previewSelection(currentText[0],nativeIdentity());
                 state.chineseSuppressed=false;
                 var background = state.job && state.job.bg;
                 state.error = false;
@@ -337,8 +353,10 @@ function DLTChineseBuildTitle(title) {
                 state.revision = config.revision; restartJob();
                 state.completed = Object.create(null); state.completedOrder = [];
                 state.recent = Object.create(null);
-                state.background.clear();
-                state.sourceViews.clear();
+                if (cache.revision !== config.revision) {
+                    cache.revision = config.revision;
+                    cache.background.clear(); cache.sourceViews.clear();
+                }
                 state.chineseSourceSelection=null;
             }
             if (state.autoEnabled !== config.autoEnabled) {
@@ -731,6 +749,13 @@ function DLTChineseBuildTitle(title) {
                 var metadata = nativeIdentity();
                 var live = readView();
                 var liveSelection=selectionKey(live[0],metadata,live[1]);
+                if (state.preview && live[0]) {
+                    if (state.previewSelection !== previewSelection(live[0],metadata)) {
+                        restartJob(); state.enabled = state.autoEnabled === true; state.manualSelection = null;
+                        state.previewSelection = previewSelection(live[0],metadata);
+                    } else if (state.manualSelection) state.manualSelection = liveSelection;
+                }
+                active = state.enabled && online;
                 state.chineseSuppressed=state.enabled&&(DLTChineseBuildTitle(live[0])||state.chineseSourceSelection===liveSelection)&&state.manualSelection!==liveSelection;
                 active=active&&!state.chineseSuppressed;
                 var probe = JSON.stringify([live, metadata.id, metadata.version, selectedRevision]);
@@ -873,6 +898,17 @@ function DLTChineseBuildTitle(title) {
                 if (toggle && eligibleController()) root.__dltReboundEnabled = state.enabled;
                 initialize();
                 return;
+            }
+            var nextState = surfaceState(belongsToPreview());
+            if (nextState !== state) {
+                render([], null);
+                if (tooltip || role === 'Details' && !eligibleController()) state = nextState;
+                else {
+                    state.readers = state.readers.filter(function (item) { return item.root !== root; });
+                    state.controls = state.controls.filter(function (item) { return item.root !== root; });
+                    if (state.owner && state.owner.root === root) { restartJob(); state.owner = null; }
+                    root.__dltBuildTextInitialized = false; initialize(); return;
+                }
             }
             if (toggle) {
                 var eligible = eligibleController();

@@ -6,7 +6,7 @@ os.environ.setdefault('DEADLOCK_TRANSLATE_GAME',str(root))
 spec=importlib.util.spec_from_file_location('prepare_mod',root/'scripts/prepare_mod.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 fixtures={
- 'citadel_ui_build_details':('<CitadelBuildDetails><Label class="BuildName" text="#Citadel_HeroBuilds_BuildName"/><Panel id="BuildDetails_Overview"><Label class="BuildDescription" text="#Citadel_HeroBuilds_BuildDescription"/></Panel></CitadelBuildDetails>','Details'),
+ 'citadel_ui_build_details':('<CitadelBuildDetails><Label class="BuildName" text="#Citadel_HeroBuilds_BuildName"/><Panel id="DetailsTop"><Panel id="BuildDetailsTabs"/><Panel class="TagList"></Panel></Panel><Panel id="BuildDetails_Overview"><Label class="BuildDescription" text="#Citadel_HeroBuilds_BuildDescription"/></Panel></CitadelBuildDetails>','Details'),
  'citadel_shop_mods_build':('<snippets><snippet name="FavoriteBuildEntry"><Label class="FavoriteBuildEntryLabel SelectedBuildName" text="#Citadel_HeroBuilds_BuildName"/></snippet></snippets><CitadelShopModsBuild><Panel id="SelectedBuildOuter" /><Panel id="ControlButtons"></Panel></CitadelShopModsBuild>','Shop'),
  'citadel_shop_mods_build_category':('<CitadelShopModsBuildCategory><Panel><Label id="BuildCategoryName" text="#Citadel_HeroBuilds_CategoryName"/><Label class="CategoryDescription" text="#Citadel_HeroBuilds_CategoryDescription"/></Panel></CitadelShopModsBuildCategory>','Category'),
  'tooltips/citadel_tooltip_mod_details':('<CitadelTooltipModDetails><Label id="ModName"/><Label class="ModifiesLabel" text="#Citadel_Item_Build_Annotation"/></CitadelTooltipModDetails>','Item'),
@@ -32,4 +32,9 @@ for name,(body,role) in fixtures.items():
  assert not any('DltBuildTextSlot' in panel.attrib.get('class','') for panel in after.iter('Panel'))
  markers=[p for p in after.iter('Panel') if p.attrib.get('id')=='DltBuildContext'+role]
  assert len(markers)==1
+ if role=='Details':
+  button=next(p for p in after.iter() if p.attrib.get('id')=='DltBuildTranslate')
+  header=next(p for p in after.iter() if p.attrib.get('id')=='DetailsTop')
+  assert button in list(header.iter()) and button.tag=='CitadelButton'
+  assert button.attrib.get('onmouseactivate')=='DLTBuildTextAction();'
  print('PASS native text tokens and explicit '+role+' context remain intact')

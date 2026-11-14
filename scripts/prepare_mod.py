@@ -123,10 +123,13 @@ def patch_build_text_layout(xml, name):
                 f'<{button} id="{prefix}Translate" class="{classes}" text="翻译当前出装" {event}="DLTBuildTextAction();" />'
                 '</Panel>')
     if name == 'citadel_ui_build_details':
-        anchor = '<Panel id="BuildDetails_Overview">'
+        anchor = '<Panel class="TagList">'
         if xml.count(anchor) != 1:
             raise ValueError('Build details controls changed')
-        xml = xml.replace(anchor, anchor + actions('DltBuild', 'TextButton', 'Medium Fill DltBuildTranslateButton', 'onactivate') + bridge)
+        preview = actions('DltBuild', 'CitadelButton', 'Medium Dark Fill DltBuildPreviewButton', 'onmouseactivate')
+        preview = preview.replace('DltBuildActions', 'DltBuildActions DltBuildPreviewActions').replace('翻译当前出装', '翻译此预览')
+        xml = xml.replace(anchor, preview + anchor)
+        xml = xml.replace('<Panel id="BuildDetails_Overview">', '<Panel id="BuildDetails_Overview">' + bridge)
         xml = xml.replace('</CitadelBuildDetails>', progress('DltBuild') + '</CitadelBuildDetails>')
     elif shop:
         anchor = '<Panel id="SelectedBuildOuter" />'

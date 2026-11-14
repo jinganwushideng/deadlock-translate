@@ -9,6 +9,10 @@ if(args.FirstOrDefault()=="--clipboard-child"){await ClipboardNativeFixture.Run(
 
 var passed=0;
 void Check(bool valid,string name){if(!valid)throw new Exception(name);Console.WriteLine("PASS "+name);passed++;}
+Check(BuildTextLanguage.TryLabel("Core Build",out var core)&&core=="核心出装"&&BuildTextLanguage.TryLabel(" Mid   Options ",out var options)&&options=="中期备选","common build headings translate locally with whitespace normalization");
+Check(!BuildTextLanguage.TryLabel("Buy Core Build later",out _)&&!BuildTextLanguage.TryLabel("Tankbuster",out _),"local headings never replace substrings or equipment names");
+Check(BuildTextLanguage.Hints("L>R, poke then sustain; CC").Select(hint=>hint.Source).ToHashSet().SetEquals(new[]{"L>R","poke","sustain","CC"}),"build tactical hints preserve purchase order and combat context");
+Check(BuildTextLanguage.Hints("showcase farmer sustainment").Length==0,"tactical hints use whole tokens rather than arbitrary substrings");
 byte[] Join(params byte[][] parts)=>parts.SelectMany(p=>p).ToArray();
 byte[] Int(ulong n){var bytes=new List<byte>();while(n>=128){bytes.Add((byte)((n&127)|128));n>>=7;}bytes.Add((byte)n);return bytes.ToArray();}
 byte[] Number(int field,uint n)=>Join(Int((ulong)(field<<3)),Int(n));

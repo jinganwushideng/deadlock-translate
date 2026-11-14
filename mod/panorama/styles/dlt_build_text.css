@@ -15,6 +15,8 @@
 
 .DltBuildActions { flow-children: right; vertical-align: center; }
 .DltBuildTranslateButton { vertical-align: center; min-width: 180px; }
+.DltBuildPreviewActions { margin-right: 12px; margin-bottom: 4px; }
+.DltBuildPreviewButton { min-width: 140px; vertical-align: center; }
 .DltBuildProgress { flow-children: down; width: 300px; }
 .DltBuildProgressPopup {
     visibility: collapse;

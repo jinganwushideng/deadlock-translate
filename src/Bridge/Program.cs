@@ -555,6 +555,12 @@ async Task<IResult> RunBuildRequest(BuildTextRequest input,CancellationToken req
         }
         foreach(var text in input.Texts.Select(text=>text.Trim()).Distinct(StringComparer.Ordinal)){
             if(!text.Any(char.IsLetter)){values[text]="";continue;}
+            if(TranslationLanguages.Incoming(profile.Fast).ChineseGlossary&&BuildTextLanguage.TryLabel(text,out var label)){
+                var prepared=terms.Prepare(text,profile.Fast.BilingualNames);
+                if(prepared.Map.Count==0&&!prepared.Hints.Any(hint=>hint.Source.Equals(text,StringComparison.OrdinalIgnoreCase))){
+                    values[text]=label;cacheHits++;continue;
+                }
+            }
             var cacheKey=BuildTextCache.Key(text,profile,quality,glossary,quality?scope:null);
             if(profile.Mode=="hybrid"&&!quality){
                 if(ReadCached(text,true,out var refined)){values[text]=refined!;cacheHits++;continue;}

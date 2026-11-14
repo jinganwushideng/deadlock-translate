@@ -76,9 +76,14 @@ const embeddedActions=f.panel('actions',embedded);f.panel('DltShopTranslate',emb
 const eb=f.panel('DltShopBridge',embedded);eb.SetURL=()=>{};
 const ep=f.panel('DltShopProgress',embedded);f.panel('DltBuildProgressFill',ep);f.panel('DltBuildProgressText',ep);
 f.initializePanel(embedded);f.frame();f.frame();
-assert.equal(f.scene.__dltBuildText.owner.root,browser.root,'only actual browser details can own a preview task');
-assert.equal(f.scene.__dltBuildText.controls.find(item=>item.root===nestedPopup.root).visible(),false,'tooltip ancestry overrides browser ancestry');
+assert.ok(f.scene.__dltBuildPreview.owner.root===browser.root,'browser details own an independent preview surface');
+assert.ok(f.scene.__dltBuildText.owner.root===f.root,'opening a preview retains the shop controller');
+assert.equal(f.scene.__dltBuildPreview.enabled,false,'preview starts in original mode regardless of the shop toggle');
+assert.equal(browser.sent.length,0,'opening a preview alone does not start a translation');
+assert.equal(f.scene.__dltBuildPreview.controls.find(item=>item.root===nestedPopup.root).visible(),false,'tooltip ancestry overrides browser ancestry');
 assert.equal(ep.visible,false);assert.equal(embeddedActions.visible,false);
+browser.root.__dltBuildTextAction();f.frame();
+assert.equal(f.scene.__dltBuildText.enabled,true,'preview action leaves the enabled shop unchanged');
 source(9001,3,'Browser preview',browser.bridge,browser.sent);
 const previewJob=browser.sent.find(request=>request.action==='start').job;
 reply({cursor:1,total:3,done:1,cacheHits:0,translated:1,failed:0,working:true,ended:false,more:false,
@@ -95,6 +100,33 @@ reply({cursor:3,total:3,done:3,cacheHits:0,translated:3,failed:0,working:false,e
     fields:[{source:'New build group',value:'新方案分组'},{source:'New build instructions',value:'新方案说明'}]});
 assert.equal(shown(group.first),'新方案分组');assert.equal(shown(group.second),'新方案说明');
 console.log('PASS changing hero then applying an uncached browser preview paints the shop and keeps progress on its surface');
+
+selector.visible=true;f.frame();
+browser.root.__dltBuildTextAction();f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,false);
+assert.equal(f.scene.__dltBuildText.enabled,true,'showing preview originals leaves shop translations enabled');
+f.click();f.frame();
+browser.root.__dltBuildTextAction();f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,true);
+assert.equal(f.scene.__dltBuildText.enabled,false,'translating preview cannot turn on a disabled shop');
+browser.title.text='Another selected preview';f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,false,'selecting another preview restores its original mode');
+assert.equal(f.scene.__dltBuildText.enabled,false);
+selector.visible=false;f.click();f.frame();
+console.log('PASS preview toggle is limited to the selected scheme and never changes the shop toggle');
+selector.visible=true;f.scene.__dltBuildTextConfig.autoEnabled=true;f.frame();f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,true,'foreign previews still respect the automatic translation preference');
+browser.root.__dltBuildTextAction();f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,false,'manual original mode persists on this selection');
+browser.title.text='全中文出装攻略';f.frame();
+assert.equal(f.scene.__dltBuildPreview.chineseSuppressed,true,'Chinese previews never automatically translate');
+const requestsBeforeForeign=browser.sent.length;
+browser.title.text='New foreign strategy';f.frame();
+assert.equal(f.scene.__dltBuildPreview.enabled,true);
+assert.equal(f.scene.__dltBuildPreview.chineseSuppressed,false);
+assert.ok(browser.sent.length>requestsBeforeForeign,'changing to a foreign preview restores the automatic preference');
+selector.visible=false;f.frame();
+console.log('PASS preview-local manual choice preserves automatic foreign and manual Chinese behavior');
 
 const foreign=f.panel('unrelated',f.scene);
 f.panel('DltShopBridge',f.panel('nested',foreign));
