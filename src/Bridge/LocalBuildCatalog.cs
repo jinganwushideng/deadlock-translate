@@ -53,7 +53,8 @@ internal sealed class LocalBuildCatalog {
         if(!string.IsNullOrWhiteSpace(title))candidates=candidates.Where(build=>TitlesMatch(build.Name,title)).ToArray();
         if(candidates.Length==0)return new("mismatch",null);
         var ambiguousName=candidates.Select(build=>(build.Id,build.Hero,Anonymous:build.Id==0?build.Fingerprint:"")).Distinct().Skip(1).Any();
-        candidates=candidates.Where(build=>GroupMatch(build.Groups,groups,ambiguousName&&id is not >0)&&
+        candidates=candidates.Where(build=>(GroupMatch(build.Groups,groups,ambiguousName&&id is not >0)||
+            !ambiguousName&&CoversStoredGroups(build.Groups,groups))&&
             (description.Length==0||Normalize(build.Description)==Normalize(description))).ToArray();
         if(candidates.Length==0)return new(ambiguousName?"ambiguous":"mismatch",null);
         candidates=candidates.GroupBy(build=>(build.Id,build.Hero,Anonymous:build.Id==0?build.Fingerprint:""))
@@ -73,6 +74,19 @@ internal sealed class LocalBuildCatalog {
         return true;
     }
     private static BuildVisibleGroup NormalizeGroup(BuildVisibleGroup group)=>new(Normalize(group.Name),Normalize(group.Note));
+    private static bool CoversStoredGroups(BuildVisibleGroup[] stored,BuildVisibleGroup[] visible) {
+        // Collapsed headers can omit their note, and the shop can add extra groups.
+        // Require a unique full-title candidate and every named stored group.
+        if(stored.Length<2||visible.Length<stored.Length)return false;
+        var actual=visible.Select(NormalizeGroup).ToList();
+        foreach(var group in stored.Select(NormalizeGroup)){
+            if(group.Name.Length==0)return false;
+            var index=actual.FindIndex(item=>item.Name==group.Name&&(item.Note.Length==0||item.Note==group.Note));
+            if(index<0)return false;
+            actual.RemoveAt(index);
+        }
+        return true;
+    }
     private static string Normalize(string value)=>Regex.Replace(value,@"\s+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).Trim();
     private static bool TitlesMatch(string a,string b)=>Canonical(a)==Canonical(b);
     internal static string Canonical(string value) {

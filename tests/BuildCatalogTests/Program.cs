@@ -27,6 +27,11 @@ Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[new("New section"
 Check(LocalBuildCatalog.Select([plan,other],"Test build",102,[]).Build?.Id==102,"native build ID takes priority");
 Check(LocalBuildCatalog.Select([plan,other],"Other name",102,[]).Status=="mismatch","stale native ID is rejected during a scene swap");
 Check(LocalBuildCatalog.Select([plan],"Test build",null,[new("Late [56k]","Group note")]).Status=="mismatch","unique title alone does not override contradictory visible content");
+var twoGroups=plan with{Groups=[new("Core Build","Buy in order"),new("Early","Buy as needed")]};
+var shopGroups=new BuildVisibleGroup[]{new("Core Build",""),new("Early","Buy as needed"),new("Counters/Upgrades","")};
+Check(LocalBuildCatalog.Select([twoGroups],"Test build",null,shopGroups).Build?.Id==101,"all stored groups identify a uniquely titled plan with collapsed notes and extra shop groups");
+Check(LocalBuildCatalog.Select([twoGroups,other],"Test build",null,shopGroups).Build==null,"collapsed group tolerance cannot pick between same-name plans");
+Check(LocalBuildCatalog.Select([twoGroups],"Test build",null,[new("Core Build",""),new("Early","Wrong instruction"),new("Counters/Upgrades","")]).Build==null,"different visible instruction still rejects the local plan");
 Check(LocalBuildCatalog.Select([plan],"Test build [50% armor]",null,[]).Status=="not-found","actual title content is kept when comparing builds");
 Check(LocalBuildCatalog.Select([plan,plan with{Version=2}],"Test build",null,[]).Build?.Version==2,"duplicate saved entries select the latest version");
 Check(LocalBuildCatalog.Select([plan],"Unknown",null,[]).Status=="not-found","unmatched builds cannot translate another scheme");

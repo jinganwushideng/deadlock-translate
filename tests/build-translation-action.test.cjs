@@ -42,10 +42,7 @@ function fixture(autoEnabled, withText = true) {
         RegisterEventHandler() {}
     } };
     vm.runInNewContext(source, scope);
-    function category(title, note) {
-        const group = panel('category', root);
-        const first = panel('BuildCategoryName', group, title);
-        const second = panel('DltCategoryNote', group, note);
+    function initializePanel(group) {
         vm.runInNewContext(source, {
             Date: { now: () => now }, $: {
                 GetContextPanel: () => group,
@@ -53,14 +50,29 @@ function fixture(autoEnabled, withText = true) {
                 RegisterEventHandler() {}
             }
         });
+    }
+    function category(title, note) {
+        const group = panel('category', root);
+        const first = panel('BuildCategoryName', group, title);
+        const second = panel('DltCategoryNote', group, note);
+        initializePanel(group);
         return { first, second };
+    }
+    function addTooltip() {
+        const popup = panel('tooltip', scene);
+        panel('ModName', popup, 'Equipment A');
+        panel('DltBuildTitleTranslation', popup);
+        const note = panel('DltBuildNote', popup, 'First annotation');
+        const output = panel('DltBuildNoteTranslation', popup);
+        initializePanel(popup);
+        return { popup, note, output };
     }
     const frame = (milliseconds = 150) => {
         now += milliseconds;
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, translate, progress, status, sent, navigations, tasks, frame, scene, category,
+    return { root, title, bridge, translate, progress, status, sent, navigations, tasks, frame, scene, category, addTooltip,
         click: () => scope.DLTBuildTextAction(),
         showOriginal: () => scope.DLTBuildTextAction() };
 }
@@ -168,6 +180,49 @@ assert.equal(reopened.sent.at(-1).loadPlan, true);
 assert.equal(reusedGroup.second.text, 'Changed instructions');
 assert.equal(reopened.progress.visible, false);
 console.log('PASS reopening one scheme restores results silently; reopened matching title with edited instructions starts a new lookup');
+
+const background = fixture(false);
+background.scene.__dltBuildTextConfig.backgroundJobs = true;
+background.category('Core', 'Build note');
+background.frame(); background.click(); background.frame();
+const start = background.sent.at(-1);
+assert.equal(start.action, 'start');
+assert.match(start.job, /^[a-f0-9]{32}$/);
+reply(background, { accepted: true });
+background.root.visible = false;
+background.frame(500);
+assert.equal(background.sent.length, 1, 'closing a shop does not request cancellation of background work');
+background.root.visible = true;
+background.frame();
+const poll = background.sent.at(-1);
+assert.equal(poll.action, 'poll');
+assert.equal(poll.job, start.job, 'reopening attaches to the same backend job');
+reply(background, { cursor: 3, total: 3, done: 3, cacheHits: 0, translated: 3, failed: 0, working: false, ended: true, more: false,
+    plan: { name: 'Build title', fingerprint: 'C'.repeat(64), groups: [{ name: 'Core', note: 'Build note' }] },
+    fields: [{ source: 'Build title', value: 'Translated build' }, { source: 'First annotation', value: 'First translation' }, { source: 'Second annotation', value: 'Second translation' }] });
+assert.equal(background.title.text, 'Translated build');
+assert.equal(background.progress.visible, false, 'a job completed while away does not replay the progress popup');
+const popup = background.addTooltip();
+background.frame(40); background.frame(40);
+assert.equal(popup.output.text, 'First translation');
+popup.note.text = 'Second annotation';
+background.frame(40);
+assert.equal(popup.output.text, 'Second translation', 'one tooltip tick repaints the recycled panel');
+popup.note.text = 'New tooltip text';
+background.frame(40);
+assert.equal(popup.output.visible, false, 'an unmatched annotation clears the previous one immediately');
+background.frame(220);
+const noteStart = background.sent.at(-1);
+assert.equal(noteStart.action, 'note');
+assert.equal(noteStart.parentJob, start.job);
+assert.deepEqual(noteStart.texts, ['New tooltip text']);
+reply(background, { accepted: true });
+background.frame(300);
+assert.equal(background.sent.at(-1).action, 'poll');
+reply(background, { cursor: 1, total: 1, done: 1, cacheHits: 0, translated: 1, failed: 0, working: false, ended: true, more: false,
+    fields: [{ source: 'New tooltip text', value: 'New note translation' }] });
+assert.equal(popup.output.text, 'New note translation');
+console.log('PASS background job survives shop close, recycled tooltip refreshes in one tick, and a missing annotation is queued separately');
 
 const swapped = fixture(false);
 const group = swapped.category('Shared title', 'Original instructions');
