@@ -21,7 +21,8 @@ Check(announcements.ShouldShow("0.6.24",secondRevision),"same version with chang
 announcements.MarkSeen("0.6.24",secondRevision);
 Check(!announcements.ShouldShow("0.6.24",firstRevision)&&!announcements.ShouldShow("0.6.24",secondRevision),"alternating same-version revisions keep their read state");
 Check(!announcements.ShouldShow("0.6.24"),"revision-aware marker remains compatible with version-only checks");
-Check(history.Current.Version==InstallerVersion.Current&&history.Current.Title.Contains("体检")&&history.Current.Changes.Any(x=>x.Contains("中断"))&&history.Current.Changes.Any(x=>x.Contains("更新")),"current announcement describes interruption recovery and update checks");
+Check(history.Entries.Any(e=>e.Version=="0.7.3"&&e.Title.Contains("体检")&&e.Changes.Any(x=>x.Contains("中断"))&&e.Changes.Any(x=>x.Contains("更新"))),"0.7.3 announcement retains interruption recovery and update checks");
+Check(history.Entries.Any(e=>e.Version=="0.7.4"&&e.Changes.Any(x=>x.Contains("DeepSeek"))&&e.Changes.Any(x=>x.Contains("Steam"))),"0.7.4 announcement includes presets and Steam launch fixes");
 Check(history.Entries.Any(e=>e.Version=="0.6.24"&&e.Changes.Any(x=>x.Contains("备份"))),"previous backup-cleanup update remains in history");
 Check(typeof(ReleaseNotesWindow).Assembly.GetManifestResourceNames().Contains("community-qr.png"),"feedback QR is embedded for offline display");
 using(var maintenance=typeof(ReleaseNotesWindow).Assembly.GetManifestResourceStream("scripts/Backup-Maintenance.ps1")){
