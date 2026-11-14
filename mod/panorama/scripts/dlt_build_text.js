@@ -46,7 +46,22 @@ function DLTBuildTextAction() {
                 }
             }); } catch (_) {}
         });
-        var applied = [null, null], rendered = null;
+        var applied = [null, null], rendered = null, selectedRevision = 0;
+        function normalize(text) {
+            return text.replace(/\s+/g, ' ').trim();
+        }
+        function titleKey(text) {
+            return normalize(text.replace(/<\/?(?:b|i|u|font|span|strong|em|br)(?:\s[^<>]*)?\s*\/?>/gi, ' ')
+                .replace(/\[\s*\d+(?:[.,]\d+)?\s*%\s*(?:WR|win\s*rate|胜率)\s*\]/gi, ' '))
+                .replace(/\s*\[/g, '[').toUpperCase();
+        }
+        function translationFor(job, source, title) {
+            if (!job || !source) return '';
+            if (Object.prototype.hasOwnProperty.call(job.values, source)) return job.values[source];
+            if (title && job.planTitle && titleKey(source) === titleKey(job.planTitle)) return job.values[job.planTitle] || '';
+            var key = normalize(source);
+            return Object.prototype.hasOwnProperty.call(job.normalized, key) ? job.normalized[key] : '';
+        }
         function isVisible() {
             for (var panel = root; panel; panel = panel.GetParent()) {
                 if (panel.visible === false || panel.style.visibility === 'collapse' ||
@@ -64,14 +79,19 @@ function DLTBuildTextAction() {
             text = text.trim();
             return text.length <= 6000 && !/^[#{]/.test(text) && /[\p{L}]/u.test(text) ? text : '';
         }
-        function render(texts, values) {
-            var next = [originals[0], originals[1], texts[0], texts[1], values && values[texts[0]] || '', values && values[texts[1]] || ''];
+        function render(texts, job) {
+            if (job && (category || shop) && texts.some(function (text, index) { return read(index) !== text; })) {
+                state.forceCollect = true;
+                return;
+            }
+            var translations = [translationFor(job, texts[0], !!toggle), translationFor(job, texts[1], false)];
+            var next = [originals[0], originals[1], texts[0], texts[1], translations[0], translations[1]];
             if (rendered && next.every(function (value, index) { return value === rendered[index]; })) return;
             rendered = next;
             for (var i = 0; i < originals.length; i++) {
                 var label = originals[i];
                 if (!label || !label.IsValid()) continue;
-                var translation = values && values[texts[i]] || '';
+                var translation = translations[i];
                 if (category || shop) {
                     var last = label.__dltBuildOriginal || applied[i];
                     if (translation) {
@@ -87,17 +107,24 @@ function DLTBuildTextAction() {
                         label.__dltBuildOriginal = null;
                     }
                 } else {
-                    if (outputs[i].text !== translation) outputs[i].text = translation;
-                    outputs[i].visible = !!translation;
+                    if (outputs[i] && outputs[i].IsValid()) {
+                        if (outputs[i].text !== translation) outputs[i].text = translation;
+                        outputs[i].visible = !!translation;
+                    }
                 }
             }
         }
         function readView() {
             if (selected) {
                 var label = selected.FindChildTraverse('DltShopTitle');
+                if (!label && selected.FindChildrenWithClassTraverse) {
+                    var titles = selected.FindChildrenWithClassTraverse('SelectedBuildName');
+                    if (titles.length === 1) label = titles[0];
+                }
                 if (label !== originals[0]) {
                     render([], null);
                     originals = label ? [label] : [];
+                    selectedRevision++;
                 }
             }
             var texts = [read(0), read(1)];
@@ -129,14 +156,15 @@ function DLTBuildTextAction() {
                     var sourceErrors = { 'account-unavailable': '未找到当前 Steam 账号', 'cache-missing': '本地出装缓存尚未生成，请先加载该方案',
                         'cache-too-large': '本地出装缓存超出读取限制', 'cache-changing': '游戏正在保存出装，请稍后重试',
                         'cache-unreadable': '本地出装缓存无法读取，请重新加载该方案', 'not-found': '本地没有此方案，请在游戏中加载后重试',
-                        'ambiguous': '本地有同名方案，请打开方案详情后重试', 'unavailable': '读取整套出装失败，请重试' };
+                        'ambiguous': '正在核对同名方案', 'mismatch': '正在核对当前方案内容', 'unavailable': '读取整套出装失败，请重试' };
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' :
                         !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : !job.total ?
                         (sourceErrors[job.sourceStatus] || (job.failed ? '读取整套出装失败，请重试' : '正在读取本地整套出装')) : running ?
                         (looking ? '读取本地译文 ' : job.refining ? '精翻 ' : '云端翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
                         (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
-                    if (job && job.total) caption += ' · 本地 ' + job.cacheHits + ' · 新译 ' + job.translated;
+                    if (job && job.total) caption += ' · 缓存 ' + job.cacheHits + ' · 新译 ' + job.translated;
+                    if (job && job.visibleOnly) caption += ' · 当前页';
                     if (status.text !== caption) status.text = caption;
                 }
             };
@@ -167,7 +195,8 @@ function DLTBuildTextAction() {
             var input = encodeURIComponent(JSON.stringify({
                 id: id, texts: batch.texts, context: batch.lookup || batch.plan ? '' : job.context,
                 revision: state.revision, refine: job.refining, build: job.build,
-                cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null, includeSnapshot: false
+                cacheOnly: !!batch.lookup, loadPlan: !!batch.plan, buildId: job.buildId || null, includeSnapshot: false,
+                groups: batch.plan ? job.groups : null, description: batch.plan ? job.description : null, fingerprint: job.fingerprint || null
             }));
             var parts = [];
             if (input.length > 1800) for (var offset = 0; offset < input.length; offset += 1200) parts.push(input.slice(offset, offset + 1200));
@@ -266,6 +295,49 @@ function DLTBuildTextAction() {
             });
             if (batch.length) queue.push({ texts: batch, attempts: 0, after: 0, lookup: !!lookup });
         }
+        function storeValue(job, text, value) {
+            job.values[text] = value;
+            var key = normalize(text);
+            var existing = job.normalizedSource[key];
+            if (existing === undefined || existing === text) {
+                job.normalizedSource[key] = text;
+                job.normalized[key] = value;
+            } else {
+                delete job.normalized[key];
+            }
+        }
+        function loadFields(job, texts, fingerprint, config) {
+            job.fingerprint = fingerprint || null;
+            job.context = texts.join('\n').slice(0, config && config.contextChars || 6000);
+            var memoKey = fingerprint;
+            if (memoKey) {
+                job.memo = state.completed[memoKey];
+                if (!job.memo) {
+                    if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
+                    state.completedOrder.push(memoKey);
+                    job.memo = state.completed[memoKey] = Object.create(null);
+                }
+            }
+            var unseen = [];
+            Array.from(new Set(texts)).forEach(function (text) {
+                job.total++;
+                var saved = job.memo[text];
+                if (!saved) { unseen.push(text); return; }
+                storeValue(job, text, saved.value); job.done++; job.cacheHits++;
+                if (saved.refine) job.refine.push([text]);
+            });
+            addBatches(job.queue, unseen, true);
+        }
+        function groupKeys(groups) {
+            return groups.map(function (group) { return JSON.stringify([normalize(group.name), normalize(group.note)]); }).sort();
+        }
+        function containsGroups(all, subset) {
+            var i = 0;
+            for (var j = 0; j < all.length && i < subset.length; j++) {
+                if (all[j] === subset[i]) i++;
+            }
+            return i === subset.length;
+        }
         function advance(job, config) {
             var now = Date.now();
             var pending = job.pending;
@@ -282,24 +354,28 @@ function DLTBuildTextAction() {
                             plan.texts.every(function (text) { return typeof text === 'string' && text.length <= 6000; }) &&
                             plan.texts.reduce(function (size, text) { return size + text.length; }, 0) <= 64000) {
                             job.build = plan.name.slice(0, 1000);
-                            job.context = plan.texts.join('\n').slice(0, config && config.contextChars || 6000);
-                            var memoKey = job.build + ':' + plan.id + ':' + plan.hero + ':' + plan.version;
-                            job.memo = state.completed[memoKey];
-                            if (!job.memo) {
-                                if (state.completedOrder.length >= 8) delete state.completed[state.completedOrder.shift()];
-                                state.completedOrder.push(memoKey);
-                                job.memo = state.completed[memoKey] = Object.create(null);
-                            }
                             job.planTitle = plan.name;
-                            var unseen = [];
-                            Array.from(new Set(plan.texts)).forEach(function (text) {
-                                job.known[text] = true; job.total++;
-                                var saved = job.memo[text];
-                                if (!saved) { unseen.push(text); return; }
-                                job.values[text] = saved.value; job.done++; job.cacheHits++;
-                                if (saved.refine) job.refine.push([text]);
+                            job.planGroups = Array.isArray(plan.groups) ? groupKeys(plan.groups) : null;
+                            var visible = pending.batch.texts;
+                            var present = new Set(plan.texts.map(normalize));
+                            var extra = visible.filter(function (text) {
+                                return !present.has(normalize(text)) && titleKey(text) !== titleKey(plan.name);
                             });
-                            addBatches(job.queue, unseen, true);
+                            // Put the title and on-screen groups first when the engine returns batches slowly.
+                            var order = new Set([normalize(plan.name)].concat(visible.map(normalize)));
+                            var first = plan.texts.filter(function (text) { return order.has(normalize(text)); });
+                            var rest = plan.texts.filter(function (text) { return !order.has(normalize(text)); });
+                            loadFields(job, first.concat(extra, rest), plan.fingerprint, config);
+                        } else if (['not-found','mismatch','ambiguous','cache-missing','cache-changing','cache-unreadable','account-unavailable','cache-too-large'].indexOf(result.planStatus) >= 0 &&
+                            typeof result.fallback === 'string' && /^[0-9a-f]{64}$/i.test(result.fallback)) {
+                            if (pending.batch.attempts === 0 && ['not-found','mismatch','cache-changing'].indexOf(result.planStatus) >= 0) {
+                                pending.batch.attempts++;
+                                pending.batch.after = now + 500;
+                                job.queue.push(pending.batch);
+                            } else {
+                                job.visibleOnly = true;
+                                loadFields(job, pending.batch.texts, result.fallback, config);
+                            }
                         } else { job.failed = 1; job.sourceStatus = sourceErrorsStatus(result.planStatus); }
                     } else if (!pending.batch.plan && result.revision === state.revision && Array.isArray(result.translations) &&
                         result.translations.length === pending.batch.texts.length &&
@@ -308,7 +384,7 @@ function DLTBuildTextAction() {
                         pending.batch.texts.forEach(function (text, index) {
                             var value = result.translations[index];
                             if (value === null) { misses.push(text); return; }
-                            job.values[text] = value;
+                            storeValue(job, text, value);
                             job.done++;
                             var refine = result.refine || result.refineIndices && result.refineIndices.indexOf(index) >= 0;
                             job.memo[text] = { value: value, refine: !!refine };
@@ -386,22 +462,41 @@ function DLTBuildTextAction() {
                             var distinct = function (entries) {
                                 return Array.from(new Set(entries.reduce(function (all, entry) { return all.concat(entry.texts); }, []).filter(Boolean)));
                             };
-                            var baseTexts = distinct(base);
                             var title = read(0);
-                            var build = title.replace(/<[^>]*>/g, '').replace(/\[[^\[\]\r\n]*%[^\[\]\r\n]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1000);
+                            var build = title.slice(0, 1000);
                             var idLabels = root.FindChildrenWithClassTraverse ? root.FindChildrenWithClassTraverse('BuildID') : [];
                             var idText = idLabels.length ? String(idLabels[0].text || '').replace(/<[^>]*>/g, '') : '';
                             var idParts = idText.match(/\d+/g);
                             var buildId = idParts && idParts.length === 1 && Number(idParts[0]) <= 4294967295 ? Number(idParts[0]) : null;
-                            var signature = build + ':' + (buildId || '');
+                            var groups = base.filter(function (entry) { return entry.view.category; }).map(function (entry) {
+                                return { name: normalize(entry.texts[0]), note: normalize(entry.texts[1]) };
+                            }).filter(function (group) { return group.name || group.note; });
+                            var description = read(1);
+                            var structure = groupKeys(groups);
+                            var selection = JSON.stringify([titleKey(build), buildId, selectedRevision, normalize(description)]);
+                            var signature = JSON.stringify([selection, structure]);
                             if (signature !== state.signature) {
-                                restartJob();
-                                state.signature = signature;
-                                var hintSize = 0;
-                                var hints = baseTexts.slice(0, 96).filter(function (text) { hintSize += text.length; return hintSize <= 48000; });
-                                state.job = { context: '', build: build, buildId: buildId, title: title, memo: Object.create(null), sourceStatus: '',
-                                    known: Object.create(null), values: Object.create(null), queue: [{ texts: hints.length ? hints : [build], plan: true, attempts: 0, after: 0 }], pending: null,
-                                    refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                                var previous = state.job;
+                                // Late Panorama panels can fill in a plan that is already verified.
+                                // A different group, replaced panel/title or changed description starts a fresh job.
+                                if (previous && previous.selection === selection && previous.planGroups &&
+                                    containsGroups(structure, previous.structure) && containsGroups(previous.planGroups, structure)) {
+                                    previous.structure = structure;
+                                    state.signature = signature;
+                                } else {
+                                    restartJob();
+                                    state.signature = signature;
+                                    var textSize = 0;
+                                    var visible = [title].concat(distinct(base).filter(function (text) { return text !== title; })).slice(0, 96)
+                                        .filter(function (text) { textSize += text.length; return textSize <= 48000; });
+                                    var groupSize = 0;
+                                    var observed = groups.slice(0, 96).filter(function (group) { groupSize += group.name.length + group.note.length; return groupSize <= 48000; });
+                                    state.job = { context: '', build: build, buildId: buildId, groups: observed, description: description, selection: selection,
+                                        structure: structure, memo: Object.create(null), sourceStatus: '',
+                                        values: Object.create(null), normalized: Object.create(null), normalizedSource: Object.create(null),
+                                        queue: [{ texts: visible, plan: true, attempts: 0, after: 0 }], pending: null,
+                                        refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                                }
                             }
                         }
                     }
@@ -416,10 +511,8 @@ function DLTBuildTextAction() {
                 }
                 if (active && state.job) advance(state.job, config);
                 else if (state.job) restartJob();
-                if (state.job && state.job.planTitle && state.job.values[state.job.planTitle] !== undefined)
-                    state.job.values[state.job.title] = state.job.values[state.job.planTitle];
                 state.pairs.forEach(function (entry) {
-                    if (entry.view.root.IsValid()) entry.view.render(entry.texts, active && state.job ? state.job.values : null);
+                    if (entry.view.root.IsValid()) entry.view.render(entry.texts, active ? state.job : null);
                 });
                 state.controls.forEach(function (item) { if (item.visible()) item.status(state.job, online); });
             } else if (!state.owner) {

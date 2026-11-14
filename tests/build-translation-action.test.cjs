@@ -69,8 +69,9 @@ function reply(f, body) {
     f.bridge.title = 'DLTBUILD:' + JSON.stringify({ id: f.sent.at(-1).id, revision: 'r1', ...body });
     f.frame(50);
 }
-function plan(f, texts = ['Build title']) {
-    reply(f, { planStatus: 'ready', plan: { id: 101, hero: 17, version: 1, name: 'Build title', texts } });
+function plan(f, texts = ['Build title'], fields = {}) {
+    reply(f, { planStatus: 'ready', plan: { id: 101, hero: 17, version: 1, name: 'Build title',
+        texts, fingerprint: 'A'.repeat(64), groups: [], ...fields } });
 }
 const automatic = fixture(true);
 assert.equal(automatic.sent[0].loadPlan, true);
@@ -114,7 +115,8 @@ console.log('PASS native ID with localized label prefix disambiguates plans and 
 
 const complete = fixture(false);
 complete.click(); complete.frame(0);
-plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
+const savedGroup = { name: 'Early group', note: 'Unseen annotation' };
+plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation'], { groups: [savedGroup] });
 assert.deepEqual(complete.sent[1].texts, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
 assert.equal(complete.sent[1].context, '');
 assert.equal(complete.sent[1].includeSnapshot, false);
@@ -123,22 +125,43 @@ reply(complete, { translations: ['Title result', null, 'Note result', null], cac
 assert.deepEqual(complete.sent[2].texts, ['Early group', 'Unseen annotation']);
 reply(complete, { translations: ['Group result', 'Annotation result'], translated: 2 });
 assert.equal(complete.scene.__dltBuildText.job.total, 4);
-const later = complete.category('Early group', 'Unseen annotation');
+const later = complete.category('Early group', 'Unseen   annotation');
 complete.frame(); complete.frame();
 assert.equal(later.first.text, 'Group result');
 assert.equal(later.second.text, 'Annotation result');
 assert.equal(complete.sent.length, 3);
-const unrelated = complete.category('Not in plan', 'Other tooltip');
-complete.frame(); complete.frame();
-assert.equal(unrelated.first.text, 'Not in plan');
-assert.equal(complete.sent.length, 3);
 complete.showOriginal(); complete.frame(); complete.click(); complete.frame();
 assert.equal(complete.sent.at(-1).loadPlan, true);
-plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation']);
+plan(complete, ['Build title', 'Early group', 'Early note', 'Unseen annotation'], { groups: [savedGroup] });
 assert.equal(complete.sent.length, 4);
 assert.equal(complete.scene.__dltBuildText.job.cacheHits, 4);
 assert.equal(complete.scene.__dltBuildText.job.translated, 0);
 console.log('PASS unseen notes translate in the initial job, later UI creation makes no request, reopen uses memo');
+
+const swapped = fixture(false);
+const group = swapped.category('Shared title', 'Original instructions');
+swapped.frame(); swapped.click(); swapped.frame();
+plan(swapped, ['Build title', 'Shared title', 'Original instructions'], { groups: [{ name: 'Shared title', note: 'Original instructions' }] });
+const oldLookup = swapped.sent.at(-1).id;
+group.second.text = 'Different instructions';
+swapped.frame(500);
+assert.equal(swapped.sent.at(-1).loadPlan, true);
+assert.deepEqual(swapped.sent.at(-1).groups, [{ name: 'Shared title', note: 'Different instructions' }]);
+swapped.bridge.title = 'DLTBUILD:' + JSON.stringify({ id: oldLookup, revision: 'r1', translations: ['Old build', 'Old group', 'Old note'] });
+swapped.frame(50);
+assert.equal(group.first.text, 'Shared title');
+assert.equal(group.second.text, 'Different instructions');
+reply(swapped, { planStatus: 'ambiguous', fallback: 'B'.repeat(64) });
+assert.equal(swapped.sent.at(-1).cacheOnly, true);
+assert.deepEqual(swapped.sent.at(-1).texts, ['Build title', 'Shared title', 'Different instructions']);
+reply(swapped, { translations: ['New build', null, null], cacheHits: 1 });
+assert.equal(swapped.title.text, 'New build');
+assert.equal(group.first.text, 'Shared title');
+reply(swapped, { translations: ['New group', 'New note'], translated: 2 });
+assert.equal(group.first.text, 'New group');
+assert.equal(group.second.text, 'New note');
+assert.equal(swapped.translate.text, '显示原文');
+console.log('PASS same-title replacement disowns late results, translates the current panel only, and updates without a toggle');
 
 const missing = fixture(false);
 missing.click(); missing.frame();

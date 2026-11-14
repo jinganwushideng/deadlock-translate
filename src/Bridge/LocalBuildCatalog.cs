@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using ValveKeyValue;
@@ -7,7 +9,8 @@ using ValveResourceFormat.ResourceTypes;
 
 namespace DeadlockTranslate;
 
-internal sealed record LocalHeroBuild(uint Id,uint Hero,uint Version,uint Updated,string Name,string[] Texts);
+public sealed record BuildVisibleGroup(string Name,string Note);
+internal sealed record LocalHeroBuild(uint Id,uint Hero,uint Version,uint Updated,string Name,string[] Texts,BuildVisibleGroup[] Groups,string Description,string Fingerprint);
 internal sealed record LocalBuildSelection(string Status,LocalHeroBuild? Build);
 
 // Reads a snapshot of the current Steam user's cache. No write handle is opened.
@@ -21,7 +24,7 @@ internal sealed class LocalBuildCatalog {
 
     internal LocalBuildCatalog(Func<string?>? locate=null) { this.locate=locate??LocateCurrentCache; }
 
-    internal async Task<LocalBuildSelection> Find(string title,uint? id,string[] hints,CancellationToken ct) {
+    internal async Task<LocalBuildSelection> Find(string title,uint? id,BuildVisibleGroup[] groups,CancellationToken ct,string description="") {
         try{
             var file=locate();
             if(file==null)return new("account-unavailable",null);
@@ -37,32 +40,46 @@ internal sealed class LocalBuildCatalog {
                 if(!info.Exists||info.Length!=length||info.LastWriteTimeUtc!=modified)return new("cache-changing",null);
                 builds=parsed;loadedFile=file;loadedLength=length;loadedTime=modified;
             }
-            return Select(builds,title,id,hints);
+            return Select(builds,title,id,groups,description);
         }catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or OverflowException or KeyNotFoundException or InvalidOperationException or NotSupportedException){
             return new("cache-unreadable",null);
         }
     }
 
-    internal static LocalBuildSelection Select(LocalHeroBuild[] builds,string title,uint? id,string[] hints) {
-        var canonical=Canonical(title);
-        var candidates=builds.Where(build=>id is >0?build.Id==id:Canonical(build.Name)==canonical).ToArray();
+    internal static LocalBuildSelection Select(LocalHeroBuild[] builds,string title,uint? id,BuildVisibleGroup[] groups,string description="") {
+        var candidates=builds.Where(build=>id is >0?build.Id==id:TitlesMatch(build.Name,title)).ToArray();
         if(candidates.Length==0)return new("not-found",null);
-        // The same build can occur in Favorites and SavedLastUsed with different versions.
-        candidates=candidates.GroupBy(build=>(build.Id,build.Hero,Name:Canonical(build.Name)))
+        // Keep separate revisions until the displayed structure has confirmed which one is active.
+        if(!string.IsNullOrWhiteSpace(title))candidates=candidates.Where(build=>TitlesMatch(build.Name,title)).ToArray();
+        if(candidates.Length==0)return new("mismatch",null);
+        var ambiguousName=candidates.Select(build=>(build.Id,build.Hero,Anonymous:build.Id==0?build.Fingerprint:"")).Distinct().Skip(1).Any();
+        candidates=candidates.Where(build=>GroupMatch(build.Groups,groups,ambiguousName&&id is not >0)&&
+            (description.Length==0||Normalize(build.Description)==Normalize(description))).ToArray();
+        if(candidates.Length==0)return new(ambiguousName?"ambiguous":"mismatch",null);
+        candidates=candidates.GroupBy(build=>(build.Id,build.Hero,Anonymous:build.Id==0?build.Fingerprint:""))
             .Select(group=>group.OrderByDescending(build=>build.Version).ThenByDescending(build=>build.Updated).First()).ToArray();
-        if(candidates.Length>1){
-            var scores=candidates.Select(build=>(Build:build,Score:hints.Distinct(StringComparer.Ordinal).Count(text=>build.Texts.Contains(text,StringComparer.Ordinal))))
-                .OrderByDescending(item=>item.Score).ToArray();
-            if(scores[0].Score==0||scores[0].Score==scores[1].Score)return new("ambiguous",null);
-            candidates=[scores[0].Build];
-        }
+        if(candidates.Length>1)return new("ambiguous",null);
         return new("ready",candidates[0]);
     }
 
+    private static bool GroupMatch(BuildVisibleGroup[] stored,BuildVisibleGroup[] visible,bool requireComplete) {
+        if(requireComplete&&(visible.Length==0||visible.Length!=stored.Length))return false;
+        var remaining=stored.Select(NormalizeGroup).ToList();
+        foreach(var group in visible.Select(NormalizeGroup)){
+            var index=remaining.IndexOf(group);
+            if(index<0)return false;
+            remaining.RemoveAt(index);
+        }
+        return true;
+    }
+    private static BuildVisibleGroup NormalizeGroup(BuildVisibleGroup group)=>new(Normalize(group.Name),Normalize(group.Note));
+    private static string Normalize(string value)=>Regex.Replace(value,@"\s+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).Trim();
+    private static bool TitlesMatch(string a,string b)=>Canonical(a)==Canonical(b);
     internal static string Canonical(string value) {
-        value=Regex.Replace(value,@"<[^>]*>","",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-        value=Regex.Replace(value,@"\[[^\[\]\r\n]*%[^\[\]\r\n]*\]","",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-        return Regex.Replace(value,@"\s+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).Trim().ToUpperInvariant();
+        value=Regex.Replace(value,@"</?(?:b|i|u|font|span|strong|em|br)(?:\s[^<>]*)?\s*/?>"," ",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        value=System.Net.WebUtility.HtmlDecode(value);
+        value=Regex.Replace(value,@"\[\s*\d+(?:[.,]\d+)?\s*%\s*(?:WR|win\s*rate|胜率)\s*\]"," ",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        return Regex.Replace(Normalize(value),@"\s*\[","[",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).ToUpperInvariant();
     }
 
     private static string? LocateCurrentCache() {
@@ -142,7 +159,9 @@ internal sealed class LocalBuildCatalog {
     private static LocalHeroBuild? ParseBuild(ReadOnlySpan<byte> bytes) {
         uint id=0,hero=0,version=0,updated=0;
         var title="";
+        var description="";
         var texts=new List<string>();
+        var groups=new List<BuildVisibleGroup>();
         var reader=new BuildWireReader(bytes);
         while(reader.Next(out var field,out var wire,out var number,out var data)){
             if(wire==0){
@@ -155,14 +174,15 @@ internal sealed class LocalBuildCatalog {
             }else if(wire==2){
                 switch(field){
                     case 5:title=ReadText(data);AddText(texts,title);break;
-                    case 6:AddText(texts,ReadText(data));break;
-                    case 10:ReadDetails(data,texts);break;
+                    case 6:description=ReadText(data);AddText(texts,description);break;
+                    case 10:ReadDetails(data,texts,groups);break;
                 }
             }
         }
         var unique=texts.Distinct(StringComparer.Ordinal).ToArray();
         if(string.IsNullOrWhiteSpace(title)||unique.Length>256||unique.Sum(text=>text.Length)>64000)return null;
-        return new(id,hero,version,updated,title,unique);
+        var fingerprint=Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{id,hero,version,title,description,groups,unique})));
+        return new(id,hero,version,updated,title,unique,groups.ToArray(),description,fingerprint);
     }
 
     private static readonly UTF8Encoding Utf8=new(false,true);
@@ -176,14 +196,20 @@ internal sealed class LocalBuildCatalog {
         if(text.Length!=0&&!text.StartsWith('#')&&!text.StartsWith('{')&&text.Any(char.IsLetter))texts.Add(text);
         if(texts.Count>2048)throw new InvalidDataException("Build text count");
     }
-    private static void ReadDetails(ReadOnlySpan<byte> bytes,List<string> texts) {
+    private static void ReadDetails(ReadOnlySpan<byte> bytes,List<string> texts,List<BuildVisibleGroup> groups) {
         var details=new BuildWireReader(bytes);
         while(details.Next(out var field,out var wire,out _,out var group)){
             if(wire!=2)continue;
+            var name="";
+            var note="";
             var reader=new BuildWireReader(group);
             while(reader.Next(out var child,out var childWire,out _,out var value)){
                 if(childWire!=2)continue;
-                if(field==1&&child is 2 or 3)AddText(texts,ReadText(value));
+                if(field==1&&child is 2 or 3){
+                    var text=ReadText(value);
+                    if(child==2)name=text;else note=text;
+                    AddText(texts,text);
+                }
                 else if(child==1&&(field==1||field==2)){
                     var item=new BuildWireReader(value);
                     while(item.Next(out var itemField,out var itemWire,out _,out var annotation)){
@@ -191,6 +217,7 @@ internal sealed class LocalBuildCatalog {
                     }
                 }
             }
+            if(field==1&&(name.Length!=0||note.Length!=0))groups.Add(new(name,note));
         }
     }
 }

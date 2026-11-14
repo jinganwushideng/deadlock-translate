@@ -19,10 +19,15 @@ byte[] Build(uint id,string name,uint version=1)=>Data(1,Join(Number(1,id),Numbe
 var plan=LocalBuildCatalog.Parse(Build(101,"Test build"))!;
 Check(plan.Texts.SequenceEqual(new[]{"Test build","Build introduction","Early group","Group note","Unseen item annotation","Ability note"}),"complete protobuf contains unrendered annotations and ability notes");
 Check(LocalBuildCatalog.Select([plan],"Test build [61% winrate]",null,[]).Build?.Id==101,"changing win-rate badges match the original build");
-var other=plan with{Id=102,Texts=["Different content"]};
+var other=plan with{Id=102,Groups=[new("Early group","Different note"),new("New section","New note")]};
 Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[]).Status=="ambiguous","same-name different builds are not guessed");
-Check(LocalBuildCatalog.Select([plan,other],"Test build",null,["Early group"]).Build?.Id==101,"visible hints disambiguate same-name builds");
-Check(LocalBuildCatalog.Select([plan,other],"Any name",102,[]).Build?.Id==102,"native build ID takes priority");
+Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[new("Early group","")]).Build==null,"shared words cannot select a scheme");
+Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[new("Early group","Different note")]).Build==null,"partial exact matches cannot disambiguate a same-name build");
+Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[new("New section","New note"),new("Early group","Different note")]).Build?.Id==102,"exact complete group structure disambiguates without relying on panel order");
+Check(LocalBuildCatalog.Select([plan,other],"Test build",102,[]).Build?.Id==102,"native build ID takes priority");
+Check(LocalBuildCatalog.Select([plan,other],"Other name",102,[]).Status=="mismatch","stale native ID is rejected during a scene swap");
+Check(LocalBuildCatalog.Select([plan],"Test build",null,[new("Late [56k]","Group note")]).Status=="mismatch","unique title alone does not override contradictory visible content");
+Check(LocalBuildCatalog.Select([plan],"Test build [50% armor]",null,[]).Status=="not-found","actual title content is kept when comparing builds");
 Check(LocalBuildCatalog.Select([plan,plan with{Version=2}],"Test build",null,[]).Build?.Version==2,"duplicate saved entries select the latest version");
 Check(LocalBuildCatalog.Select([plan],"Unknown",null,[]).Status=="not-found","unmatched builds cannot translate another scheme");
 try{LocalBuildCatalog.Parse([10,127]);throw new Exception("Accepted truncated data");}catch(InvalidDataException){Check(true,"truncated protobuf is rejected");}
