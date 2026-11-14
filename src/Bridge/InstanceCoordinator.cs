@@ -9,11 +9,6 @@ public sealed record InstanceInfo(string Version,bool Elevated,bool Handoff);
 
 public static class InstanceCoordinator {
     public static bool Matches(InstanceScope? requested,InstanceScope expected)=>requested!=null&&requested==expected;
-    public static async Task LaunchGame(HttpClient http,string origin,string pairing,InstanceScope scope,SteamGameLaunch game){
-        using var response=await http.PostAsJsonAsync(origin+"/control/"+pairing+"/launch-game",new LaunchGameRequest(scope,game));
-        if(response.StatusCode==HttpStatusCode.Conflict)throw new System.ComponentModel.Win32Exception(740);
-        response.EnsureSuccessStatusCode();
-    }
     // Check the authenticated instance before touching certificates or binding a second listener.
     public static bool IsListening(int port){try{return IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(endpoint=>endpoint.Port==port);}catch(NetworkInformationException){return true;}}
     public static async Task<InstanceInfo?> Prepare(HttpClient http,string origin,string pairing,InstanceScope scope,bool requireAdmin,bool currentElevated,Func<int,bool>? isListening=null){

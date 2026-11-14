@@ -24,8 +24,7 @@ public sealed record SteamGameLaunch(string Executable,string[] Arguments,string
         if(!Path.IsPathFullyQualified(WorkingDirectory)||!Directory.Exists(WorkingDirectory))throw new ArgumentException("游戏工作目录无效");
         var info=new ProcessStartInfo(Executable){UseShellExecute=false,WorkingDirectory=WorkingDirectory};
         foreach(var argument in Arguments)info.ArgumentList.Add(argument);
-        // Same-user UAC can start via the Windows shell rather than Steam's environment.
-        // Deadlock's known application ID is the only default we supply; no arbitrary env is accepted.
+        // Keep Steam's original environment. Only fill absent known Deadlock IDs.
         if(!info.Environment.TryGetValue("SteamAppId",out var appId)||string.IsNullOrEmpty(appId))info.Environment["SteamAppId"]="1422450";
         if(!info.Environment.TryGetValue("SteamGameId",out var gameId)||string.IsNullOrEmpty(gameId))info.Environment["SteamGameId"]="1422450";
         var process=Process.Start(info)??throw new InvalidOperationException("游戏启动失败");
@@ -34,4 +33,3 @@ public sealed record SteamGameLaunch(string Executable,string[] Arguments,string
         return process;
     }
 }
-public sealed record LaunchGameRequest(InstanceScope Scope,SteamGameLaunch Game);

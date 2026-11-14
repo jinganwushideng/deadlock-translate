@@ -367,7 +367,7 @@ function SteamArgs([string]$runtime,[switch]$Apply,[switch]$Remove,[string]$Acco
     if(-not $q.steam -or -not $AccountId){throw '请选择 Steam 目录和要配置的账号；也可以手动粘贴启动项。'}
     $a=@('-RuntimeFolder',$runtime,'-SteamPath',$q.steam,'-UserId',$AccountId)
     if($Apply){$a+='-Apply';if($q.stopSteam){$a+='-StopSteam';$a+='-RestartSteam'}}
-    if($Remove){$a+='-RemoveTranslator'}elseif($q.admin){$a+='-AdministratorCompatibility'}elseif($q.action -notin @('steam-review','steam-retry')){$a+='-NormalPermissions'}
+    if($Remove){$a+='-RemoveTranslator'}else{$a+='-NormalPermissions'}
     return $a
 }
 function Get-SteamAccountPreview([string]$runtime,[string]$id){
@@ -625,7 +625,7 @@ try{
             $conflicts=Conflicts $game $install
             $vpkState=if($install){Get-DltGameVpkState $install (Join-Path $game 'game\citadel\addons') $runtime}else{$null}
             $integrity=if($install){Get-DltRuntimeIntegrity $runtime $install}else{$null}
-            $launch='"'+(Join-Path $runtime 'DeadlockTranslate.exe')+'"'+$(if($q.admin){' --admin-compatible'}else{''})+' --steam-game %command%'
+            $launch='"'+(Join-Path $runtime 'DeadlockTranslate.exe')+'" --steam-game %command%'
             $needsRepair=$install -and (-not(Test-Path -LiteralPath (Join-Path $runtime 'DeadlockTranslate.exe')) -or -not(Test-Path -LiteralPath (Join-Path $runtime 'data\terms.json')) -or -not(Test-Path -LiteralPath (Join-Path $runtime 'dlt_translate_dir.vpk')))
             if($install -and (Test-Path -LiteralPath (Join-Path $runtime 'dlt_translate_dir.vpk')) -and (Hash (Join-Path $runtime 'dlt_translate_dir.vpk')) -ne $install.vpkHash.ToLowerInvariant()){$needsRepair=$true}
             $needsRepair=$needsRepair -or ($integrity -and $integrity.requiresRepair)

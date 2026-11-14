@@ -9,7 +9,10 @@ var steamMarker=Array.IndexOf(initialArgs,"--steam-game");
 var loggingArgs=steamMarker>=0?initialArgs[..steamMarker]:initialArgs;
 var dirIndex=Array.IndexOf(loggingArgs,"--data-dir");
 var dataDir=dirIndex>=0&&dirIndex+1<loggingArgs.Length?loggingArgs[dirIndex+1]:Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DeadlockTranslate");
-var adminCompatible=loggingArgs.Contains("--admin-compatible");
+var adminRequested=loggingArgs.Contains("--admin-compatible");
+// Steam's child must inherit the launcher's original user, token and environment.
+// The opt-in switch can still elevate a standalone backend, never a Steam launch.
+var adminCompatible=steamMarker<0&&adminRequested;
 var ownerIndex=Array.IndexOf(loggingArgs,"--elevation-owner");
 var noShell=loggingArgs.Contains("--no-shell");
 string owner;
@@ -60,15 +63,19 @@ var instanceScope=new InstanceScope(owner,StartupCompatibility.Scope(dataDir),St
 var backendElevated=StartupCompatibility.Elevated();
 using var localControl=new HttpClient(new HttpClientHandler{UseProxy=false,AllowAutoRedirect=false}){Timeout=TimeSpan.FromSeconds(2),MaxResponseContentBufferSize=16*1024};
 var controlOrigin=$"http://localhost:{port}";
-var existingInstance=await InstanceCoordinator.Prepare(localControl,controlOrigin,pairing,instanceScope,adminCompatible,backendElevated);
-if(existingInstance!=null){
+if(steamGame!=null){
+    var verified=StartupCompatibility.CheckSteamContext();
+    if(!verified||adminRequested&&!backendElevated)
+        audit.Record("backend",LogKind.PrivilegeMismatch,new(Reason:verified?LogReason.SteamElevationSkipped:LogReason.SteamContextUnknown,Stage:"steam"));
+}
+async Task ReuseInstance(){
     if(followGame){using var follow=await localControl.PostAsync(controlOrigin+"/control/"+pairing+"/follow-game",null);follow.EnsureSuccessStatusCode();}
     if(args.Contains("--settings")){using var settings=await localControl.PostAsync(controlOrigin+"/control/"+pairing+"/settings",null);settings.EnsureSuccessStatusCode();}
-    if(steamGame!=null){
-        if(existingInstance.Elevated&&!backendElevated)await InstanceCoordinator.LaunchGame(localControl,controlOrigin,pairing,instanceScope,steamGame);
-        else{using var child=steamGame.Start(gameExecutable);}
-    }
-    else if(args.Contains("--launch"))Process.Start(new ProcessStartInfo("steam://rungameid/1422450"){UseShellExecute=true});
+    LaunchRequestedGame();
+}
+var existingInstance=await InstanceCoordinator.Prepare(localControl,controlOrigin,pairing,instanceScope,adminCompatible,backendElevated);
+if(existingInstance!=null){
+    await ReuseInstance();
     return;
 }
 var config = new ConfigStore(dataDir);
@@ -263,7 +270,10 @@ app.MapPost("/api/backups/cleanup",async(BackupCleanupRequest request,HttpContex
     try{return Results.Json(await backupMaintenance.Run(true,request.IncludeLegacy,request.PlanToken,app.Lifetime.ApplicationStopping));}
     catch(InvalidOperationException ex){return Results.Conflict(new{error=ex.Message});}
 });
-app.MapGet("/api/launch-options",()=>new{normal=StartupCompatibility.LaunchOption(Environment.ProcessPath!,false),admin=StartupCompatibility.LaunchOption(Environment.ProcessPath!,true),backendElevated,adminCompatible});
+app.MapGet("/api/launch-options",()=>{
+    var command=StartupCompatibility.LaunchOption(Environment.ProcessPath!);
+    return new{normal=command,admin=command,backendElevated,adminCompatible};
+});
 var adminRestartPending=0;
 app.MapPost("/api/admin-restart",()=>{
     if(noShell)return Results.Conflict(new{error="无交互模式不会请求管理员权限。"});
@@ -656,12 +666,6 @@ app.MapPost("/control/{key}/instance",(string key,InstanceScope requested,HttpCo
     if(!Same(key,pairing)||(ctx.Request.Headers.Origin.Count>0&&ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();
     return InstanceCoordinator.Matches(requested,instanceScope)?Results.Ok(new InstanceInfo(BuildInfo.Version,backendElevated,!backendElevated)):Results.Conflict();
 });
-app.MapPost("/control/{key}/launch-game",(string key,LaunchGameRequest requested,HttpContext ctx)=>{
-    if(!Same(key,pairing)||(ctx.Request.Headers.Origin.Count>0&&ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();
-    if(!InstanceCoordinator.Matches(requested.Scope,instanceScope)||requested.Game==null||gameExecutable.Length==0)return Results.StatusCode(403);
-    try{using var child=requested.Game.Start(gameExecutable);gameLifecycle.Arm();return Results.Ok();}
-    catch(System.ComponentModel.Win32Exception ex) when(ex.NativeErrorCode==740){audit.Record("backend",LogKind.StartupFailed,new(Reason:LogReason.ElevationRequired,Stage:"steam",Win32Error:740));return Results.Conflict();}
-});
 app.MapPost("/control/{key}/admin-handoff",(string key,InstanceScope requested,HttpContext ctx)=>{
     if(!Same(key,pairing)||(ctx.Request.Headers.Origin.Count>0&&ctx.Request.Headers.Origin!=Origin(ctx)))return Results.NotFound();
     if(backendElevated||!InstanceCoordinator.Matches(requested,instanceScope))return Results.Conflict();
@@ -675,24 +679,20 @@ app.MapPost("/control/{key}/follow-game",(string key,HttpContext ctx)=>{
 });
 try {
     await app.StartAsync();
-    if(followGame)gameLifecycle.Arm();
-    if(args.Contains("--settings")) OpenSettings();
-    LaunchRequestedGame();
-    try { Process.GetCurrentProcess().PriorityClass=ProcessPriorityClass.BelowNormal; }catch { }
-    await app.WaitForShutdownAsync();gameMetrics.Stop();audit.Record("backend",LogKind.Stopped);
-} catch(IOException) {
+} catch(IOException){
     // A startup race may remain. Never attach to an unverified listener.
-    var racedInstance=await InstanceCoordinator.Prepare(localControl,controlOrigin,pairing,instanceScope,adminCompatible,backendElevated)??throw new StartupFault("port-busy","本地 HTTP 或 HTTPS 端口已被占用。请导出日志检查，不会关闭其他程序。");
-    if(followGame){using var follow=await localControl.PostAsync(controlOrigin+"/control/"+pairing+"/follow-game",null);follow.EnsureSuccessStatusCode();}
-    if(args.Contains("--settings")){using var settings=await localControl.PostAsync(controlOrigin+"/control/"+pairing+"/settings",null);settings.EnsureSuccessStatusCode();}
-    if(steamGame!=null){
-        if(racedInstance.Elevated&&!backendElevated)await InstanceCoordinator.LaunchGame(localControl,controlOrigin,pairing,instanceScope,steamGame);
-        else{using var child=steamGame.Start(gameExecutable);}
-    }
-    else LaunchRequestedGame();
+    _=await InstanceCoordinator.Prepare(localControl,controlOrigin,pairing,instanceScope,adminCompatible,backendElevated)
+        ??throw new StartupFault("port-busy","本地 HTTP 或 HTTPS 端口已被占用。请导出日志检查，不会关闭其他程序。");
+    await ReuseInstance();
+    return;
 }
+if(followGame)gameLifecycle.Arm();
+if(args.Contains("--settings")) OpenSettings();
+LaunchRequestedGame();
+try { Process.GetCurrentProcess().PriorityClass=ProcessPriorityClass.BelowNormal; }catch { }
+await app.WaitForShutdownAsync();gameMetrics.Stop();audit.Record("backend",LogKind.Stopped);
 
-} catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
+} catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:steamMarker>=0?"steam":ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
 public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending,int CacheHits=0,int Translated=0,double CollectionMs=0,int Collections=0,double? ClickToCollectMs=null,double? ClickToDispatchMs=null,int SentParts=0,int ReceivedParts=0,int MaxReplyChars=0,int DecodeErrors=0,int Timeouts=0);
 public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false,bool LoadPlan=false,uint? BuildId=null,bool IncludeSnapshot=true,BuildVisibleGroup[]? Groups=null,string? Description=null,string? Fingerprint=null,string? Job=null,string? Action=null,int Cursor=0,string? ParentJob=null,string? Source=null,uint? BuildVersion=null,bool Automatic=false);
 public record TestRequest(string Provider,string Text,string Direction="incoming");

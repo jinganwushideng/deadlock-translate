@@ -10,6 +10,11 @@ var root=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../
 var owner=StartupCompatibility.Owner();
 Check(!StartupCompatibility.RequiresElevation(false,false)&&!StartupCompatibility.RequiresElevation(false,true),"normal entry never requests elevation");
 Check(StartupCompatibility.RequiresElevation(true,false)&&!StartupCompatibility.RequiresElevation(true,true),"only opt-in low privilege requests UAC once");
+Check(StartupCompatibility.ValidateSteamContext(true,false,false)&&StartupCompatibility.ValidateSteamContext(true,true,true),"matching normal and elevated Steam launchers are both allowed");
+Check(!StartupCompatibility.ValidateSteamContext(null,null,false),"a missing or stale Steam PID does not block the original launch");
+await Fault(()=>{StartupCompatibility.ValidateSteamContext(true,false,true);return Task.CompletedTask;},"steam-permission-mismatch","normal Steam cannot start a game from an elevated wrapper");
+await Fault(()=>{StartupCompatibility.ValidateSteamContext(true,true,false);return Task.CompletedTask;},"steam-permission-mismatch","an elevated Steam client cannot delegate to a normal wrapper either");
+await Fault(()=>{StartupCompatibility.ValidateSteamContext(false,false,false);return Task.CompletedTask;},"steam-user-mismatch","another Windows user is rejected before creating the game");
 StartupCompatibility.ValidateOwner(owner,owner);StartupCompatibility.ValidateOwner(null,owner);
 Check(owner.Length==64&&owner.All(Uri.IsHexDigit),"scope stores a hash rather than raw Windows SID");
 Check(StartupCompatibility.SameUser(Environment.ProcessId)==true&&StartupCompatibility.SameUser(int.MaxValue)==null,"token-owner diagnostic reads minimal rights and treats denied lookup as unknown");
@@ -23,7 +28,7 @@ Check(split.Game!.Arguments.SequenceEqual(launchArgs[5..]),"game arguments survi
 Check(split.Backend.Count(x=>x=="--admin-compatible")==1&&split.Backend.Contains("--elevation-owner"),"backend owner guard is added before Steam command");
 Check(split.Backend[Array.IndexOf(split.Backend,"--data-dir")+1]==Path.Combine(root,"artifacts","带空格"),"user data directory pinned despite changed elevation environment");
 await Fault(()=>{StartupCompatibility.ElevationInfo(Environment.ProcessPath!,["--admin-compatible","--elevation-owner",owner],root,owner);return Task.CompletedTask;},"elevation-loop","failed elevation cannot repeatedly display UAC");
-Check(StartupCompatibility.Reason(new Win32Exception(740))==LogReason.ElevationRequired&&StartupCompatibility.Message(new Win32Exception(740)).Contains("--admin-compatible"),"Windows error 740 has actionable startup guidance");
+Check(StartupCompatibility.Reason(new Win32Exception(740))==LogReason.ElevationRequired&&StartupCompatibility.Message(new Win32Exception(740)).Contains("deadlock.exe")&&!StartupCompatibility.Message(new Win32Exception(740)).Contains("--admin-compatible"),"Windows error 740 fixes the Steam/game permission mismatch rather than elevating the wrapper");
 Check(StartupCompatibility.Reason(new Win32Exception(1223))==LogReason.UacCancelled,"cancelled UAC is distinct from network/translation errors");
 Check(!StartupCompatibility.Message(new Exception("SECRET_PROVIDER_KEY")).Contains("SECRET_PROVIDER_KEY"),"startup dialogs never include arbitrary exception or credential text");
 Check(GameProcess.ImagePath(Environment.ProcessId)==Environment.ProcessPath&&GameProcess.ImagePath(int.MaxValue)==null,"minimal-rights image lookup succeeds and access failures remain unknown");

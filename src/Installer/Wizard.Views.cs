@@ -294,8 +294,7 @@ public sealed partial class Wizard
         if (Mode != "uninstall") DrawSteamAccounts(launchCard);
         configure.Text = Mode == "uninstall" ? "清除此 Steam 目录所有账号中指向本程序的启动前缀" : "自动配置所选账号的 Deadlock 启动项";
         Check(launchCard, configure); Check(launchCard, stopSteam);
-        if (Mode != "uninstall") {admin.Text="游戏需要管理员权限：启用管理员兼容启动";Check(launchCard, admin);}
-        else
+        if (Mode == "uninstall")
         {
             var cleanup = Section("卸载选项");
             Check(cleanup, restoreConflicts); Check(cleanup, removeCertificate); Check(cleanup, removeRuntime);

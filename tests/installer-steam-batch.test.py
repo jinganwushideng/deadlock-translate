@@ -58,6 +58,17 @@ function Get-Process {
         changed=self.apply(['1','2'],preview);self.assertFalse(changed['ok'],changed)
         self.assertEqual(self.one.read_bytes(),before)
 
+    def test_legacy_elevation_flag_removed_but_game_arguments_preserved(self):
+        self.one.write_text(self.one.read_text(encoding='utf-8').replace('-novid',r'\"D:\\Old Mod\\DeadlockTranslate.exe\" --admin-compatible --steam-game %command% -novid -condebug'),encoding='utf-8')
+        plan=self.preview(['1'])
+        self.assertFalse(plan['blocked'],plan)
+        result=self.apply(['1'],plan)
+        self.assertTrue(result['ok'],result)
+        text=self.one.read_text(encoding='utf-8-sig')
+        self.assertNotIn('--admin-compatible',text)
+        self.assertIn('--steam-game %command% -novid -condebug',text)
+        self.assertEqual(text.count('%command%'),1)
+
     def test_unsupported_account_in_batch_is_shown_without_modifying_any(self):
         before=self.one.read_bytes()
         self.two.write_text(self.two.read_text(encoding='utf-8').replace('+custom setting','other-wrapper %command%'),encoding='utf-8')

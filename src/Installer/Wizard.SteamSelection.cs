@@ -94,8 +94,6 @@ public sealed partial class Wizard
         Row(card,"Steam 目录",steam,Button("浏览…",()=>Browse(steam)),AsyncButton("读取账号",async()=>await Work(Inspect)));
         DrawSteamAccounts(card);
         Check(card,stopSteam);
-        admin.Text="为所选账号启用管理员兼容（未勾选则沿用各账号原设置）";
-        Check(card,admin);
         if(errorMessage.Length==0)Note(card,"只调整所选账号的 Deadlock 启动项。原文件会先备份。");
         ButtonRow(card,Button("返回安装器",CloseSteamManagement));
     }

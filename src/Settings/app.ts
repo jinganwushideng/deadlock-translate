@@ -577,7 +577,7 @@ $('cleanBackups').addEventListener('click',async()=>{
  }catch(e){$('backupSummary').textContent=(e as Error).message;notice((e as Error).message,true);}finally{backupControls(false);}
 });
 bind('restartHotkey',async()=>{await api('hotkey/reinitialize','POST',{});notice('已请求重建快捷键监听；没有发送聊天。');});
-async function copyAdminLaunch(){const launch=await api('launch-options');$<HTMLInputElement>('adminLaunchCommand').value=launch.admin;try{await copyText(launch.admin);notice('已复制管理员兼容启动项。退出游戏后在 Steam 属性中替换翻译启动前缀；原来的普通游戏参数保留在末尾。');}catch{notice('启动项已显示在下方，可手动选择复制。');}}
+async function copyAdminLaunch(){const launch=await api('launch-options');$<HTMLInputElement>('adminLaunchCommand').value=launch.normal;try{await copyText(launch.normal);notice('已复制 Steam 启动项。退出游戏后在 Steam 属性中替换翻译启动前缀；原来的普通游戏参数保留在末尾。');}catch{notice('启动项已显示在下方，可手动选择复制。');}}
 bind('copyAdminLaunch',copyAdminLaunch);
 async function restartAdmin(){await api('admin-restart','POST',{});notice('等待你确认 Windows UAC。只使用原 Windows 用户；确认后点击窗口“重新加载”，浏览器用户请重新打开 Settings.cmd。旧待发送任务不会补发。');}
 bind('adminRestart',restartAdmin);
@@ -647,7 +647,7 @@ function collectRuntimeIssues(d:any,error?:unknown):RuntimeIssue[]{
  if(p.detected===true&&p.sameUser===false)add('different-user','游戏和翻译后台使用了不同的 Windows 用户','证书与加密密钥属于原安装用户；管理员重启不能解决跨账号问题。',['退出游戏，用原安装用户登录 Windows 并启动 Steam 与翻译程序。','出现 UAC 时使用原 Windows 用户确认，不能填写另一位管理员的账户。','不需要删除配置、API 密钥或重复安装证书。'],['check','logs']);
  else if(mismatch){
   const actions:HelpAction[]=p.sameUser===true?['admin','copy-admin','check']:['outgoing','check'];
-  add('privilege','权限不匹配：游戏是管理员，后台是普通权限','这可能导致发送快捷键无法被读取；连接异常需结合下面的检查结果处理。',['推荐：退出游戏，取消 Deadlock 和 Steam 快捷方式的“以管理员身份运行”，再从 Steam 正常启动。','如果游戏必须使用管理员权限，主动选择“管理员兼容重启”，由原 Windows 用户确认 UAC；完成后重新加载设置页。','长期使用可复制管理员兼容启动项，保留普通游戏参数。重启后旧待发送任务不会自动补发。'],actions);
+  add('privilege','权限不匹配：游戏是管理员，后台是普通权限','这可能导致发送快捷键无法被读取；连接异常需结合下面的检查结果处理。',['推荐：退出游戏，取消 Deadlock 和 Steam 快捷方式的“以管理员身份运行”，再从 Steam 正常启动。','如果游戏必须使用管理员权限，主动选择“管理员兼容重启”，由原 Windows 用户确认 UAC；完成后重新加载设置页。','Steam 启动项不改变游戏权限；需要时可单独开启后台的管理员兼容模式。重启后旧待发送任务不会自动补发。'],actions);
  }
  const hasBuildIdentity=!!d.clientBuildId&&!!d.buildId;
  const mismatchedBuild=hasBuildIdentity?d.clientBuildId!==d.buildId:!!d.clientVersion&&!!d.version&&d.clientVersion!==d.version;
@@ -731,7 +731,7 @@ function renderRuntimeIssues(d:any,error?:unknown){
   const signature=JSON.stringify([issue.steps,issue.actions]);
   if(signature!==row.signature){
    clearChildren(row.steps);for(const text of issue.steps){const item=document.createElement('li');item.textContent=text;row.steps.append(item);}
-   clearChildren(row.actions);const names:Record<HelpAction,string>={reconnect:'恢复游戏连接',check:'重新检查',admin:'管理员兼容重启（需 UAC）','copy-admin':'复制 Steam 兼容启动项',outgoing:'查看发送任务',shortcuts:'查看快捷键与短语',providers:'查看翻译服务',logs:'一键导出日志'};
+   clearChildren(row.actions);const names:Record<HelpAction,string>={reconnect:'恢复游戏连接',check:'重新检查',admin:'管理员兼容重启（需 UAC）','copy-admin':'复制 Steam 启动项',outgoing:'查看发送任务',shortcuts:'查看快捷键与短语',providers:'查看翻译服务',logs:'一键导出日志'};
    for(const action of issue.actions){const button=document.createElement('button');button.textContent=names[action];button.dataset.helpAction=action;button.addEventListener('click',async()=>{button.disabled=true;try{await runHelpAction(action);}catch(e){notice((e as Error).message,true);}finally{button.disabled=false;}});row.actions.append(button);}
    row.signature=signature;
   }

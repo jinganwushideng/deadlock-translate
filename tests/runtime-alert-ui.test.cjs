@@ -12,7 +12,7 @@ const server=http.createServer((req,res)=>{
  else if(url==='/api/terms')res.end('[]');
  else if(url==='/api/outgoing')res.end(JSON.stringify({items:[],hotkey:status.diagnostics.hotkey,hotkeyAvailable:true}));
  else if(url==='/api/admin-restart'){adminCalls++;res.end('{}');}
- else if(url==='/api/launch-options')res.end(JSON.stringify({admin:'"D:\\Apps\\DeadlockTranslate\\DeadlockTranslate.exe" --admin-compatible --steam-game %command%'}));
+ else if(url==='/api/launch-options')res.end(JSON.stringify({normal:'"D:\\Apps\\DeadlockTranslate\\DeadlockTranslate.exe" --steam-game %command%'}));
  else if(url==='/api/diagnostics/export'){exportCount++;res.end(JSON.stringify({file:'fixture-log.zip'}));}
  else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
@@ -38,7 +38,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('[data-page="providers"]').click();check(await page.locator('[data-issue="privilege"]').isVisible(),'warning remains visible across settings tabs');
   await page.evaluate(()=>{window.savedAction=document.querySelector('[data-issue="privilege"] [data-help-action="admin"]');window.savedAction.focus();});
   await page.waitForTimeout(1300);check(await page.evaluate(()=>window.savedAction===document.querySelector('[data-issue="privilege"] [data-help-action="admin"]')&&document.activeElement===window.savedAction),'unchanged poll preserves focused warning actions');
-  await page.locator('[data-issue="privilege"] [data-help-action="copy-admin"]').click();await page.waitForFunction(()=>document.querySelector('#adminLaunchCommand').value.includes('--admin-compatible'));check((await page.locator('#adminLaunchCommand').inputValue()).includes('--admin-compatible --steam-game %command%'),'copy action uses the correct flag order');
+  await page.locator('[data-issue="privilege"] [data-help-action="copy-admin"]').click();await page.waitForFunction(()=>document.querySelector('#adminLaunchCommand').value.endsWith(' --steam-game %command%'));check((await page.locator('#adminLaunchCommand').inputValue()).endsWith('DeadlockTranslate.exe" --steam-game %command%'),'copy action leaves the Steam launch non-elevating');
   await page.locator('[data-issue="privilege"] [data-help-action="admin"]').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('等待你确认'));check(adminCalls===1,'elevation request only occurs after the explicit action');
   status.diagnostics.gamePrivileges.sameUser=false;await page.waitForSelector('[data-issue="different-user"]');check(await page.locator('[data-issue="different-user"] [data-help-action="admin"]').count()===0,'cross-user problem never offers an elevation shortcut');
   status=healthy();status.diagnostics.gamePrivileges={detected:true,elevated:null,sameUser:null};status.diagnostics.phase='game-stale';await page.waitForSelector('[data-issue="unknown-permission"]');check(await page.locator('[data-issue="privilege"]').count()===0,'unknown token state is not declared an administrator mismatch');

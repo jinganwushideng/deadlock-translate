@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using Microsoft.Win32;
 
 namespace DeadlockTranslate;
 
@@ -31,6 +32,29 @@ public static class StartupCompatibility {
         }finally{CloseHandle(process);}
     }
     public static bool RequiresElevation(bool requested,bool elevated)=>requested&&!elevated;
+    public static bool CheckSteamContext(){
+        bool? sameUser=null,elevated=null;
+        try{
+            using var active=Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam\ActiveProcess");
+            if(active?.GetValue("pid") is int pid&&pid>0){
+                using var steam=Process.GetProcessById(pid);
+                using var launcher=Process.GetCurrentProcess();
+                // The registry can outlive Steam; PID reuse or a different session
+                // isn't proof of a mismatch. Only reject a known live client.
+                if(!steam.HasExited&&steam.SessionId==launcher.SessionId&&steam.ProcessName.Equals("steam",StringComparison.OrdinalIgnoreCase)){
+                    sameUser=SameUser(pid);
+                    elevated=ProcessElevated(pid);
+                }
+            }
+        }catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException or System.Security.SecurityException){}
+        return ValidateSteamContext(sameUser,elevated,Elevated());
+    }
+    public static bool ValidateSteamContext(bool? sameUser,bool? steamElevated,bool launcherElevated){
+        if(sameUser==false)throw new StartupFault("steam-user-mismatch","Steam 和当前启动器使用了不同的 Windows 用户。请完整退出 Steam，以当前 Windows 用户重新打开 Steam 后启动游戏。");
+        if(steamElevated.HasValue&&steamElevated.Value!=launcherElevated)
+            throw new StartupFault("steam-permission-mismatch","Steam 和当前启动器的管理员权限不一致，继续启动可能导致游戏无法连接 Steam 并退出。请完整退出 Steam，取消 Steam、Deadlock 和翻译程序属性中的「以管理员身份运行」，再从 Steam 库启动。");
+        return sameUser==true&&steamElevated.HasValue;
+    }
     public static void ValidateOwner(string? requested,string current){
         if(requested!=null && (requested.Length!=64 || !requested.All(Uri.IsHexDigit) || !string.Equals(requested,current,StringComparison.Ordinal)))
             throw new StartupFault("different-user","管理员兼容模式必须使用原来的 Windows 用户确认 UAC。请勿输入另一个管理员账户，否则证书和 DPAPI 密钥不属于同一用户。没有修改证书或配置。");
@@ -47,11 +71,11 @@ public static class StartupCompatibility {
         if(marker>=0)foreach(var arg in arguments[marker..])info.ArgumentList.Add(arg);
         return info;
     }
-    public static string LaunchOption(string executable,bool admin)=>'"'+executable+'"'+(admin?" --admin-compatible":"")+" --steam-game %command%";
+    public static string LaunchOption(string executable)=>'"'+executable+'"'+" --steam-game %command%";
     public static string Message(Exception exception)=>exception switch {
         StartupFault fault=>fault.Message,
         Win32Exception {NativeErrorCode:1223}=>"已取消管理员权限确认，翻译后台没有启动。可使用普通 Launch.cmd，或重新选择管理员兼容启动。",
-        Win32Exception {NativeErrorCode:740}=>"Deadlock 要求管理员权限，但翻译后台以普通权限启动。请使用 Launch-Admin.cmd，或在 Steam 翻译启动项中、--steam-game 前添加 --admin-compatible；需由你确认 UAC。也可以取消游戏的管理员兼容设置。",
+        Win32Exception {NativeErrorCode:740}=>"Deadlock 要求管理员权限，当前 Steam 启动器无法直接拉起它。请取消 deadlock.exe 属性中的「以管理员身份运行」，完整退出并重新打开 Steam，再从 Steam 库启动。如果游戏必须以管理员权限运行，请先确保 Steam 和游戏使用同一 Windows 用户和权限。",
         UnauthorizedAccessException=>"无法访问翻译程序或用户数据目录。请使用安装时的 Windows 用户，检查目录权限；不要复制或删除加密密钥来解决。",
         FileNotFoundException=>"安装记录或程序文件缺失。请重新运行 Install.cmd 或成套覆盖更新；后台与游戏 VPK 必须来自同一包。",
         System.Security.Cryptography.CryptographicException=>"当前 Windows 用户无法读取加密配置或证书。请使用原安装用户启动，避免在 UAC 输入另一个管理员账户；不要删除密钥或重复安装证书。可运行 Export-Diagnostics.cmd 导出日志。",
@@ -66,7 +90,8 @@ public static class StartupCompatibility {
         StartupFault {Code:"scope-mismatch"}=>LogReason.ScopeMismatch,
         StartupFault {Code:"port-busy"}=>LogReason.PortBusy,
         StartupFault {Code:"port-timeout"}=>LogReason.PortTimeout,
-        StartupFault {Code:"different-user"}=>LogReason.DifferentUser,
+        StartupFault {Code:"different-user" or "steam-user-mismatch"}=>LogReason.DifferentUser,
+        StartupFault {Code:"steam-permission-mismatch"}=>LogReason.SteamPermissionMismatch,
         StartupFault {Code:"handoff-timeout"}=>LogReason.HandoffTimeout,
         StartupFault {Code:"elevation-required" or "elevation-loop" or "admin-unavailable"}=>LogReason.ElevationRequired,
         UnauthorizedAccessException=>LogReason.Unauthorized,
