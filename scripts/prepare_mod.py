@@ -1,4 +1,5 @@
 import argparse, hashlib, json, pathlib, re, secrets, subprocess, shutil, os
+import xml.etree.ElementTree as ET
 from vpk import Vpk
 from native_bubble_layout import STYLE as NATIVE_BUBBLE_STYLE, patch_native_bubble
 root = pathlib.Path(__file__).resolve().parents[1]
@@ -21,6 +22,29 @@ BUILD_TEXT_RESOURCES = {
     'panorama/styles/dlt_build_text.vcss_c',
     *(f'panorama/layout/{name}.vxml_c' for name in BUILD_TEXT_LAYOUTS),
 }
+
+def preserve_native_label_tree(xml):
+    tree = ET.fromstring(xml)
+    parents = {child: parent for parent in tree.iter() for child in parent}
+    for slot in list(tree.iter('Panel')):
+        if 'DltBuildTextSlot' not in slot.attrib.get('class', '').split():
+            continue
+        parent = parents[slot]
+        index = list(parent).index(slot)
+        original, translated = list(slot)
+        parent.remove(slot)
+        parent.insert(index, original)
+        # Append our drawing-only label. Native children keep their original
+        # parent and indexes, including the annotation label at NotesContainer[0].
+        parent.append(translated)
+    for parent in tree.iter():
+        for translated in list(parent):
+            if 'DltBoundTranslation' in translated.attrib.get('class', '').split():
+                parent.remove(translated); parent.append(translated)
+        for marker in list(parent):
+            if marker.attrib.get('id', '').startswith('DltBuildContext'):
+                parent.remove(marker); parent.append(marker)
+    return ET.tostring(tree, encoding='unicode')
 
 
 def patch_build_text_layout(xml, name):
@@ -115,7 +139,7 @@ def patch_build_text_layout(xml, name):
         xml = xml.replace(controls, controls + actions('DltShop', 'CitadelButton',
                           'BuildHeaderButton Medium Dark Fill DltBuildTranslateButton', 'onmouseactivate'))
         xml = xml.replace('</CitadelShopModsBuild>', progress('DltShop') + '</CitadelShopModsBuild>')
-    return xml
+    return preserve_native_label_tree(xml)
 
 
 def stage_build_text_layouts(viewer, stage):

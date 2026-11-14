@@ -24,6 +24,8 @@ Check(BuildSourceCapture.MatchesExportTitle("[Haze build [55% WR]]的副本","Ha
 Check(!BuildSourceCapture.MatchesExportTitle("[Vindicta build]的副本","Haze build"),"a native ID cannot authorize renaming another hero's exported source");
 Check(!BuildSourceCapture.MatchesExportTitle("[Haze build [61% WR]]的副本","Haze build [55% WR]"),"source validation retains title numbers");
 Check(BuildSourceCapture.IsConsistent(plan)&&!BuildSourceCapture.IsConsistent(plan with{Name="Wrong title"})&&!BuildSourceCapture.IsConsistent(plan with{Hero=3}),"stored sources retain their original native title and hero identity");
+Check(BuildTextJobs.IsChineseTitle("中文出装攻略 [tracklock.gg]")&&!BuildTextJobs.IsChineseTitle("SNIP3R: Dance of Death [55% WR]"),"automatic plan classification distinguishes Chinese titles from foreign titles");
+Check(BuildTextJobs.IsChinesePlan(plan with{Name="International guide",Texts=["这是中文方案说明，原生装备名称可以保留英文，不应自动调用翻译"]}),"full-source language detection recognizes a Chinese guide under a foreign title");
 Check(BuildSourceCapture.ClassifyClipboardFormat(2,"")==BuildSourceCapture.ClipboardKind.Bitmap&&BuildSourceCapture.ClassifyClipboardFormat(13,"")==BuildSourceCapture.ClipboardKind.Memory,"bitmap and text handles use distinct native clipboard operations");
 Check(BuildSourceCapture.ClassifyClipboardFormat(0xc009,"DataObject")==BuildSourceCapture.ClipboardKind.Internal&&BuildSourceCapture.ClassifyClipboardFormat(0xc010,"Unknown OLE object")==BuildSourceCapture.ClipboardKind.Unsupported,"opaque OLE clipboard formats never reach GlobalSize or byte copying");
 var sourceOrder=BuildTextJobs.PrioritizeSource(plan with{Texts=["Unseen item annotation","Group note","Test build","Ability note","Build introduction","Early group"]},["Group note"]);

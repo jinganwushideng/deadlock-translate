@@ -5,12 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../mod/panorama/scripts/dlt_build_text.js'), 'utf8');
 
-function fixture(autoEnabled, withText = true) {
+function fixture(autoEnabled, withText = true, initialTitle = 'Build title') {
     const tasks = [], sent = [], navigations = [], dispatched = [];
     let now = 0;
     function panel(id, parent, text = '') {
         const item = {
             id, text, parent, paneltype: 'Panel', visible: true, style: {}, children: [], classes: new Set(),
+            actualuiscale_x: 1, actualuiscale_y: 1, actuallayoutwidth: 200, actuallayoutheight: 24,
+            GetPositionWithinWindow: () => ({x:0,y:0}),
             IsValid: () => true, GetParent: () => item.parent,
             GetChildCount: () => item.children.length, GetChild: index => item.children[index],
             SetHasClass(name, value) { if(value)this.classes.add(name);else this.classes.delete(name); },
@@ -31,7 +33,7 @@ function fixture(autoEnabled, withText = true) {
     scene.__dltBuildTextConfig = { revision: 'r1', enabled: true, autoEnabled, contextChars: 6000, fastTimeout: 5, qualityTimeout: 30 };
     const root = panel('shop', scene), selected = panel('SelectedBuildOuter', root);
     root.paneltype = 'CitadelShopModsBuild';
-    const title = panel('DltShopTitle', selected, withText ? 'Build title' : '');
+    const title = panel('DltShopTitle', selected, withText ? initialTitle : '');
     panel('DltShopTitleTranslation', selected).visible = false;
     const bridge = panel('DltShopBridge', root), actions = panel('actions',root), translate = panel('DltShopTranslate', actions);
     const progress = panel('DltShopProgress', root);
@@ -82,7 +84,7 @@ function fixture(autoEnabled, withText = true) {
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip, panel, initializePanel,
+    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip, panel, initializePanel, positionTranslation:scope.DLTPositionBuildTranslation,
         click: () => scope.DLTBuildTextAction(),
         showOriginal: () => scope.DLTBuildTextAction() };
 }

@@ -7,6 +7,30 @@ function DLTBuildTextAction() {
     }
 }
 
+function DLTPositionBuildTranslation(original, output) {
+    try {
+        var parent = output.GetParent();
+        var scaleX = Number(parent.actualuiscale_x), scaleY = Number(parent.actualuiscale_y);
+        if (!(scaleX > 0) || !(scaleY > 0)) return '';
+        var point = original.GetPositionWithinWindow(), origin = parent.GetPositionWithinWindow();
+        var x = point.x === undefined ? point[0] : point.x, y = point.y === undefined ? point[1] : point.y;
+        var px = origin.x === undefined ? origin[0] : origin.x, py = origin.y === undefined ? origin[1] : origin.y;
+        var width = Number(original.actuallayoutwidth) / scaleX, height = Number(original.actuallayoutheight) / scaleY;
+        if (![x,y,px,py,width,height].every(function (value) { return isFinite(value); }) || width <= 0 || height <= 0) return '';
+        var position = ((x - px) / scaleX) + 'px ' + ((y - py) / scaleY) + 'px 0px';
+        output.style.position = position;
+        output.style.width = width + 'px'; output.style.height = height + 'px';
+        return position + ':' + width + ':' + height;
+    } catch (_) { return ''; }
+}
+
+function DLTChineseBuildTitle(title) {
+    var text=String(title||'').replace(/<[^>]*>/g,'').replace(/\[[^\]]*(?:\d\s*%|https?:|\.[a-z]{2,})[^\]]*\]/gi,'');
+    var han=(text.match(/[\u3400-\u9fff]/g)||[]).length;
+    var latin=(text.match(/[a-z]/gi)||[]).length;
+    return han>=2 && han>=latin*0.5;
+}
+
 (function (root) {
     'use strict';
     $.Schedule(0, initialize);
@@ -116,10 +140,15 @@ function DLTBuildTextAction() {
                 return false;
             }
             var translations = [translationFor(job, texts[0], !!toggle), translationFor(job, texts[1], false)];
-            var next = [originals[0], originals[1], outputs[0], outputs[1], texts[0], texts[1], translations[0], translations[1]];
+            var geometry = translations.map(function (value,index) {
+                return value && originals[index] && outputs[index] ? DLTPositionBuildTranslation(originals[index],outputs[index]) : '';
+            });
+            translations = translations.map(function (value,index) { return geometry[index] ? value : ''; });
+            var next = [originals[0], originals[1], outputs[0], outputs[1], texts[0], texts[1], translations[0], translations[1],geometry[0],geometry[1]];
             if (rendered && next.every(function (value, index) { return value === rendered[index]; }) && outputs.every(function (output, index) {
                 return !output || output.text === translations[index] && output.visible === !!translations[index] &&
-                    (!originals[index] || !originals[index].BHasClass || originals[index].BHasClass('DltNativeHidden') === !!translations[index]);
+                    (!originals[index] || !originals[index].BHasClass || originals[index].BHasClass('DltNativeHidden') === !!translations[index]) &&
+                    (!translations[index] || !originals[index] || String(originals[index].style.opacity) === '0');
             })) return true;
             rendered = next;
             for (var i = 0; i < originals.length; i++) {
@@ -133,6 +162,13 @@ function DLTBuildTextAction() {
                 }
                 // Preserve the native localization template and dialog-variable binding.
                 // Only our own sibling label receives text assignments.
+                if (translation && output) {
+                    if (!label.__dltOpacityRestore) label.__dltOpacityRestore = { value: label.style.opacity || (category && i === 1 ? '0.6' : button && i === 1 ? '0.7' : '1') };
+                    label.style.opacity = '0';
+                } else if (label.__dltOpacityRestore) {
+                    label.style.opacity = label.__dltOpacityRestore.value;
+                    delete label.__dltOpacityRestore;
+                }
                 if (label.SetHasClass) label.SetHasClass('DltNativeHidden', !!translation && !!output);
             }
             return true;
@@ -177,6 +213,9 @@ function DLTBuildTextAction() {
             }
             return { id: numberFor('BuildID'), version: numberFor('Version') };
         }
+        function selectionKey(build,metadata,description) {
+            return JSON.stringify([normalize(build),metadata.id,metadata.version,metadata.id?0:selectedRevision,normalize(description)]);
+        }
         var view = { root: root, category: !!category, visible: isVisible, read: readView, render: render };
         if (!tooltip) state.readers.push(view);
         state.forceCollect = true;
@@ -189,7 +228,7 @@ function DLTBuildTextAction() {
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));
-                    var label = state.enabled ? job && job.bg && job.failed ? '重试翻译' : '显示原文' : '翻译当前出装';
+                    var label = state.enabled && !state.chineseSuppressed ? job && job.bg && job.failed ? '重试翻译' : '显示原文' : '翻译当前出装';
                     DLTSetButtonCaption(toggle, label);
                     var now = Date.now();
                     var needsTranslation = job && (job.bg ? !job.finishedAt && (job.working || job.receiving || job.downloadComplete) :
@@ -197,7 +236,7 @@ function DLTBuildTextAction() {
                     if (job && job.bg && needsTranslation) job.progressShown = true;
                     if (job && job.bg && !job.finishedAt && now - job.startedAt >= 500) job.progressShown = true;
                     var confirmation = job && !job.reopened && job.translated && job.finishedAt && now - job.finishedAt < 3500;
-                    progress.visible = state.owner === control && state.enabled && online && !!(needsTranslation || job &&
+                    progress.visible = state.owner === control && state.enabled && !state.chineseSuppressed && online && !!(needsTranslation || job &&
                         (job.manualCapture || job.failed || confirmation || job.progressShown && !job.finishedAt));
                     progress.style.visibility = progress.visible ? 'visible' : 'collapse';
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
@@ -231,7 +270,10 @@ function DLTBuildTextAction() {
             root.__dltBuildTextAction = function () {
                 if (!eligibleController()) return;
                 var config = syncSettings();
-                var showOriginal = state.enabled && !(state.job && state.job.bg && state.job.failed);
+                var showOriginal = state.enabled && !state.chineseSuppressed && !(state.job && state.job.bg && state.job.failed);
+                var currentText=readView();
+                state.manualSelection=showOriginal?null:selectionKey(currentText[0],nativeIdentity(),currentText[1]);
+                state.chineseSuppressed=false;
                 var background = state.job && state.job.bg;
                 state.error = false;
                 state.clicks++;
@@ -266,7 +308,7 @@ function DLTBuildTextAction() {
                 groups: batch.plan && !completeSource ? job.groups : null, description: batch.plan && !completeSource ? job.description : null, fingerprint: job.fingerprint || null,
                 job: job.bg ? job.bg.key : null, action: batch.action, cursor: job.cursor || 0,
                 parentJob: batch.action === 'note' ? job.parentKey : null,
-                source: job.bg ? job.bg.source || job.bg.captureToken : null, buildVersion: job.buildVersion || null
+                source: job.bg ? job.bg.source || job.bg.captureToken : null, buildVersion: job.buildVersion || null, automatic: !job.explicit
             }));
             var seconds = batch.action || batch.lookup ? 10 : batch.plan ? 30 :
                 Math.max(config && config.fastTimeout || 15, config && config.qualityTimeout || 90) + 5;
@@ -297,6 +339,7 @@ function DLTBuildTextAction() {
                 state.recent = Object.create(null);
                 state.background.clear();
                 state.sourceViews.clear();
+                state.chineseSourceSelection=null;
             }
             if (state.autoEnabled !== config.autoEnabled) {
                 state.autoEnabled = config.autoEnabled;
@@ -336,7 +379,7 @@ function DLTBuildTextAction() {
             return saved;
         }
         function rememberSourceView(job) {
-            if (!job.sourceKey) return;
+            if (!job.sourceKey || job.suppressed) return;
             state.sourceViews.delete(job.sourceKey);
             state.sourceViews.set(job.sourceKey, job);
             if (state.sourceViews.size > 12) state.sourceViews.delete(state.sourceViews.keys().next().value);
@@ -352,6 +395,11 @@ function DLTBuildTextAction() {
         }
         function acceptSource(job, capture) {
             var plan = capture.plan;
+            if (plan && plan.isChinese && !job.explicit) {
+                job.bg.source=capture.source;job.bg.captureToken=null;job.bg.captureManual=false;
+                job.suppressed=true;job.finishedAt=Date.now();state.chineseSourceSelection=job.selection;state.chineseSuppressed=true;
+                return;
+            }
             if (plan && Number.isSafeInteger(plan.id) && plan.id > 0 && Number.isSafeInteger(plan.hero) &&
                 Number.isSafeInteger(plan.version) && plan.version > 0 && typeof plan.name === 'string' && normalize(plan.name) === normalize(job.build)) {
                 var key = JSON.stringify([state.revision, plan.id, plan.hero, plan.version, normalize(plan.name), capture.source]);
@@ -395,6 +443,9 @@ function DLTBuildTextAction() {
                 }
                 job.bridgeFailures = 0;
                 if (reply.error === 'settings-changed') { restartJob(); return; }
+                if (reply.error === 'chinese-plan') {
+                    job.suppressed=true;job.finishedAt=now;state.chineseSourceSelection=job.selection;state.chineseSuppressed=true;return;
+                }
                 if (reply.error === 'job-missing') {
                     if (job.parentKey) { job.failed = 1; job.finishedAt = now; return; }
                     job.bg.accepted = false;
@@ -679,6 +730,9 @@ function DLTBuildTextAction() {
                 // still bounded, but recycled text and native version changes need not wait for it.
                 var metadata = nativeIdentity();
                 var live = readView();
+                var liveSelection=selectionKey(live[0],metadata,live[1]);
+                state.chineseSuppressed=state.enabled&&(DLTChineseBuildTitle(live[0])||state.chineseSourceSelection===liveSelection)&&state.manualSelection!==liveSelection;
+                active=active&&!state.chineseSuppressed;
                 var probe = JSON.stringify([live, metadata.id, metadata.version, selectedRevision]);
                 if (probe !== control.probe) { control.probe = probe; state.forceCollect = true; }
                 state.pairs.forEach(function (entry) {
@@ -713,7 +767,7 @@ function DLTBuildTextAction() {
                             }).filter(function (group) { return group.name || group.note; });
                             var description = read(1);
                             var structure = groupKeys(groups);
-                            var selection = JSON.stringify([normalize(build), buildId, buildVersion, buildId ? 0 : selectedRevision, normalize(description)]);
+                            var selection = selectionKey(build,metadata,description);
                             var identity = JSON.stringify([selection, config && config.sourceExports && buildId ? null : structure]);
                             var signature = identity;
                             if (signature !== state.signature) {
@@ -756,8 +810,9 @@ function DLTBuildTextAction() {
                                             queue: background ? [] : [{ texts: visible, plan: true, attempts: 0, after: 0 }], pending: null,
                                             refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0,
                                             startedAt: Date.now(), sourceDeadline: Date.now() + 45000, progressShown: false };
+                                        state.job.explicit=state.manualSelection===selection;
                                         var savedView = background && Array.from(state.sourceViews.values()).find(function (saved) {
-                                            return saved.bg === background && !saved.failed;
+                                            return saved.bg === background && !saved.failed && !saved.suppressed;
                                         });
                                         if (savedView) adoptView(state.job, savedView);
                                     }
@@ -783,7 +838,7 @@ function DLTBuildTextAction() {
                 else if (state.job) restartJob();
                 var painted = true;
                 state.pairs.forEach(function (entry) {
-                    if (entry.view.root.IsValid() && entry.view.render(entry.texts, active ? state.job : null) === false) painted = false;
+                    if (entry.view.root.IsValid() && entry.view.render(entry.texts, active && !state.chineseSuppressed ? state.job : null) === false) painted = false;
                 });
                 if (active && state.job) {
                     if (state.job.bg && state.job.downloadComplete && !state.job.finishedAt && painted) finishApplied(state.job);

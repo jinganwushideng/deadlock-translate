@@ -143,4 +143,14 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
         int Rank(string text)=>text==source.Name?0:names.Contains(text)?1:notes.Contains(text)?shown.Contains(text)?2:3:4;
         return source.Texts.OrderBy(Rank).ToArray();
     }
+    internal static bool IsChineseTitle(string title) {
+        title=System.Text.RegularExpressions.Regex.Replace(title,@"<[^>]*>|\[[^\]]*(?:\d\s*%|https?:|\.[a-z]{2,})[^\]]*\]","",System.Text.RegularExpressions.RegexOptions.IgnoreCase,TimeSpan.FromMilliseconds(100));
+        var han=title.Count(c=>c is >= '\u3400' and <= '\u9fff');var latin=title.Count(char.IsAsciiLetter);
+        return han>=2&&han>=latin*0.5;
+    }
+    internal static bool IsChinesePlan(LocalHeroBuild source) {
+        if(IsChineseTitle(source.Name))return true;
+        var text=string.Join('\n',source.Texts);var han=text.Count(c=>c is >= '\u3400' and <= '\u9fff');var latin=text.Count(char.IsAsciiLetter);
+        return han>=8&&han>=latin*0.5;
+    }
 }

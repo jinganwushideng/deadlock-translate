@@ -19,9 +19,17 @@ for name,(body,role) in fixtures.items():
  for token in tokens:
   labels=[label for label in after.iter('Label') if label.attrib.get('text')==token]
   assert len(labels)==1,(name,token)
-  slots=[p for p in after.iter('Panel') if 'DltBuildTextSlot' in p.attrib.get('class','') and labels[0] in list(p)]
-  assert len(slots)==1,(name,'native field was detached from its token slot')
-  assert any(label.attrib.get('id','').endswith('Translation') for label in slots[0].iter('Label'))
+  old_label=next(label for label in before.iter('Label') if label.attrib.get('text')==token)
+  old_parent=next(parent for parent in before.iter() if old_label in list(parent))
+  new_parent=next(parent for parent in after.iter() if labels[0] in list(parent))
+  assert old_parent.tag==new_parent.tag and old_parent.attrib==new_parent.attrib,(name,'native parent changed')
+  native_children=[child for child in new_parent if not child.attrib.get('id','').startswith('DltBuildContext')
+                   and 'DltBoundTranslation' not in child.attrib.get('class','').split()
+                   and 'DltBuildActions' not in child.attrib.get('class','').split() and child.tag!='HTML']
+  assert list(old_parent).index(old_label)==native_children.index(labels[0]),(name,'native sibling ordering changed')
+  if role=='Item':assert list(old_parent).index(old_label)==list(new_parent).index(labels[0]),'annotation must retain its exact native child index'
+  assert any(label.attrib.get('id','').endswith('Translation') for label in new_parent.iter('Label'))
+ assert not any('DltBuildTextSlot' in panel.attrib.get('class','') for panel in after.iter('Panel'))
  markers=[p for p in after.iter('Panel') if p.attrib.get('id')=='DltBuildContext'+role]
  assert len(markers)==1
  print('PASS native text tokens and explicit '+role+' context remain intact')

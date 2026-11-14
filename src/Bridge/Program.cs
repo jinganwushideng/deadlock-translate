@@ -393,6 +393,7 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
             return Results.Json(new{id=input.Id,revision,error="settings-changed"});
         var source=input.Source!=null?buildSourceCapture.Find(input.Source):null;
         if(input.Source!=null&&source==null)return Results.Json(new{id=input.Id,revision,error="source-expired"});
+        if(input.Automatic&&source!=null&&BuildTextJobs.IsChinesePlan(source))return Results.Json(new{id=input.Id,revision,error="chinese-plan"});
         var accepted=buildTextJobs.Start(newKey,revision,job=>RunBuildJob(input,job,source),
             source==null?null:source.Fingerprint+":"+revision);
         return Results.Json(new{id=input.Id,revision,accepted,error=accepted?null:"busy"});
@@ -677,7 +678,7 @@ try {
 
 } catch(Exception ex){audit.Record("backend",LogKind.StartupFailed,new(Reason:StartupCompatibility.Reason(ex),Stage:ex is StartupFault?"instance":"startup",FailureType:ex.GetType().Name,Win32Error:ex is System.ComponentModel.Win32Exception w?w.NativeErrorCode:null));await audit.FlushAsync();StartupCompatibility.Notify(ex,noShell);Environment.ExitCode=1;}
 public record BuildTextEvidence(int Controls,int Readers,int Clicks,bool Enabled,bool Error,int Total,int Done,int Failed,bool Pending,int CacheHits=0,int Translated=0,double CollectionMs=0,int Collections=0,double? ClickToCollectMs=null,double? ClickToDispatchMs=null,int SentParts=0,int ReceivedParts=0,int MaxReplyChars=0,int DecodeErrors=0,int Timeouts=0);
-public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false,bool LoadPlan=false,uint? BuildId=null,bool IncludeSnapshot=true,BuildVisibleGroup[]? Groups=null,string? Description=null,string? Fingerprint=null,string? Job=null,string? Action=null,int Cursor=0,string? ParentJob=null,string? Source=null,uint? BuildVersion=null);
+public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Revision,bool Refine=false,string? Build=null,bool CacheOnly=false,bool LoadPlan=false,uint? BuildId=null,bool IncludeSnapshot=true,BuildVisibleGroup[]? Groups=null,string? Description=null,string? Fingerprint=null,string? Job=null,string? Action=null,int Cursor=0,string? ParentJob=null,string? Source=null,uint? BuildVersion=null,bool Automatic=false);
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
 public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0,int HudContainers=0,int HudRebinds=0,int HudRendered=0,int HudRecovered=0,int HudHostRepairs=0,int HudHiddenRepairs=0,int HudBindings=0,int HudExpiredResults=0,int HudDeferredScans=0,int GameLogDrops=0,int HudWaits=0,int HudRetryRecovered=0,int HudNativeExpired=0,int HudPanelGone=0,int HudRetryDropped=0,int FeedRendered=0,int FeedExpired=0,int FeedDropped=0,PerformanceSample? Performance=null);

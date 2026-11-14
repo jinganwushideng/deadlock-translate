@@ -96,7 +96,7 @@ internal sealed class BuildSourceCapture : IDisposable {
             plan=plan with{Fingerprint=key};
             Store(key,plan);
             var clipboard=ReleaseSession(owned,sequence);
-            return new{source=key,clipboard,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=key,total=plan.Texts.Length}};
+            return new{source=key,clipboard,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=key,total=plan.Texts.Length,isChinese=BuildTextJobs.IsChinesePlan(plan)}};
         } catch(Exception ex) when(ex is not OutOfMemoryException) {return new{error=ex is IOException or UnauthorizedAccessException?"unavailable":"export-format"};}
         finally {ReleaseSession(owned,sequence);}
     }
@@ -104,7 +104,7 @@ internal sealed class BuildSourceCapture : IDisposable {
         if(!IsConsistent(plan))throw new InvalidDataException("Build source does not match native data");
         plan=plan with{Fingerprint=SourceFingerprint(plan)};
         Store(plan.Fingerprint,plan);
-        return new{source=plan.Fingerprint,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=plan.Fingerprint,total=plan.Texts.Length}};
+        return new{source=plan.Fingerprint,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=plan.Fingerprint,total=plan.Texts.Length,isChinese=BuildTextJobs.IsChinesePlan(plan)}};
     }
     internal static bool MatchesExportTitle(string nativeTitle,string expected) {
         static string Plain(string value) => System.Text.RegularExpressions.Regex.Replace(
