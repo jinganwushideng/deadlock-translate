@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32;
+using System.Text.Json;
 
 namespace DeadlockTranslate;
 
@@ -32,7 +33,7 @@ public static class StartupCompatibility {
         }finally{CloseHandle(process);}
     }
     public static bool RequiresElevation(bool requested,bool elevated)=>requested&&!elevated;
-    public static bool CheckSteamContext(){
+    public static bool CheckSteamContext(bool administratorCompatibility=false){
         bool? sameUser=null,elevated=null;
         try{
             using var active=Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam\ActiveProcess");
@@ -47,13 +48,34 @@ public static class StartupCompatibility {
                 }
             }
         }catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException or System.Security.SecurityException){}
-        return ValidateSteamContext(sameUser,elevated,Elevated());
+        return ValidateSteamContext(sameUser,elevated,Elevated(),administratorCompatibility);
     }
-    public static bool ValidateSteamContext(bool? sameUser,bool? steamElevated,bool launcherElevated){
+    public static bool ValidateSteamContext(bool? sameUser,bool? steamElevated,bool launcherElevated,bool administratorCompatibility=false){
         if(sameUser==false)throw new StartupFault("steam-user-mismatch","Steam 和当前启动器使用了不同的 Windows 用户。请完整退出 Steam，以当前 Windows 用户重新打开 Steam 后启动游戏。");
-        if(steamElevated.HasValue&&steamElevated.Value!=launcherElevated)
+        if(steamElevated.HasValue&&steamElevated.Value!=launcherElevated){
+            if(administratorCompatibility&&launcherElevated)return false;
             throw new StartupFault("steam-permission-mismatch","Steam 和当前启动器的管理员权限不一致，继续启动可能导致游戏无法连接 Steam 并退出。请完整退出 Steam，取消 Steam、Deadlock 和翻译程序属性中的「以管理员身份运行」，再从 Steam 库启动。");
+        }
         return sameUser==true&&steamElevated.HasValue;
+    }
+    // Only documented launch identifiers cross UAC. Never copy PATH, credentials
+    // or a process's complete environment into command-line arguments.
+    private static readonly string[] SteamVariables=["SteamAppId","SteamGameId","SteamOverlayGameId","SteamClientLaunch","SteamEnv","SteamTenfoot"];
+    public static string CaptureSteamEnvironment()=>Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(
+        SteamVariables.Select(name=>(name,value:Environment.GetEnvironmentVariable(name)))
+            .Where(item=>ValidSteamValue(item.value)).ToDictionary(item=>item.name,item=>item.value!)));
+    private static bool ValidSteamValue(string? value)=>value is {Length:>0 and <=80}&&value.All(c=>char.IsAsciiLetterOrDigit(c)||c is '_' or '-');
+    public static void RestoreSteamEnvironment(string[] arguments){
+        var index=Array.IndexOf(arguments,"--steam-launch-context");
+        if(index<0)return;
+        try{
+            if(index+1>=arguments.Length||arguments[index+1].Length>2048)throw new FormatException();
+            var values=JsonSerializer.Deserialize<Dictionary<string,string>>(Convert.FromBase64String(arguments[index+1]))??throw new FormatException();
+            if(values.Any(item=>!SteamVariables.Contains(item.Key,StringComparer.Ordinal)||!ValidSteamValue(item.Value)))throw new FormatException();
+            foreach(var (name,value) in values)Environment.SetEnvironmentVariable(name,value);
+        }catch(Exception ex) when(ex is FormatException or JsonException or ArgumentException){
+            throw new StartupFault("steam-context-invalid","Steam 管理员兼容启动信息无效，请重新从 Steam 库启动。");
+        }
     }
     public static void ValidateOwner(string? requested,string current){
         if(requested!=null && (requested.Length!=64 || !requested.All(Uri.IsHexDigit) || !string.Equals(requested,current,StringComparison.Ordinal)))
@@ -68,14 +90,24 @@ public static class StartupCompatibility {
         // Pin the initiating user's data location before Windows changes the environment.
         if(!backend.Contains("--data-dir")){info.ArgumentList.Add("--data-dir");info.ArgumentList.Add(Path.GetFullPath(dataDirectory));}
         info.ArgumentList.Add("--elevation-owner");info.ArgumentList.Add(owner);
+        if(marker>=0){
+            var context=CaptureSteamEnvironment();
+            // An earlier value is never replayed over this launcher's fresh context.
+            var old=info.ArgumentList.IndexOf("--steam-launch-context");
+            if(old>=0){info.ArgumentList.RemoveAt(old);if(old<info.ArgumentList.Count)info.ArgumentList.RemoveAt(old);}
+            info.ArgumentList.Add("--steam-launch-context");info.ArgumentList.Add(context);
+        }
         if(marker>=0)foreach(var arg in arguments[marker..])info.ArgumentList.Add(arg);
         return info;
     }
-    public static string LaunchOption(string executable)=>'"'+executable+'"'+" --steam-game %command%";
+    public static string LaunchOption(string executable,bool administratorCompatibility=false)=>'"'+executable+'"'+(administratorCompatibility?" --admin-compatible":"")+" --steam-game %command%";
+    public static bool ConfirmAdminGame()=>MessageBox(IntPtr.Zero,
+        "Windows 已确认这个游戏要求管理员权限。是否以管理员兼容模式继续？\n\n选择「是」后由 Windows 请求 UAC，只能使用当前 Windows 用户。以后可在安装器「启动项管理」勾选管理员兼容。\n\n普通游戏保留普通模式；若管理员模式中游戏提示 Steam 未运行，请让 Steam 和游戏使用相同的权限再试。",
+        "同频 · 游戏需要管理员权限",0x24)==6;
     public static string Message(Exception exception)=>exception switch {
         StartupFault fault=>fault.Message,
         Win32Exception {NativeErrorCode:1223}=>"已取消管理员权限确认，翻译后台没有启动。可使用普通 Launch.cmd，或重新选择管理员兼容启动。",
-        Win32Exception {NativeErrorCode:740}=>"Deadlock 要求管理员权限，当前 Steam 启动器无法直接拉起它。请取消 deadlock.exe 属性中的「以管理员身份运行」，完整退出并重新打开 Steam，再从 Steam 库启动。如果游戏必须以管理员权限运行，请先确保 Steam 和游戏使用同一 Windows 用户和权限。",
+        Win32Exception {NativeErrorCode:740}=>"Windows 确认 Deadlock 需要管理员权限。确实需要时，请在安装器「启动项管理」勾选「管理员兼容启动」，或将 --admin-compatible 放到 Steam 启动项的 --steam-game 前，并用原 Windows 用户确认 UAC。若是误设管理员属性，可取消 deadlock.exe 的强制管理员运行后按普通模式启动。",
         UnauthorizedAccessException=>"无法访问翻译程序或用户数据目录。请使用安装时的 Windows 用户，检查目录权限；不要复制或删除加密密钥来解决。",
         FileNotFoundException=>"安装记录或程序文件缺失。请重新运行 Install.cmd 或成套覆盖更新；后台与游戏 VPK 必须来自同一包。",
         System.Security.Cryptography.CryptographicException=>"当前 Windows 用户无法读取加密配置或证书。请使用原安装用户启动，避免在 UAC 输入另一个管理员账户；不要删除密钥或重复安装证书。可运行 Export-Diagnostics.cmd 导出日志。",

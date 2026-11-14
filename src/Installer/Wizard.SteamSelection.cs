@@ -94,6 +94,9 @@ public sealed partial class Wizard
         Row(card,"Steam 目录",steam,Button("浏览…",()=>Browse(steam)),AsyncButton("读取账号",async()=>await Work(Inspect)));
         DrawSteamAccounts(card);
         Check(card,stopSteam);
+        admin.Text="管理员兼容启动（游戏需要管理员权限时勾选；未勾选沿用账号设置）";
+        Check(card,admin);
+        Note(card,"普通游戏使用普通启动；已设置管理员运行或出现 Windows 740 时使用兼容启动，并确认 Windows UAC。");
         if(errorMessage.Length==0)Note(card,"只调整所选账号的 Deadlock 启动项。原文件会先备份。");
         ButtonRow(card,Button("返回安装器",CloseSteamManagement));
     }

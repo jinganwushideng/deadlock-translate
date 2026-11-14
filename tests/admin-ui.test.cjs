@@ -7,7 +7,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
  await page.goto(base+'/in-game/'+key);await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));await page.locator('[data-page="diagnostics"]').click();
  check(await page.locator('#adminRestart').isVisible(),'opt-in admin restart is visible in diagnostics maintenance');
  await page.locator('#copyAdminLaunch').click();await page.waitForFunction(()=>document.querySelector('#adminLaunchCommand').value.endsWith(' --steam-game %command%'));
- check((await page.locator('#adminLaunchCommand').inputValue()).includes('DeadlockTranslate.exe" --steam-game %command%'),'generated launch prefix uses actual EXE without elevating the wrapper');
+ check((await page.locator('#adminLaunchCommand').inputValue()).includes('DeadlockTranslate.exe" --admin-compatible --steam-game %command%'),'administrator launch prefix restores the explicit opt-in path');
  check(await page.locator('#adminLaunchCommand').getAttribute('readonly')!==null,'generated command is selectable read-only text');
  check(await page.getByText('重启将取消旧待发送任务', {exact:false}).isVisible(),'pending task cancellation explained before restart');
  await page.locator('#adminRestart').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('无交互模式不会请求管理员权限'));

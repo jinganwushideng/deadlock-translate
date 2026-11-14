@@ -20,7 +20,7 @@ function invoke(args){return spawnSync(exe,args,{windowsHide:true,timeout:20000,
  check((await fetch(base+'/api/admin-restart',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:'{}'})).status===401,'elevation restart requires settings session');
  check((await fetch(base+'/api/admin-restart',{method:'POST',headers:{...headers,Origin:'https://evil.example'},body:'{}'})).status===403,'elevation restart rejects foreign origins');
  check((await fetch(base+'/api/admin-restart',{method:'POST',headers,body:'{}'})).status===409,'noninteractive test never displays UAC or elevates');
- const options=await(await fetch(base+'/api/launch-options',{headers})).json();check(options.admin===options.normal&&options.normal.endsWith(' --steam-game %command%'),'both legacy and current settings links generate a non-elevating Steam launch prefix');
+ const options=await(await fetch(base+'/api/launch-options',{headers})).json();check(options.admin===options.normal.replace(' --steam-game',' --admin-compatible --steam-game'),'normal and explicit administrator launch options remain distinct');
  check((await fetch(base+'/api/providers/deepseek/key',{method:'POST',headers:{Origin:base,'X-DLT-Request':'1'}})).status===401,'DeepSeek platform launch requires a settings session');
  check((await fetch(base+'/api/providers/deepseek/key',{method:'POST',headers:{...headers,Origin:'https://evil.example'},body:'{}'})).status===403,'DeepSeek platform launch rejects a foreign origin');
  const keyLink=await fetch(base+'/api/providers/deepseek/key',{method:'POST',headers,body:JSON.stringify({url:'https://evil.example'})});

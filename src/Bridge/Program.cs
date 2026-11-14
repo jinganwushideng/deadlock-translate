@@ -10,9 +10,9 @@ var loggingArgs=steamMarker>=0?initialArgs[..steamMarker]:initialArgs;
 var dirIndex=Array.IndexOf(loggingArgs,"--data-dir");
 var dataDir=dirIndex>=0&&dirIndex+1<loggingArgs.Length?loggingArgs[dirIndex+1]:Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DeadlockTranslate");
 var adminRequested=loggingArgs.Contains("--admin-compatible");
-// Steam's child must inherit the launcher's original user, token and environment.
-// The opt-in switch can still elevate a standalone backend, never a Steam launch.
-var adminCompatible=steamMarker<0&&adminRequested;
+// Ordinary launches never adopt an elevated backend's token. Explicit administrator
+// compatibility is separate and uses same-user Windows consent.
+var adminCompatible=adminRequested;
 var ownerIndex=Array.IndexOf(loggingArgs,"--elevation-owner");
 var noShell=loggingArgs.Contains("--no-shell");
 string owner;
@@ -20,6 +20,7 @@ try {
     owner=StartupCompatibility.Owner();
     if(ownerIndex>=0&&ownerIndex+1>=loggingArgs.Length)throw new StartupFault("identity","管理员兼容启动参数不完整。");
     StartupCompatibility.ValidateOwner(ownerIndex>=0?loggingArgs[ownerIndex+1]:null,owner);
+    if(ownerIndex>=0)StartupCompatibility.RestoreSteamEnvironment(loggingArgs);
     if(StartupCompatibility.RequiresElevation(adminCompatible,StartupCompatibility.Elevated())){
         if(noShell)throw new StartupFault("elevation-required","管理员兼容模式需要用户确认 UAC；无交互模式不会自动请求权限。");
         using var elevated=Process.Start(StartupCompatibility.ElevationInfo(Environment.ProcessPath!,initialArgs,dataDir,owner));
@@ -64,9 +65,9 @@ var backendElevated=StartupCompatibility.Elevated();
 using var localControl=new HttpClient(new HttpClientHandler{UseProxy=false,AllowAutoRedirect=false}){Timeout=TimeSpan.FromSeconds(2),MaxResponseContentBufferSize=16*1024};
 var controlOrigin=$"http://localhost:{port}";
 if(steamGame!=null){
-    var verified=StartupCompatibility.CheckSteamContext();
-    if(!verified||adminRequested&&!backendElevated)
-        audit.Record("backend",LogKind.PrivilegeMismatch,new(Reason:verified?LogReason.SteamElevationSkipped:LogReason.SteamContextUnknown,Stage:"steam"));
+    var verified=StartupCompatibility.CheckSteamContext(adminCompatible);
+    if(!verified)
+        audit.Record("backend",LogKind.PrivilegeMismatch,new(Reason:adminCompatible?LogReason.SteamAdminCompatibility:LogReason.SteamContextUnknown,Stage:"steam"));
 }
 async Task ReuseInstance(){
     if(followGame){using var follow=await localControl.PostAsync(controlOrigin+"/control/"+pairing+"/follow-game",null);follow.EnsureSuccessStatusCode();}
@@ -138,7 +139,14 @@ string SettingsUrl()=>Origin()+"/settings/"+settingsToken;
 bool Same(string? a,string b)=>a!=null && a.Length==b.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a),Encoding.UTF8.GetBytes(b));
 void OpenSettings()=>Process.Start(new ProcessStartInfo(SettingsUrl()){UseShellExecute=true});
 void LaunchRequestedGame(){
-    if(steamGame!=null){using var child=steamGame.Start(gameExecutable);}
+    if(steamGame!=null){
+        try{using var child=steamGame.Start(gameExecutable);}
+        catch(System.ComponentModel.Win32Exception ex) when(ex.NativeErrorCode==740&&!backendElevated&&!noShell){
+            if(!StartupCompatibility.ConfirmAdminGame())throw new System.ComponentModel.Win32Exception(1223);
+            using var elevated=Process.Start(StartupCompatibility.ElevationInfo(Environment.ProcessPath!,initialArgs,dataDir,owner));
+            if(elevated==null)throw new StartupFault("elevation-failed","管理员兼容启动未完成。");
+        }
+    }
     else if(args.Contains("--launch"))Process.Start(new ProcessStartInfo("steam://rungameid/1422450"){UseShellExecute=true});
 }
 app.Use(async(ctx,next)=>{
@@ -272,8 +280,8 @@ app.MapPost("/api/backups/cleanup",async(BackupCleanupRequest request,HttpContex
     catch(InvalidOperationException ex){return Results.Conflict(new{error=ex.Message});}
 });
 app.MapGet("/api/launch-options",()=>{
-    var command=StartupCompatibility.LaunchOption(Environment.ProcessPath!);
-    return new{normal=command,admin=command,backendElevated,adminCompatible};
+    return new{normal=StartupCompatibility.LaunchOption(Environment.ProcessPath!,false),
+        admin=StartupCompatibility.LaunchOption(Environment.ProcessPath!,true),backendElevated,adminCompatible};
 });
 var adminRestartPending=0;
 app.MapPost("/api/admin-restart",()=>{
