@@ -16,7 +16,7 @@ internal sealed class BuildSourceCapture : IDisposable {
     private readonly ConcurrentDictionary<string,StoredSource> sources=new(StringComparer.Ordinal);
 
     private sealed record ClipboardFormat(uint Format,IntPtr Data);
-    private sealed record Session(string Token,uint Sequence,List<ClipboardFormat> Original,string Title,uint? Id,DateTime Expires,bool Manual);
+    private sealed record Session(string Token,uint Sequence,List<ClipboardFormat> Original,string Title,uint? Id,uint? Version,DateTime Expires,bool Manual);
     private IntPtr window;
     internal BuildSourceCapture(string state) {
         directory=Path.Combine(state,"build-sources-v2");
@@ -35,17 +35,24 @@ internal sealed class BuildSourceCapture : IDisposable {
         commands.Add(()=>{try {result.SetResult(action());}catch(Exception ex){result.SetException(ex);}});
         return result.Task;
     }
-    internal Task<object> Prepare(string title,uint? id) => Invoke(()=>{
+    internal Task<object> Prepare(string title,uint? id,uint? version=null) => Invoke(()=>{
+        if(session is Session previous&&!previous.Manual){
+            ReadCore(previous.Token);
+            // Finish restoring an earlier automatic export before saving the next
+            // clipboard. Otherwise rapid A-B switching can retain export A as user data.
+            if(session!=null&&DateTime.UtcNow<previous.Expires.AddSeconds(-29))return new{pending=true};
+        }
         ReleaseSession(false);
         List<ClipboardFormat> original;
         var manual=false;
         try { original=CaptureOriginal(); }
         catch(InvalidOperationException) { original=[]; manual=true; }
         var token=Guid.NewGuid().ToString("N");
-        session=new(token,GetClipboardSequenceNumber(),original,title,id,DateTime.UtcNow.AddSeconds(manual?120:30),manual);
+        session=new(token,GetClipboardSequenceNumber(),original,title,id,version,DateTime.UtcNow.AddSeconds(manual?120:30),manual);
         return new{capture=true,token,manual};
     });
-    internal Task<object> Read(string token) => Invoke(()=>{
+    internal Task<object> Read(string token) => Invoke(()=>ReadCore(token));
+    private object ReadCore(string token) {
         if(session is not Session current||current.Token!=token)return new{error="capture-expired"};
         if(DateTime.UtcNow>current.Expires){ReleaseSession(false);return new{error="capture-expired"};}
         var sequence=GetClipboardSequenceNumber();
@@ -73,20 +80,26 @@ internal sealed class BuildSourceCapture : IDisposable {
                 title!=LocalBuildCatalog.Canonical("Copy of "+current.Title))
                 return new{error="selection-changed"};
             owned=true;
+            if(current.Version is >0 && plan.Version!=current.Version)return new{error="selection-changed"};
             plan=plan with{Name=current.Title,Texts=plan.Texts.Select(text=>text==plan.Name?current.Title:text).ToArray(),
                 Fields=plan.Fields?.Select(field=>field.Kind=="title"?field with{Text=current.Title}:field).ToArray()};
-            var key=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{plan.Id,plan.Hero,plan.Version,plan.Texts,plan.Groups})));
+            var key=SourceFingerprint(plan);
             plan=plan with{Fingerprint=key};
             Store(key,plan);
             var clipboard=ReleaseSession(owned,sequence);
-            return new{source=key,clipboard,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=key,groups=plan.Groups,total=plan.Texts.Length}};
+            return new{source=key,clipboard,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=key,total=plan.Texts.Length}};
         } catch(Exception ex) when(ex is not OutOfMemoryException) {return new{error=ex is IOException or UnauthorizedAccessException?"unavailable":"export-format"};}
         finally {ReleaseSession(owned,sequence);}
-    });
+    }
     internal object AcceptLocal(LocalHeroBuild plan) {
+        plan=plan with{Fingerprint=SourceFingerprint(plan)};
         Store(plan.Fingerprint,plan);
         return new{source=plan.Fingerprint,plan=new{id=plan.Id,hero=plan.Hero,version=plan.Version,name=plan.Name,fingerprint=plan.Fingerprint,total=plan.Texts.Length}};
     }
+    internal static string SourceFingerprint(LocalHeroBuild plan) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        JsonSerializer.SerializeToUtf8Bytes(new{schema=2,plan.Id,plan.Hero,plan.Version,plan.Name,plan.Description,plan.Groups,
+            texts=plan.Texts.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+            fields=plan.Fields?.Where(field=>field.Text.Length>0).OrderBy(field=>field.Id,StringComparer.Ordinal).ThenBy(field=>field.ItemId)})));
     private void Store(string key,LocalHeroBuild plan) {
         var stored=new StoredSource(LocalBuildCatalog.LocateCurrentCache()??"",plan);
         sources[key]=stored;

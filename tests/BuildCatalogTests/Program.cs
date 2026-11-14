@@ -19,6 +19,10 @@ byte[] Build(uint id,string name,uint version=1)=>Data(1,Join(Number(1,id),Numbe
 var plan=LocalBuildCatalog.Parse(Build(101,"Test build"))!;
 Check(plan.Fields?.Any(field=>field.Text=="Unseen item annotation"&&field.ItemId==123&&field.Group==0&&field.Entry==0)==true,"unseen item annotations keep native item ID and field position");
 Check(plan.Texts.SequenceEqual(new[]{"Test build","Build introduction","Early group","Group note","Unseen item annotation","Ability note"}),"complete protobuf contains unrendered annotations and ability notes");
+var sourceOrder=BuildTextJobs.PrioritizeSource(plan with{Texts=["Unseen item annotation","Group note","Test build","Ability note","Build introduction","Early group"]},["Group note"]);
+Check(sourceOrder[0]=="Test build"&&sourceOrder[1]=="Early group"&&Array.IndexOf(sourceOrder,"Group note")<Array.IndexOf(sourceOrder,"Unseen item annotation"),"native title, group names and visible instructions precede equipment annotations");
+Check(BuildSourceCapture.SourceFingerprint(plan)==BuildSourceCapture.SourceFingerprint(plan with{Texts=plan.Texts.Reverse().ToArray(),Fields=plan.Fields?.Reverse().ToArray()}),"local cache and export text enumeration produce the same complete source fingerprint");
+Check(BuildSourceCapture.SourceFingerprint(plan)!=BuildSourceCapture.SourceFingerprint(plan with{Texts=plan.Texts.Append("Changed hidden annotation").ToArray()}),"changed complete contents invalidate a snapshot even with the same native ID and version");
 Check(LocalBuildCatalog.Select([plan],"Test build [61% winrate]",null,[]).Build?.Id==101,"changing win-rate badges match the original build");
 var other=plan with{Id=102,Groups=[new("Early group","Different note"),new("New section","New note")]};
 Check(LocalBuildCatalog.Select([plan,other],"Test build",null,[]).Status=="ambiguous","same-name different builds are not guessed");
@@ -51,6 +55,10 @@ try{
     job.Apply(longSources,System.Text.Json.JsonSerializer.SerializeToElement(new{translations=new[]{longTranslation,longTranslation,longTranslation},translated=3,cacheHits=0}),false);
     var page=System.Text.Json.JsonSerializer.SerializeToElement(job.Snapshot(0,1),ConfigStore.Json);
     Check(page.GetProperty("fields").GetArrayLength()==1&&page.GetProperty("more").GetBoolean(),"long results paginate before overflowing native HTML transport");
+    var fullJob=new BuildTextJobs.Job("fixture",default,2);
+    fullJob.SetPlan(new("fixture",longSources,[new("heading",longTranslation)],new string('B',64),false,null,true));
+    var smallMeta=System.Text.Json.JsonSerializer.SerializeToElement(fullJob.Snapshot(0,1),ConfigStore.Json);
+    Check(smallMeta.GetProperty("plan").GetProperty("groups").ValueKind==System.Text.Json.JsonValueKind.Null,"complete source results do not resend group descriptions as page metadata");
     var telemetry=new LlmTelemetry();
     string ResponseJson(string content)=>System.Text.Json.JsonSerializer.Serialize(new{choices=new[]{new{message=new{content},finish_reason="stop"}}});
     using(var response=new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(ResponseJson(longTranslation))}){

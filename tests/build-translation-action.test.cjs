@@ -73,7 +73,7 @@ function fixture(autoEnabled, withText = true) {
         tasks.splice(0).forEach(action => action());
     };
     frame(); frame();
-    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip,
+    return { root, title, bridge, translate, progress, status, sent, navigations, dispatched, tasks, frame, scene, category, addTooltip, panel,
         click: () => scope.DLTBuildTextAction(),
         showOriginal: () => scope.DLTBuildTextAction() };
 }

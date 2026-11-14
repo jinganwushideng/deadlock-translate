@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace DeadlockTranslate;
 
-internal sealed record BuildJobPlan(string Name, string[] Texts, BuildVisibleGroup[]? Groups, string Fingerprint, bool VisibleOnly,BuildSourceField[]? Fields=null);
+internal sealed record BuildJobPlan(string Name, string[] Texts, BuildVisibleGroup[]? Groups, string Fingerprint, bool VisibleOnly,BuildSourceField[]? Fields=null,bool FullSource=false);
 internal sealed record BuildJobField(string Source, string Value,string? FieldId=null,string? Kind=null,uint ItemId=0);
 
 // Owned by the backend. The shop can disappear while the worker is still running.
@@ -111,10 +111,10 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
                     page.Add(field);characters+=size;
                 }
                 var fields=page.ToArray();
-                return new { id, revision = Revision, cursor = cursor + fields.Length,
+                return new { id, revision = Revision, cursor = cursor + fields.Length, fieldCount=updates.Count,
                     ended, more = cursor + fields.Length < updates.Count, working, total, done,
                     cacheHits = cached, translated, failed, error,
-                    plan = cursor == 0 && plan != null ? new { plan.Name, plan.Groups, plan.Fingerprint, plan.VisibleOnly } : null,
+                    plan = cursor == 0 && plan != null ? new { plan.Name, Groups=plan.FullSource?null:plan.Groups, plan.Fingerprint, plan.VisibleOnly } : null,
                     fields };
             }
         }
@@ -133,5 +133,14 @@ internal sealed class BuildTextJobs(CancellationToken stopping) {
             size += text.Length;
         }
         if (batch.Count > 0) yield return batch.ToArray();
+    }
+    internal static string[] PrioritizeSource(LocalHeroBuild source,IEnumerable<string> visible) {
+        var shown=visible.ToHashSet(StringComparer.Ordinal);
+        var names=source.Groups.Select(group=>group.Name).ToHashSet(StringComparer.Ordinal);
+        var notes=source.Groups.Select(group=>group.Note).Append(source.Description).ToHashSet(StringComparer.Ordinal);
+        // Native protobuf writes equipment entries before a group's name/note.
+        // Prioritize the page headings instead of inheriting that serialization order.
+        int Rank(string text)=>text==source.Name?0:names.Contains(text)?1:notes.Contains(text)?shown.Contains(text)?2:3:4;
+        return source.Texts.OrderBy(Rank).ToArray();
     }
 }

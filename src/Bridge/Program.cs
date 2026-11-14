@@ -362,10 +362,10 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         try {
             if(input.BuildId is >0&&input.BuildVersion is >0){
                 var found=await localBuilds.Find(input.Build,input.BuildId,input.Groups??[],ctx.RequestAborted,input.Description??"");
-                if(found.Build is LocalHeroBuild cached&&cached.Version==input.BuildVersion)
+                if(found.Build is LocalHeroBuild cached&&cached.Version==input.BuildVersion&&cached.Name.Trim().Equals(input.Build.Trim(),StringComparison.Ordinal))
                     return Results.Json(new{id=input.Id,revision,capture=buildSourceCapture.AcceptLocal(cached)});
             }
-            var capture=await buildSourceCapture.Prepare(input.Build,input.BuildId);
+            var capture=await buildSourceCapture.Prepare(input.Build,input.BuildId,input.BuildVersion);
             return Results.Json(new{id=input.Id,revision,capture});
         }catch(InvalidOperationException){return Results.Json(new{id=input.Id,revision,error="clipboard-busy"});}
     }
@@ -378,7 +378,8 @@ app.MapPost("/build-text/{key}",async(string key,BuildTextRequest input,HttpCont
         if(input.Action=="cancel")job?.Cancel();
         return Results.Json(job?.Snapshot(input.Cursor,input.Id)??new{id=input.Id,revision,error="job-missing"});
     }
-    if(input.Texts is not {Length: >0 and <=512} || (input.Action!="list"&&input.Texts.Length>96) ||
+    var completeSourceStart=input.Action=="start"&&input.LoadPlan&&input.Source is {Length:64};
+    if(input.Texts is not {Length: <=512} || input.Texts.Length==0&&!completeSourceStart || (input.Action!="list"&&input.Texts.Length>96) ||
         (!input.CacheOnly&&!input.LoadPlan&&input.Action!="list"&&input.Texts.Length>12) ||
         input.Texts.Any(text=>text==null||text.Length>6000) ||
         input.Texts.Sum(text=>text.Length)>(input.Action=="list"?512000:input.CacheOnly||input.LoadPlan?48000:6000) || input.Context?.Length>12000 || input.Build?.Length>1000 ||
@@ -425,7 +426,7 @@ async Task RunBuildJob(BuildTextRequest input,BuildTextJobs.Job job,LocalHeroBui
     }
     BuildJobPlan? plan=null;
     if(parent!=null) plan=parent with{Texts=input.Texts,Groups=null};
-    else if(source!=null)plan=new(source.Name,source.Texts,source.Groups,source.Fingerprint,false,source.Fields);
+    else if(source!=null)plan=new(source.Name,BuildTextJobs.PrioritizeSource(source,input.Texts),source.Groups,source.Fingerprint,false,source.Fields,true);
     else if(input.Action=="list"){
         var fingerprint=Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input.Texts)));
         plan=new("Build browser list",input.Texts.Distinct(StringComparer.Ordinal).ToArray(),null,fingerprint,true);
