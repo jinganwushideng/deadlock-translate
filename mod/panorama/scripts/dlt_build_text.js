@@ -33,6 +33,7 @@ function DLTBuildTextAction() {
         if (!state) {
             state = { owner: null, controls: [], readers: [], clicks: 0, error: false, enabled: false, autoEnabled: null,
                 revision: '', seq: 0, job: null, signature: null, completed: Object.create(null), completedOrder: [],
+                recent: Object.create(null),
                 forceCollect: true, nextCollectAt: 0, pairs: [], collectionMs: 0, collections: 0,
                 clickAt: 0, collectDelayMs: null, dispatchDelayMs: null,
                 sentParts: 0, receivedParts: 0, maxReplyChars: 0, decodeErrors: 0, timeouts: 0 };
@@ -139,16 +140,16 @@ function DLTBuildTextAction() {
             var fill = progress.FindChildTraverse('DltBuildProgressFill');
             var status = progress.FindChildTraverse('DltBuildProgressText');
             var control = {
-                root: root, visible: isVisible, request: send, receive: receive,
+                root: root, visible: isVisible, request: send, receive: receive, reopening: false,
                 cancel: function () { if (bridge.IsValid()) bridge.SetURL('about:blank'); },
                 status: function (job, online) {
                     var running = !!(job && (job.pending || job.queue.length));
                     var label = state.enabled ? '显示原文' : '翻译当前出装';
                     if (toggle.text !== label) toggle.text = label;
                     var now = Date.now();
-                    var confirmation = job && (job.translated ? !job.finishedAt || now - job.finishedAt < 3500 :
-                        state.clickAt && now - state.clickAt < 1200);
-                    progress.visible = state.enabled && (!job || !job.total || running || !!job.failed || !!confirmation);
+                    var needsTranslation = job && (job.pending && isTranslation(job.pending.batch) || job.queue.some(isTranslation));
+                    var confirmation = job && job.translated && job.finishedAt && now - job.finishedAt < 3500;
+                    progress.visible = state.owner === control && state.enabled && online && !!(needsTranslation || job && (job.failed || confirmation));
                     var percent = job && job.total ? Math.round(job.done * 100 / job.total) : 0;
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
@@ -273,6 +274,7 @@ function DLTBuildTextAction() {
             if (config.revision !== state.revision) {
                 state.revision = config.revision; restartJob();
                 state.completed = Object.create(null); state.completedOrder = [];
+                state.recent = Object.create(null);
             }
             if (state.autoEnabled !== config.autoEnabled) {
                 state.autoEnabled = config.autoEnabled;
@@ -294,6 +296,16 @@ function DLTBuildTextAction() {
                 batch.push(text); chars += text.length;
             });
             if (batch.length) queue.push({ texts: batch, attempts: 0, after: 0, lookup: !!lookup });
+        }
+        function isTranslation(batch) {
+            return !batch.plan && !batch.lookup;
+        }
+        function rememberComplete(job) {
+            if (!job || !job.fingerprint || job.visibleOnly || !job.finishedAt || job.failed || !job.total || job.done !== job.total) return;
+            // Without a native ID, require the complete visible group structure before restoring a verified plan.
+            if (!job.buildId && (!job.structure.length ||
+                job.planGroups && !containsGroups(job.structure, job.planGroups))) return;
+            state.recent[shop ? 'shop' : 'details'] = job;
         }
         function storeValue(job, text, value) {
             job.values[text] = value;
@@ -437,7 +449,11 @@ function DLTBuildTextAction() {
             var online = !config || config.enabled;
             if (!state.owner || !state.owner.root.IsValid() || !state.owner.visible()) {
                 var owner = state.controls.find(function (item) { return item.root.IsValid() && item.visible(); }) || null;
-                if (owner !== state.owner) { restartJob(); state.owner = owner; }
+                if (owner !== state.owner) {
+                    restartJob();
+                    state.owner = owner;
+                    if (owner) owner.reopening = true;
+                }
             }
             if (state.owner && state.owner.root === root) {
                 var active = state.enabled && online;
@@ -473,6 +489,7 @@ function DLTBuildTextAction() {
                             }).filter(function (group) { return group.name || group.note; });
                             var description = read(1);
                             var structure = groupKeys(groups);
+                            var identity = JSON.stringify([titleKey(build), buildId, normalize(description), structure]);
                             var selection = JSON.stringify([titleKey(build), buildId, selectedRevision, normalize(description)]);
                             var signature = JSON.stringify([selection, structure]);
                             if (signature !== state.signature) {
@@ -482,20 +499,28 @@ function DLTBuildTextAction() {
                                 if (previous && previous.selection === selection && previous.planGroups &&
                                     containsGroups(structure, previous.structure) && containsGroups(previous.planGroups, structure)) {
                                     previous.structure = structure;
+                                    previous.identity = identity;
                                     state.signature = signature;
                                 } else {
                                     restartJob();
                                     state.signature = signature;
-                                    var textSize = 0;
-                                    var visible = [title].concat(distinct(base).filter(function (text) { return text !== title; })).slice(0, 96)
-                                        .filter(function (text) { textSize += text.length; return textSize <= 48000; });
-                                    var groupSize = 0;
-                                    var observed = groups.slice(0, 96).filter(function (group) { groupSize += group.name.length + group.note.length; return groupSize <= 48000; });
-                                    state.job = { context: '', build: build, buildId: buildId, groups: observed, description: description, selection: selection,
-                                        structure: structure, memo: Object.create(null), sourceStatus: '',
-                                        values: Object.create(null), normalized: Object.create(null), normalizedSource: Object.create(null),
-                                        queue: [{ texts: visible, plan: true, attempts: 0, after: 0 }], pending: null,
-                                        refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                                    var recent = state.recent[shop ? 'shop' : 'details'];
+                                    if (state.owner.reopening && recent && recent.identity === identity) {
+                                        state.job = Object.assign({}, recent, { selection: selection, translated: 0,
+                                            cacheHits: Object.keys(recent.values).length });
+                                    } else {
+                                        var textSize = 0;
+                                        var visible = [title].concat(distinct(base).filter(function (text) { return text !== title; })).slice(0, 96)
+                                            .filter(function (text) { textSize += text.length; return textSize <= 48000; });
+                                        var groupSize = 0;
+                                        var observed = groups.slice(0, 96).filter(function (group) { groupSize += group.name.length + group.note.length; return groupSize <= 48000; });
+                                        state.job = { context: '', build: build, buildId: buildId, groups: observed, description: description,
+                                            selection: selection, identity: identity, structure: structure, memo: Object.create(null), sourceStatus: '',
+                                            values: Object.create(null), normalized: Object.create(null), normalizedSource: Object.create(null),
+                                            queue: [{ texts: visible, plan: true, attempts: 0, after: 0 }], pending: null,
+                                            refine: [], refining: false, done: 0, total: 0, failed: 0, cacheHits: 0, translated: 0, finishedAt: 0 };
+                                    }
+                                    state.owner.reopening = false;
                                 }
                             }
                         }
@@ -509,7 +534,10 @@ function DLTBuildTextAction() {
                         if (!item.visible() && !(item.category && attached(item.root, root))) item.render([], null);
                     });
                 }
-                if (active && state.job) advance(state.job, config);
+                if (active && state.job) {
+                    advance(state.job, config);
+                    rememberComplete(state.job);
+                }
                 else if (state.job) restartJob();
                 state.pairs.forEach(function (entry) {
                     if (entry.view.root.IsValid()) entry.view.render(entry.texts, active ? state.job : null);
