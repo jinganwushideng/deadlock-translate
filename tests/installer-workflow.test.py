@@ -32,7 +32,10 @@ class WorkflowTests(unittest.TestCase):
  def call(self,action,**values):
   request=self.root/('request-'+uuid.uuid4().hex+'.json');result=request.with_suffix('.result.json');request.write_text(json.dumps(dict(self.q,action=action,**values)),encoding='utf-8-sig')
   powershell=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
-  p=subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(self.script),'-RequestFile',str(request),'-ResultFile',str(result)],capture_output=True,env=self.env,timeout=45)
+  # Mutating fixtures have multiple PowerShell child processes and can take
+  # longer under parallel load. Do not kill them at the read-only deadline.
+  timeout=120 if action in {'apply','recover','restore-transaction','steam-retry'} else 45
+  p=subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(self.script),'-RequestFile',str(request),'-ResultFile',str(result)],capture_output=True,env=self.env,timeout=timeout)
   self.assertTrue(result.exists(),(p.stdout+p.stderr).decode(errors='replace'));return json.loads(result.read_text(encoding='utf-8-sig'))
  def test_certificate_workflow_without_powershell_on_path(self):
   self.simulate_certificate_gate()
