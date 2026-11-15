@@ -156,8 +156,11 @@ class ArchiveTests(unittest.TestCase):
         self.fixture.state.rename(state)
         self.fixture.state = state
         environment = os.environ.copy()
-        environment.update(LOCALAPPDATA=str(local), TEMP=str(self.temp), TMP=str(self.temp))
-        r = subprocess.run(['cmd.exe', '/d', '/c', str(self.launcher)], input=b'\r\n',
+        empty_path = self.root / 'empty-path'
+        empty_path.mkdir()
+        environment.update(LOCALAPPDATA=str(local), TEMP=str(self.temp), TMP=str(self.temp), PATH=str(empty_path))
+        command = Path(os.environ['SystemRoot']) / 'System32/cmd.exe'
+        r = subprocess.run([str(command), '/d', '/c', str(self.launcher)], input=b'\r\n',
                            env=environment, capture_output=True, timeout=50)
         self.assertEqual(r.returncode, 0, (r.stdout + r.stderr).decode('utf-8', errors='replace'))
         self.assert_updated()

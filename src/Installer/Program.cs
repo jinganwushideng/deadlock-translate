@@ -19,11 +19,21 @@ internal static class Program {
         }
         var shot=Array.IndexOf(args,"--preview");
         if(shot>=0&&shot+1<args.Length){using var preview=new Wizard(preview:true);preview.SavePreview(args[shot+1]);return;}
-        Mutex mutex;try{mutex=new Mutex(false,"Local\\DeadlockTranslate-Setup-"+identity.User?.Value);}catch(UnauthorizedAccessException){MessageBox.Show("另一个权限级别的安装器可能仍在运行，请先关闭它后重试。","同频安装器");return;}
+        var smoke=Array.IndexOf(args,"--startup-check");
+        void ReportBusy(string message){
+            if(smoke>=0&&smoke+1<args.Length){
+                var folder=args[smoke+1];
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder,"startup-check.json"),System.Text.Json.JsonSerializer.Serialize(new{ok=false,error=message,code="installer-active"}));
+                Environment.ExitCode=1;
+                return;
+            }
+            MessageBox.Show(message,"同频安装器");
+        }
+        Mutex mutex;try{mutex=new Mutex(false,"Local\\DeadlockTranslate-Setup-"+identity.User?.Value);}catch(UnauthorizedAccessException){ReportBusy("另一个权限级别的安装器可能仍在运行，请先关闭它后重试。");return;}
         using var mutexScope=mutex;
         var first=false;try{first=mutex.WaitOne(ownerIndex>=0||args.Contains("--wait-previous")?10000:0);}catch(AbandonedMutexException){first=true;}
-        if(!first){MessageBox.Show("已有一个安装器窗口，请先完成或关闭它。","同频安装器");return;}
-        var smoke=Array.IndexOf(args,"--startup-check");
+        if(!first){ReportBusy("已有一个安装器窗口，请先完成或关闭它。");return;}
         var steamIndex=Array.IndexOf(args,"--steam-users");
         string[]? steamIds=null;
         if(steamIndex>=0){

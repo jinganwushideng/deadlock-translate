@@ -1,5 +1,6 @@
 """Exercise abandoned installer transactions in isolated game and Steam fixtures."""
 import importlib.util
+import ctypes
 import json
 from pathlib import Path
 import subprocess
@@ -41,6 +42,25 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(json.loads((self.folder/'transaction.json').read_text())['phase'], 'complete')
         self.assertFalse((self.folder/'payload').exists())
         self.assertEqual(self.f.target.read_bytes(),self.f.vpk)
+
+    def test_second_operation_cannot_write_while_install_lock_is_held(self):
+        lock = self.f.state/'installation-operation.lock'
+        create = ctypes.windll.kernel32.CreateFileW
+        create.restype = ctypes.c_void_p
+        create.argtypes = [ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p]
+        handle = create(str(lock), 0xC0000000, 0, None, 4, 0, None)
+        self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+        try:
+            result = self.f.call('apply', transactionId=self.transaction)
+            self.assertFalse(result['ok'], result)
+            self.assertEqual(result['failure']['code'], 'operation-active')
+            self.assertFalse(self.f.target.exists())
+            self.assertFalse(self.folder.exists())
+        finally:
+            ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(handle))
+        reply = self.f.call('apply', transactionId=self.transaction)
+        self.assertTrue(reply['ok'], reply)
+        self.assertEqual(self.f.target.read_bytes(), self.f.vpk)
 
     def test_process_exit_after_record_and_vpk_can_restore(self):
         gameinfo = self.f.game / 'game/citadel/gameinfo.gi'

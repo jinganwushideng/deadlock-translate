@@ -116,6 +116,16 @@ if($RemoveTrust){[IO.File]::Delete($marker)}else{[IO.File]::WriteAllText($marker
   (self.payload/'package-manifest.json').write_text(json.dumps(dict(version='9.9.9',files=entries)))
  def test_full_fresh_install_with_simulated_certificate_gate(self):
   self.simulate_certificate_gate();r=self.call('apply');self.assertTrue(r['ok'],r);self.assertTrue(r['data']['coreDone']);self.assertEqual(self.target.read_bytes(),self.vpk);self.assertEqual((self.runtime/'DeadlockTranslate.exe').read_bytes(),b'never executed');self.assertTrue((self.state/'install-manifest.json').exists())
+ def test_legacy_install_with_literal_payload_path_and_empty_path(self):
+  self.simulate_certificate_gate()
+  payload=self.payload.with_name("离线 [安装] & '包")
+  self.payload.rename(payload)
+  self.q['payload']=str(payload)
+  self.env['PATH']=str(self.root)
+  result=self.call('apply')
+  self.assertTrue(result['ok'],result)
+  self.assertEqual(self.target.read_bytes(),self.vpk)
+  self.assertEqual((self.runtime/'DeadlockTranslate.exe').read_bytes(),b'never executed')
  def test_full_update_with_simulated_certificate_gate(self):
   self.installed();self.simulate_certificate_gate();(self.state/'settings.json').write_text('KEEP');r=self.call('apply');self.assertTrue(r['ok'],r);self.assertEqual((self.runtime/'DeadlockTranslate.exe').read_bytes(),b'never executed');self.assertEqual((self.state/'settings.json').read_text(),'KEEP')
  def test_failed_install_restores_selected_conflict(self):

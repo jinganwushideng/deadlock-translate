@@ -739,7 +739,11 @@ try{
                             }
                         }else{
                         $stage=$runtime+'.dlt-stage-'+[Guid]::NewGuid().ToString('N');NoLinks $stage
-                        Emit '正在复制完整程序并安装游戏 Mod…';New-Item -ItemType Directory -Force -Path $stage|Out-Null;Copy-Item -Path (Join-Path $payload '*') -Destination $stage -Recurse
+                        Emit '正在复制完整程序并安装游戏 Mod…'
+                        [IO.Directory]::CreateDirectory($stage)|Out-Null
+                        foreach($item in Get-ChildItem -LiteralPath $payload -Force){
+                            Copy-Item -LiteralPath $item.FullName -Destination $stage -Recurse -Force
+                        }
                         if(Test-Path -LiteralPath $runtime){[IO.Directory]::Delete($runtime,$false)}
                         Move-DltStagedDirectory $stage $runtime;$installedNow=$true
                         }
