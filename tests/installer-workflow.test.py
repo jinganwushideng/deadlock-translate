@@ -31,8 +31,37 @@ class WorkflowTests(unittest.TestCase):
   self.script=ROOT/'scripts/Installer-Workflow.ps1'
  def call(self,action,**values):
   request=self.root/('request-'+uuid.uuid4().hex+'.json');result=request.with_suffix('.result.json');request.write_text(json.dumps(dict(self.q,action=action,**values)),encoding='utf-8-sig')
-  p=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(self.script),'-RequestFile',str(request),'-ResultFile',str(result)],capture_output=True,env=self.env,timeout=45)
+  powershell=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+  p=subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(self.script),'-RequestFile',str(request),'-ResultFile',str(result)],capture_output=True,env=self.env,timeout=45)
   self.assertTrue(result.exists(),(p.stdout+p.stderr).decode(errors='replace'));return json.loads(result.read_text(encoding='utf-8-sig'))
+ def test_certificate_workflow_without_powershell_on_path(self):
+  self.simulate_certificate_gate()
+  self.env['PATH']=str(self.root)
+  workflow=self.script.read_text(encoding='utf-8-sig')
+  start=workflow.index('function CertStatus {')
+  end=workflow.index('\n',start)
+  workflow=workflow[:start]+'''function CertStatus { return @{ready=(Test-Path -LiteralPath (Join-Path $state 'fixture-trusted'));state='fixture'} }
+function Get-Process {
+ if($Name -and -not @($Name -split ',' | Where-Object {$_ -notin @('deadlock','citadel','DeadlockTranslate')}).Count){return}
+}'''+workflow[end:]
+  self.script.write_text(workflow,encoding='utf-8-sig')
+  trust=self.script.parent/'Trust-Local-Https.ps1'
+  trust.write_text("""param([string]$StateDirectory,[string]$RuntimeFolder,[switch]$ConfirmTrust,[switch]$Renew,[switch]$RemoveTrust)
+$ErrorActionPreference='Stop'
+if(-not $ConfirmTrust){throw 'Confirmation flag was not forwarded'}
+$marker=Join-Path $StateDirectory 'fixture-trusted'
+if($RemoveTrust){[IO.File]::Delete($marker)}else{[IO.File]::WriteAllText($marker,([string]$Renew.IsPresent))}
+""",encoding='utf-8-sig')
+  r=self.call('certificate')
+  self.assertTrue(r['ok'],r)
+  marker=self.state/'fixture-trusted'
+  self.assertEqual(marker.read_text(),'False')
+  r=self.call('certificate',renew=True)
+  self.assertTrue(r['ok'],r)
+  self.assertEqual(marker.read_text(),'True')
+  r=self.call('remove-certificate')
+  self.assertTrue(r['ok'],r)
+  self.assertFalse(marker.exists())
  def test_inspect_and_health_skip_disconnected_steam_library(self):
   drives=ctypes.windll.kernel32.GetLogicalDrives()
   letter=next((chr(ord('A')+i) for i in range(25,2,-1) if not drives & (1 << i)),None)

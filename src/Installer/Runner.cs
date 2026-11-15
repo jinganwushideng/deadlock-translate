@@ -19,6 +19,10 @@ public sealed class Runner(Package package,Action<string> progress,InstallerAudi
         audit?.Record("step-start",new{action,game=request.GetValueOrDefault("game"),runtime=request.GetValueOrDefault("runtime"),mode=request.GetValueOrDefault("mode")});
         await File.WriteAllTextAsync(input,JsonSerializer.Serialize(request),new UTF8Encoding(true),ct);
         var powershell=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),@"System32\WindowsPowerShell\v1.0\powershell.exe");
+        if(!File.Exists(powershell)){
+            audit?.Record("step-start-failed",new{action,type="WindowsPowerShellMissing",nativeError=2});
+            throw new IOException("找不到 Windows 自带的 Windows PowerShell。请恢复系统的 Windows PowerShell 组件后重试。");
+        }
         var info=new ProcessStartInfo(powershell){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8,WorkingDirectory=package.Scripts};
         info.Environment["DLT_INSTALL_CANCEL"]=signal;
         info.Environment["DLT_INSTALL_PROGRESS"]=progressFile;

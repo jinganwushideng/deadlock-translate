@@ -13,7 +13,8 @@ function Full([string]$p){[IO.Path]::GetFullPath($p).TrimEnd('\','/')}
 function NoLinks([string]$p){for($v=[IO.Path]::GetFullPath($p);$v;$v=[IO.Path]::GetDirectoryName($v)){if((Test-Path -LiteralPath $v) -and ((Get-Item -LiteralPath $v -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw '路径包含链接，请选择普通目录。'}}}
 function Hash([string]$p){(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()}
 function Emit([string]$s){Send-DltJournalProgress $s;Write-Output ($s|ConvertTo-Json -Compress)}
-function Run([string]$script,[string[]]$arguments){
+function Run([string]$script,[string[]]$arguments,[string]$stage){
+    if(-not $stage){$stage='script-'+$script.Replace('.ps1','')}
     $failureFile=Join-Path ([IO.Path]::GetDirectoryName($ResultFile)) ('failure-'+[Guid]::NewGuid().ToString('N')+'.json')
     if($script -in @('Manage-Mod.ps1','Update-Mod.ps1','Configure-Steam.ps1')){$arguments+=@('-ErrorResultFile',$failureFile);if($script -in @('Manage-Mod.ps1','Update-Mod.ps1')){$arguments+=@('-TraceFile',$script:DltTraceFile)}}
     if($script -in @('Manage-Mod.ps1','Update-Mod.ps1') -and $q.allowReadOnlyGameinfo){$arguments+='-AllowReadOnlyGameinfo'}
@@ -30,7 +31,7 @@ function Run([string]$script,[string[]]$arguments){
         $category='child-no-result';$text=($out|Out-String)
         if($text -match 'ParserError|ParseException'){$category='child-parser'}elseif($text -match 'PSSecurityException|UnauthorizedAccess|AccessDenied'){$category='child-access'}elseif($text -match 'ModuleNotFound|Modules_ModuleNotFound'){$category='child-module'}elseif($text -match 'CommandNotFoundException'){$category='child-command'}
         Write-DltInstallTrace 'child-process' $script ($category+':exit='+$childExit)
-        Throw-DltFault $category ('script-'+$script.Replace('.ps1','')) '' ($script+' 未完成，退出码 '+$childExit+'；错误类别 '+$category+'。') '请重试本步骤或导出日志；已保留脚本阶段和退出码，不需要删除配置或证书。'
+        Throw-DltFault $category $stage '' ($script+' 未完成，退出码 '+$childExit+'；错误类别 '+$category+'。') '请重试本步骤或导出日志；已保留脚本阶段和退出码，不需要删除配置或证书。'
     }
 }
 function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
@@ -602,17 +603,14 @@ try{
             $info=CertStatus
             if($info.ready -and -not $q.renew){$result=$info;break}
             Emit '正在准备证书；Windows 信任弹窗需要你亲自确认。'
-            # This script uses its own directory for the verified backend executable.
-            $trust=Join-Path $PSScriptRoot 'Trust-Local-Https.ps1'
             $a=@('-RuntimeFolder',$payload,'-StateDirectory',$state,'-ConfirmTrust');if($q.renew){$a+='-Renew'}
-            $output=& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $trust @a 2>&1
-            if($LASTEXITCODE -ne 0){throw '证书没有准备完成或信任被取消。请使用原 Windows 用户重试。'}
+            Run 'Trust-Local-Https.ps1' $a 'certificate'
             $result=CertStatus;if(-not $result.ready){throw '尚未确认有效证书信任，安装没有继续。'}
         }
         'remove-certificate'{
             if(Get-Process -Name deadlock,citadel,DeadlockTranslate -ErrorAction SilentlyContinue){throw '请先退出游戏并停止翻译后台，再撤销证书信任。'}
             Emit '等待 Windows 确认撤销当前用户的本程序证书信任…'
-            Run 'Trust-Local-Https.ps1' @('-RuntimeFolder',$payload,'-StateDirectory',$state,'-RemoveTrust','-ConfirmTrust')
+            Run 'Trust-Local-Https.ps1' @('-RuntimeFolder',$payload,'-StateDirectory',$state,'-RemoveTrust','-ConfirmTrust') 'remove-certificate'
             $result=CertStatus
         }
         'plan'{
@@ -769,7 +767,11 @@ try{
                         NoLinks $c.original;NoLinks $c.disabled
                         if((Test-Path -LiteralPath $c.disabled) -and -not(Test-Path -LiteralPath $c.original) -and (Hash $c.disabled) -eq $c.hash){Move-DltTrackedFile $c.disabled $c.original 'restore-conflicting-mod'}else{$warnings+='冲突备份已有变动或原路径被占用，未覆盖。'}
                     }}
-                    if($q.removeCertificate){Emit '等待 Windows 确认移除本程序证书信任…';$output=& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Trust-Local-Https.ps1') -RuntimeFolder $runtime -StateDirectory $state -RemoveTrust -ConfirmTrust 2>&1;if($LASTEXITCODE){$warnings+='证书信任未移除；可稍后使用原程序的证书脚本重试。'}}
+                    if($q.removeCertificate){
+                        Emit '等待 Windows 确认移除本程序证书信任…'
+                        try{Run 'Trust-Local-Https.ps1' @('-RuntimeFolder',$runtime,'-StateDirectory',$state,'-RemoveTrust','-ConfirmTrust') 'remove-certificate'}
+                        catch{$warnings+='证书信任未移除；可稍后使用原程序的证书脚本重试。'}
+                    }
                     # Runtime files are retained intentionally so repair, diagnostics and rollback remain available.
                     if($q.removeRuntime){try{$warnings+=RemoveOwnedRuntime $runtime $backup}catch{$warnings+='程序清理未全部完成；已移除文件有备份，剩余文件保留。'}}else{$warnings+='程序文件和个人设置已保留；游戏 Mod 已卸载。可从完成页打开原目录。'}
 

@@ -36,7 +36,7 @@ def build(destination):
     command = r'''@echo off
 setlocal
 set "DLT_UPDATE_SELF=%~f0"
-powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -Command "$s=[IO.File]::ReadAllText($env:DLT_UPDATE_SELF);$m=[regex]::Match($s,'(?m)^:DLT_PAYLOAD\r?\n([A-Za-z0-9+/=]+)\s*$');if(-not $m.Success){throw 'Updater payload missing'};$b=[scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($m.Groups[1].Value)));& $b -DownloadFolder ([IO.Path]::GetDirectoryName($env:DLT_UPDATE_SELF))"
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -ExecutionPolicy Bypass -Command "$s=[IO.File]::ReadAllText($env:DLT_UPDATE_SELF);$m=[regex]::Match($s,'(?m)^:DLT_PAYLOAD\r?\n([A-Za-z0-9+/=]+)\s*$');if(-not $m.Success){throw 'Updater payload missing'};$b=[scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($m.Groups[1].Value)));& $b -DownloadFolder ([IO.Path]::GetDirectoryName($env:DLT_UPDATE_SELF))"
 set "DLT_UPDATE_EXIT=%ERRORLEVEL%"
 pause
 exit /b %DLT_UPDATE_EXIT%
