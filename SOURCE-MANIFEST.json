@@ -269,11 +269,11 @@
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
-      "sha256": "f7326ac08b148bf4ac08eab563a7913a48f0b02c540f7621c7a6596f015e1f0e"
+      "sha256": "211aeea859d78c4f0b7d54e682cd9fddd02ac77277fe8e24d016b81b84d14f7d"
     },
     {
       "file": "scripts/build.ps1",
-      "sha256": "4c26071953335751fc4d4acb9297c519c969f4f2345bd29ca1edd6779289e2c4"
+      "sha256": "3e12255acbe1698426cf3691d7b05943b407da00ab208e2303e2d243fa054dfd"
     },
     {
       "file": "scripts/build_external_updater.py",
@@ -301,11 +301,11 @@
     },
     {
       "file": "scripts/Configure-Steam.ps1",
-      "sha256": "99901dab3402a61ccca7dad66211724cd8f128d3f2f140c7c9a1e78fbcdc46d0"
+      "sha256": "5b7d82f469cfeb6d24789ec9178dec5dc252b988cde063b9ff8ae9dd1e26beea"
     },
     {
       "file": "scripts/Export-Diagnostics.cmd",
-      "sha256": "dc6a891ceea1e8d64929f28adcf29994882b25da81477c1e39438f74dd2ab793"
+      "sha256": "7fb82c0c9b8f1c8048ce1d14a449ebf694dfe7a7ceceb54ded6d293aa6bf3725"
     },
     {
       "file": "scripts/export_source.py",
@@ -313,39 +313,39 @@
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
-      "sha256": "b1ff8a168a2594f891862d3ee94eb43a93790677041c2ec85cd011fd8b0d2db8"
+      "sha256": "740accf8eaf011db70d8c13e4257117af74e1befef95606a385c426b1e163d78"
     },
     {
       "file": "scripts/Game-SearchPaths.ps1",
-      "sha256": "f6898dc1003dc6ffdc87350fe5451f61d22c4223998843831bc552c8e01a9dea"
+      "sha256": "974da059a522aaf9a0c193694b33915eeca4717f1ebaf06c0ddfbafa292f5703"
     },
     {
       "file": "scripts/Install-Safety.ps1",
-      "sha256": "a852509c24895c87c02fcdd38561b0dbcd6f11aca9ec231b9de03458b244f7bb"
+      "sha256": "c3bfe53fe722ee308b76f7ff2c233b25132311ee554baf6a65377ec1aa9a17b4"
     },
     {
       "file": "scripts/Install.cmd",
-      "sha256": "b7540409851ada6cb08e36ac544e60f5345455ad4a678fae6a9a87d3d4074502"
+      "sha256": "5e65591f5ce30d76dccfea2163cf11ffc338049d5a26ff3f43cb324b31c1caa4"
     },
     {
       "file": "scripts/Installer-Transaction.ps1",
-      "sha256": "22db3b8c992d6d5d5b8db04f766ab7da93dc96cb2cc32a2f561981d4a7147d89"
+      "sha256": "be15515ff1d466dea8e3f89b904f9753ac93429c6215d61fe537f898cb78ec2c"
     },
     {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "704e6d56589eb2bdb69867f78711d7c63e78dadf50673865e3d02b14baed8990"
+      "sha256": "9c4884339501618c7d5612187e5c0cbabc44449c2ee7505a61d628a256624fe1"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
-      "sha256": "8ee80033acb1c6a159ae0b79220c496e8e48358deb5fb46dcf0ef7eb0acf644b"
+      "sha256": "ab822c4afabd188a5eda05f653f5b044a98061baeb7caf061bad2746b73e1e62"
     },
     {
       "file": "scripts/Launch.cmd",
-      "sha256": "e08e0547284ac6375f4688dd7402c9b122bb21af5b4e6ca2ca096abe79828767"
+      "sha256": "5763ca3a06606d227e5668243ea0e4eca108ccecafa17ef2055c97b232407af6"
     },
     {
       "file": "scripts/Manage-Mod.ps1",
-      "sha256": "ebadb44aafb9d17e4af0c599336cfa447eff14386c5fd04fe399f453ec05d0a7"
+      "sha256": "721db16a75d391eabf68bdd452051d45a9f9b903881cb311b82b0c20d0da8d7a"
     },
     {
       "file": "scripts/merge_term_defaults.py",
@@ -373,15 +373,15 @@
     },
     {
       "file": "scripts/Renew-Local-Https.cmd",
-      "sha256": "f6815360c826ec3f065f7fa5f34012ff7c0a93e12aa335bd4a7e353d37437cd0"
+      "sha256": "9e7d1252e02ceb5ae3cdafa203a8195d9bd8116c72159df85ea3c3fc63c68dd5"
     },
     {
       "file": "scripts/Repair-GameConfig.cmd",
-      "sha256": "79fcc58ef7016de07f7043c458ad8431733e9cd559775c4ff36dd0742f1ae21c"
+      "sha256": "da3bbf928d5601a07b0a5b3d855826672375edfb38bceb64ee19fc263fafa530"
     },
     {
       "file": "scripts/Settings.cmd",
-      "sha256": "cffce76fde0502388915e88da3d0947932964a4ffbfafcb06084167db6c08a03"
+      "sha256": "c66c30ca8a48c59ad651a4a907154e13470268209991284e878da6a361c57877"
     },
     {
       "file": "scripts/steam_launch_options.py",
@@ -393,27 +393,27 @@
     },
     {
       "file": "scripts/Trust-Local-Https.cmd",
-      "sha256": "2a53eab1bb6997e219331dc28b9d7a7729877ecc52209bd938c87a7308afc27a"
+      "sha256": "967b9fffb74e0fa2e4fca625143784cc99bd7cd7e5c3e886bc8cc0104949ca69"
     },
     {
       "file": "scripts/Trust-Local-Https.ps1",
-      "sha256": "ee9706b49d13d047986876df2c5a81c9f00684499f2fc103d466988c8ade0a10"
+      "sha256": "ec40dd4f6e7afcbc146bba380a072fa01ee6aef50d8616058d8f69b48421a2d4"
     },
     {
       "file": "scripts/Uninstall.cmd",
-      "sha256": "1b3399e067055ff75dbfadfcb570bc30d220f3226fc34712464de06ef022c160"
+      "sha256": "c22fd869ca6f77dd4152e6825c7e786e8094b1ed5fd971d2f8b387210dc669c4"
     },
     {
       "file": "scripts/Update-Archive.ps1",
-      "sha256": "b55d9f3e3169cde0f85e8a3b956bc7db3849ac64c9e2a1cb8c44c3b7a3ed9d9e"
+      "sha256": "7948dbd56bfcb11211189fc27090e645670c942b6ea8351d8fa5bd0fe5c1a194"
     },
     {
       "file": "scripts/Update-Mod.ps1",
-      "sha256": "152b3ebe644579590e42fe8425f322ffe84391eea11bb992916823d13e5d8434"
+      "sha256": "9142dabb23546c3ba19f4ccbd8fad8148b1ad1731b4c30597967e6eed4e8df60"
     },
     {
       "file": "scripts/Vpk-Recovery.ps1",
-      "sha256": "c1f1c264040936fe3f195a5a570a6265b2e0d3e564bcc355239a046192e2df1a"
+      "sha256": "9b476c363b3bb54f6715cc6e3288c8896485c9f547bd1777cdf3b1c6414fb1d9"
     },
     {
       "file": "scripts/vpk.py",
@@ -1021,11 +1021,11 @@
     },
     {
       "file": "tests/game-location.test.ps1",
-      "sha256": "1d57c28b41e6c15c7617b4db4874b57252943facb94efa5ea1baea2ac0907f43"
+      "sha256": "9190805233fb1b31c1aaa1c88f8c73753da2e74f39bf981e38c1cf5ee0cedddb"
     },
     {
       "file": "tests/game-searchpaths.test.ps1",
-      "sha256": "65d454323d91dd91752b85d655ba51446a24971683a5e1627a3a0e1f7128cc98"
+      "sha256": "dd1f20246b9978eb89a33651b237b5fd7f6426354e079081ea6eb9d31c2060d8"
     },
     {
       "file": "tests/game-window.test.cjs",
@@ -1089,7 +1089,7 @@
     },
     {
       "file": "tests/install-safety.test.ps1",
-      "sha256": "5815ede17d9608c33cbe9319769cced929158108c4dd0d98846d15c912ed3d6f"
+      "sha256": "6f2d807281d07f5610177f8a7660148abcd690d86bd8c943dcfd58b4d9be082f"
     },
     {
       "file": "tests/installer-migration.test.py",
@@ -1113,7 +1113,7 @@
     },
     {
       "file": "tests/installer.test.ps1",
-      "sha256": "e45fb5774b00ba760a3765c8cb28e5578dafa3847e614909d44247b6dcbb9ba2"
+      "sha256": "1cfd8bc43003412ce564aa9f532f597999e701290e73687bc323e5bd4c69432c"
     },
     {
       "file": "tests/InstallerTests/InstallerTests.csproj",
@@ -1249,7 +1249,7 @@
     },
     {
       "file": "tests/native-vpk-identity.test.ps1",
-      "sha256": "e969f42bbc179124d86c4aef16857f4e1929af0e137fdd5f4699e060eefc9512"
+      "sha256": "2ba1cc6cb37fe68f74fd3add72f638bad5c563a1586351a79a863a8ae65708c8"
     },
     {
       "file": "tests/NativeEditorTests/NativeEditorTests.csproj",
