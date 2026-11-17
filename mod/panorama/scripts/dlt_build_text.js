@@ -253,7 +253,7 @@ function DLTChineseBuildTitle(title) {
             var status = progress.FindChildTraverse('DltBuildProgressText');
             var count = progress.FindChildTraverse('DltBuildProgressCount');
             var control = {
-                root: root, visible: function () { return eligibleController() && isVisible(); }, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
+                root: root, progress: progress, visible: function () { return eligibleController() && isVisible(); }, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
                 status: function (job, online) {
                     var running = !!(job && (job.bg ? !job.finishedAt : job.pending || job.queue.length));

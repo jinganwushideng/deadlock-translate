@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-3e4dade580bf';
+var BUILD_ID = '0.7.5-9a2cf7118d8b';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -350,6 +350,28 @@ var DLTChatInputChanged = function () {};
             return valid(state.input) && (has(context, 'ChatExpanded') || has(state.rootChat, 'ChatExpanded') || !!(state.input.BHasKeyFocus && state.input.BHasKeyFocus()));
         } catch (_) { return false; }
     }
+    function buildNoticeVisible() {
+        var surfaces = [ROOT.__dltBuildText, ROOT.__dltBuildPreview];
+        for (var i = 0; i < surfaces.length; i++) {
+            var owner = surfaces[i] && surfaces[i].owner;
+            if (owner && valid(owner.root) && valid(owner.progress) && owner.progress.visible === true &&
+                owner.visible() && !displayHidden(owner.progress)) return true;
+        }
+        return false;
+    }
+    function maintainLocalToast() {
+        var panel = state.localToast, layer = state.localToastLayer;
+        if (!valid(panel) || !valid(layer) || panel.visible === false) return;
+        var now = Date.now(), blocked = buildNoticeVisible();
+        var elapsed = Math.max(0, now - (state.toastCheckedAt || now));
+        state.toastCheckedAt = now;
+        if (blocked && panel.visible) {
+            state.toastUntil += elapsed;
+            if (state.expenseToast) state.expenseToast.until += elapsed;
+        }
+        layer.visible = !blocked;
+        if (now >= state.toastUntil) panel.visible = false;
+    }
     function showLocalToast(message, details) {
         var panel = state.localToast;
         if (!valid(panel)) {
@@ -391,6 +413,8 @@ var DLTChatInputChanged = function () {};
         }
         panel.visible = true;
         state.toastUntil = Date.now() + (details ? 4000 : 2400);
+        state.toastCheckedAt = Date.now();
+        maintainLocalToast();
         return true;
     }
     function showExpense(data) {
@@ -2283,7 +2307,7 @@ var DLTChatInputChanged = function () {};
                 }); state.nextScan = started + state.config.scanIntervalMs;
             }
             // A chord whose chat box was not open yet is retried here until its window expires.
-            if (valid(state.localToast) && Date.now() >= state.toastUntil) state.localToast.visible = false;
+            maintainLocalToast();
             if (inputOpen()) rememberDraft();
             else if (state.liveDraft && state.liveDraft.value) rememberDraft('closed');
             if (state.pendingHotkey) captureOutgoing();

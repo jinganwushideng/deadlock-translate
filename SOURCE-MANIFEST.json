@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-3e4dade580bf",
+  "buildId": "0.7.5-9a2cf7118d8b",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "ecc0248abe62e0282ab6d50bc854b09170c4322bed755d977d68e3baeb727331"
+      "sha256": "2a140af5d9004a15799ca1e533c5cd66a3711bab45c8db2958653e9b0331ecb8"
     },
     {
       "file": "CHANGELOG.md",
@@ -225,7 +225,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_build_text.js",
-      "sha256": "9f65ab3e95bb242605656d335fb9ca80c7e5fa1a5910257f494c85906f1c2097"
+      "sha256": "78c505062e15e9b3d9d8007f45f5c1e6d1092c18f29cd81df49ab0d16cf440e0"
     },
     {
       "file": "mod/panorama/scripts/dlt_build_transport.js",
@@ -233,7 +233,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "8a7d28e4a6049b8d3a042af039617adc5b8fed1143e94580b3e21b0dc5d5f096"
+      "sha256": "98307905d9e0bf54ec1c9901cfdb69e91c61b124f15cbe874c02e799efa07c45"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -453,7 +453,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "72e5609a8534639bf8eda5132eb193da51ba198017e7694b7101ac611190bb4c"
+      "sha256": "fcd89df9acfde624d47b9fd68bb63a85652a4ecde9bb7c35a9b05592211a9e9c"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -1517,7 +1517,7 @@
     },
     {
       "file": "tests/translation-toast.test.cjs",
-      "sha256": "9ab492c37fe713ccf5386b41d8a8eb6f768a4719cac24207b1ae710ca4b2722c"
+      "sha256": "3b555711300099c288d11e9c5b43d7455084af216567d95b270e1689cbc9cb61"
     },
     {
       "file": "tests/ui-visual.cjs",
