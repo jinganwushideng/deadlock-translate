@@ -192,7 +192,7 @@ public sealed partial class Translators {
         var prompt=BuildTextLanguage.Prompt+(protectNames?"\nOn this retry, keep each DLTERM placeholder exactly where its name belongs. Do not translate a placeholder, replace it with a name or omit it.":"");
         var epoch=Interlocked.Read(ref qualityEpoch);
         var previous=providerIssues.GetValueOrDefault("llm");
-        var trace=Telemetry.Begin(settings,false,0);
+        var trace=Telemetry.Begin(settings,false,0,category:"build");
         TouchModel(settings.Model);
         try{
             using var request=new HttpRequestMessage(HttpMethod.Post,ApiConfigurationDiagnostics.ChatEndpoint(settings.LlmBaseUrl));

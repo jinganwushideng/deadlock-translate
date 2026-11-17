@@ -44,11 +44,11 @@ public sealed partial class Translators : ILlmKeepAliveProvider {
             var cts=CancellationTokenSource.CreateLinkedTokenSource(cancellation);cts.CancelAfter(TimeSpan.FromSeconds(10));
             flight=new(cts,lease);warmFlight=flight;
         }
-        var attempted=false;
+        var attempted=false;string? key=null;Uri? endpoint=null;DeepSeekTokens tokens=new(null,null,null,null,null);
         try{
             flight.Cancellation.Token.ThrowIfCancellationRequested();
             using var request=new HttpRequestMessage(HttpMethod.Post,ApiConfigurationDiagnostics.ChatEndpoint(settings.LlmBaseUrl));
-            request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",store.LlmSecretFor(settings));
+            key=store.LlmSecretFor(settings);endpoint=request.RequestUri;request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",key);
             var body=new Dictionary<string,object>{["model"]=model,["stream"]=false,["max_tokens"]=16,["messages"]=new[]{new{role="user",content="Reply only OK."}}};
             // Maintenance is not a translation: do not spend the user's reasoning budget on ping.
             // Actual receive/send requests retain their independently configured thinking settings.
@@ -62,11 +62,12 @@ public sealed partial class Translators : ILlmKeepAliveProvider {
             }
             await response.Content.LoadIntoBufferAsync(65536,flight.Cancellation.Token).ConfigureAwait(false);
             using var json=JsonDocument.Parse(await response.Content.ReadAsStringAsync(flight.Cancellation.Token));
+            if(json.RootElement.ValueKind==JsonValueKind.Object)tokens=ChatCompletionReader.ReadTokens(json.RootElement);
             if(json.RootElement.ValueKind!=JsonValueKind.Object||!json.RootElement.TryGetProperty("choices",out var choices)||choices.ValueKind!=JsonValueKind.Array||choices.GetArrayLength()==0)return new("failed",LogReason.InvalidData,status,Attempted:true,ElapsedMs:timer.ElapsedMilliseconds);
             return new("succeeded",HttpStatus:status,Attempted:true,ElapsedMs:timer.ElapsedMilliseconds);
         }catch(OperationCanceledException){return new(cancellation.IsCancellationRequested?"cancelled":flight.Preempted?"interrupted":"failed",flight.Preempted?LogReason.None:LogReason.Timeout,Attempted:attempted,ElapsedMs:timer.ElapsedMilliseconds);}
         catch(InvalidOperationException){return new("configuration-changed",LogReason.InvalidData,Attempted:attempted,ElapsedMs:timer.ElapsedMilliseconds);}
         catch(Exception ex)when(ex is HttpRequestException or IOException or JsonException or ArgumentException){return new("failed",LogReason.Network,Attempted:attempted,ElapsedMs:timer.ElapsedMilliseconds);}
-        finally{lock(warmGate){if(ReferenceEquals(warmFlight,flight))warmFlight=null;flight.Lease.Dispose();}flight.Cancellation.Dispose();}
+        finally{if(attempted)Spend.Record(Guid.NewGuid().ToString("N"),"keepalive",model,endpoint,key,tokens);lock(warmGate){if(ReferenceEquals(warmFlight,flight))warmFlight=null;flight.Lease.Dispose();}flight.Cancellation.Dispose();}
     }
 }

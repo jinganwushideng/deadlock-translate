@@ -10,10 +10,11 @@ public sealed class NativeHotkey : IDisposable {
     private readonly Thread thread;private readonly HookProc callback;private readonly Timer foregroundTimer;
     private readonly HotkeyState keys=new();
     private readonly QuickMessageHotkeys quick=new();
+    public OutgoingLanguageHotkeys Languages {get;}=new();
     private readonly HotkeyNoiseSummary noise=new();
     private readonly HotkeyRecorder recorder;
     private volatile bool settingsOpen;private long lastSettingsSeen;
-    private HotkeyChord binding;private volatile bool outgoingEnabled,chatOpen,stopping;
+    private HotkeyChord binding;private volatile bool outgoingEnabled,chatOpen,stopping,versionedCapture;
     private IntPtr hook;private uint threadId;private long lastSeen,sequence,triggerAt,acknowledged,ackTimeouts,rejected,reinitialized,testDetected,testUntil,lastRejectedAt,foregroundAt;
     private long lastTimedOut;private int installError,foregroundBusy,reinitializePending;
     private volatile uint foregroundPid;private volatile bool foregroundGame,foregroundBrowser;private bool? gameElevated,gameSameUser;private readonly bool? backendElevated;
@@ -22,15 +23,15 @@ public sealed class NativeHotkey : IDisposable {
     public NativeHotkey(ConfigStore config,DiagnosticLog? log=null){
         this.config=config;this.log=log;binding=HotkeyChord.Parse(config.Current.OutgoingHotkey);outgoingEnabled=config.Current.OutgoingEnabled;backendElevated=Elevated((uint)Environment.ProcessId);
         recorder=new(view=>log?.Record("hotkey",LogKind.HotkeyRecordingFinished,new(Stage:"recording",Reason:view.State=="expired"?LogReason.Timeout:view.State=="failed"?LogReason.Other:LogReason.None,Binding:view.State=="completed"?view.Binding:null,Flag:view.State=="completed")));
-        quick.Configure(config.Current);registeredSettings=config.Current;callback=Handle;config.Changed+=Configure;thread=new Thread(Run){IsBackground=true,Name="DLT hotkey",Priority=ThreadPriority.AboveNormal};
+        Languages.Configure(config.Current);quick.Configure(config.Current);registeredSettings=config.Current;callback=Handle;config.Changed+=Configure;thread=new Thread(Run){IsBackground=true,Name="DLT hotkey",Priority=ThreadPriority.AboveNormal};
         foregroundTimer=new(_=>SampleForeground(),null,0,500);thread.Start();
     }
     private Settings? registeredSettings;
     private readonly object configurationGate=new();
-    private void Configure(){lock(configurationGate){var settings=config.Current;var old=registeredSettings;
+    private void Configure(){lock(configurationGate){var settings=config.Current;var old=registeredSettings;Languages.Configure(settings);
         if(old!=null&&old.OutgoingHotkey==settings.OutgoingHotkey&&old.OutgoingEnabled==settings.OutgoingEnabled&&old.QuickMessages.SequenceEqual(settings.QuickMessages))return;
         registeredSettings=settings;Volatile.Write(ref binding,HotkeyChord.Parse(settings.OutgoingHotkey));outgoingEnabled=settings.OutgoingEnabled;quick.Configure(settings);Reinitialize();}}
-    public void UpdateQuickSession(string session,bool compatible,string channel)=>quick.Session(session,compatible,channel);
+    public void UpdateQuickSession(string session,bool compatible,string channel){quick.Session(session,compatible,channel);Languages.Session(session);versionedCapture=compatible;}
     public QuickMessage[] TakeQuickMessages(string session)=>quick.Take(session,Environment.TickCount64);
     public void UpdateFocus(bool open){var previous=chatOpen;chatOpen=open;Interlocked.Exchange(ref lastSeen,Environment.TickCount64);if(open&&!previous)Reinitialize();}
     public static bool AllowsCapture(bool outgoingEnabled,bool chatOpen,long now,long lastSeen)=>outgoingEnabled&&chatOpen&&lastSeen>0&&now>=lastSeen&&now-lastSeen<5000;
@@ -40,7 +41,7 @@ public sealed class NativeHotkey : IDisposable {
     private bool SettingsFresh(long now)=>settingsOpen&&now-Interlocked.Read(ref lastSettingsSeen)<1500;
     public HotkeyRecordingView BeginRecording(bool inGame){
         if(!Available)throw new InvalidOperationException("快捷键监听未启用，请重建监听，或使用下方按键选项。");
-        if(ReadModifiers()!=0||recorder.HasSuppressedKeys||quick.HasSuppressedKey)throw new InvalidOperationException("请先松开所有按键，再点击录制。");
+        if(ReadModifiers()!=0||recorder.HasSuppressedKeys||quick.HasSuppressedKey||Languages.HasSuppressedKey)throw new InvalidOperationException("请先松开所有按键，再点击录制。");
         var window=GetForegroundWindow();GetWindowThreadProcessId(window,out var pid);
         if(window==IntPtr.Zero||pid==0)throw new InvalidOperationException("无法确认前台设置窗口，请使用下方按键选项。");
         using var process=Process.GetProcessById((int)pid);var name=process.ProcessName;
@@ -86,12 +87,13 @@ public sealed class NativeHotkey : IDisposable {
             var now=Environment.TickCount64;var b=Volatile.Read(ref binding);
             var foregroundWindow=GetForegroundWindow();GetWindowThreadProcessId(foregroundWindow,out var currentPid);
             var record=recorder.Process(key,scan,flags,down,up,now,foregroundWindow,SettingsFresh(now));
-            if(record.BlockSending||record.Suppress){keys.Process(b,key,scan,flags,down,up,new(false,false,false,false,false,false));quick.Process(key,scan,flags,down,up,now,false);return record.Suppress?(IntPtr)1:CallNextHookEx(hook,code,w,l);}
+            if(record.BlockSending||record.Suppress){keys.Process(b,key,scan,flags,down,up,new(false,false,false,false,false,false));quick.Process(key,scan,flags,down,up,now,false);Languages.Process(key,flags,down,up,keys.Held,false);return record.Suppress?(IntPtr)1:CallNextHookEx(hook,code,w,l);}
             var validForeground=currentPid!=0&&currentPid==foregroundPid&&now-Interlocked.Read(ref foregroundAt)<5000;
             var game=validForeground&&foregroundGame&&gameSameUser!=false;var test=now<Interlocked.Read(ref testUntil);var settings=SettingsFresh(now);var testAllowed=validForeground&&(foregroundBrowser||(game&&(!chatOpen||settings)));
+            if(Languages.Process(key,flags,down,up,keys.Held,versionedCapture&&keys.SwallowedKey==0&&!quick.HasSuppressedKey&&outgoingEnabled&&game&&!settings&&!test&&AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen))))return (IntPtr)1;
             if(quick.Process(key,scan,flags,down,up,now,outgoingEnabled&&game&&!chatOpen&&!settings&&!test&&AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen))))return (IntPtr)1;
             var decision=keys.Process(b,key,scan,flags,down,up,new(outgoingEnabled,chatOpen,AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen)),game&&!settings,testAllowed,test));
-            if(decision.Action==HotkeyAction.Trigger){chatOpen=false;Interlocked.Exchange(ref triggerAt,now);Interlocked.Increment(ref sequence);log?.Record("hotkey",LogKind.HotkeyTriggered,new(Binding:b.Canonical));return (IntPtr)1;}
+            if(decision.Action==HotkeyAction.Trigger){if(!versionedCapture)chatOpen=false;Interlocked.Exchange(ref triggerAt,now);var seq=Interlocked.Increment(ref sequence);Languages.Capture(seq,DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());log?.Record("hotkey",LogKind.HotkeyTriggered,new(Binding:b.Canonical));return (IntPtr)1;}
             if(decision.Action==HotkeyAction.Test){Interlocked.Increment(ref testDetected);Interlocked.Exchange(ref lastTestUtcTicks,DateTime.UtcNow.Ticks);log?.Record("hotkey",LogKind.HotkeyTest,new(Binding:b.Canonical));return (IntPtr)1;}
             if(decision.Action==HotkeyAction.Suppress)return (IntPtr)1;
             if(game&&down&&key==b.VirtualKey&&HotkeyNoiseSummary.IsNoise(decision.Reason,keys.Held,chatOpen))noise.Observe(decision.Reason,now);
@@ -111,9 +113,10 @@ public sealed class NativeHotkey : IDisposable {
             if(msg.Id is 0x8001 or 0x8002 or 0x113){
                 FlushNoise(Environment.TickCount64);
                 quick.RecoverRelease(key=>(GetAsyncKeyState(key)&0x8000)!=0);
+                Languages.RecoverRelease(key=>(GetAsyncKeyState(key)&0x8000)!=0);
                 if(!recorder.Active(Environment.TickCount64))recorder.RecoverReleases(key=>(GetAsyncKeyState(key)&0x8000)!=0);
-                if(recorder.IsArming(Environment.TickCount64)&&!recorder.HasSuppressedKeys&&keys.SwallowedKey==0&&!quick.HasSuppressedKey&&ReadModifiers()==0){Install();if(hook==IntPtr.Zero)recorder.Fail("录制监听无法启动，可使用按键选项，或重建监听后重试。");else recorder.Activate(Environment.TickCount64,GetForegroundWindow(),SettingsFresh(Environment.TickCount64));}
-                if(Volatile.Read(ref reinitializePending)!=0&&!recorder.Active(Environment.TickCount64)&&!recorder.HasSuppressedKeys){if(keys.SwallowedKey!=0)keys.RecoverRelease((GetAsyncKeyState(keys.SwallowedKey)&0x8000)!=0);var actual=ReadModifiers();if(keys.SwallowedKey==0&&!quick.HasSuppressedKey&&actual==0){Interlocked.Exchange(ref reinitializePending,0);Install();Interlocked.Increment(ref reinitialized);log?.Record("hotkey",LogKind.HotkeyReinitialized);}}
+                if(recorder.IsArming(Environment.TickCount64)&&!recorder.HasSuppressedKeys&&keys.SwallowedKey==0&&!quick.HasSuppressedKey&&!Languages.HasSuppressedKey&&ReadModifiers()==0){Install();if(hook==IntPtr.Zero)recorder.Fail("录制监听无法启动，可使用按键选项，或重建监听后重试。");else recorder.Activate(Environment.TickCount64,GetForegroundWindow(),SettingsFresh(Environment.TickCount64));}
+                if(Volatile.Read(ref reinitializePending)!=0&&!recorder.Active(Environment.TickCount64)&&!recorder.HasSuppressedKeys){if(keys.SwallowedKey!=0)keys.RecoverRelease((GetAsyncKeyState(keys.SwallowedKey)&0x8000)!=0);var actual=ReadModifiers();if(keys.SwallowedKey==0&&!quick.HasSuppressedKey&&!Languages.HasSuppressedKey&&actual==0){Interlocked.Exchange(ref reinitializePending,0);Install();Interlocked.Increment(ref reinitialized);log?.Record("hotkey",LogKind.HotkeyReinitialized);}}
             }
             else{TranslateMessage(ref msg);DispatchMessage(ref msg);}
         }}finally{FlushNoise(Environment.TickCount64,true);KillTimer(IntPtr.Zero,(UIntPtr)1);if(hook!=IntPtr.Zero)UnhookWindowsHookEx(hook);hook=IntPtr.Zero;threadId=0;}

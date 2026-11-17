@@ -179,7 +179,13 @@ def prepare():
         if tag.count('onblur="CitadelChatInputBlur();"') != 1:
             raise ValueError('Native ChatInput blur contract changed; native focus observation was not applied')
         focus=re.search(r'\bonfocus="([^"]*)"',tag)
-        return tag.replace(focus.group(0),'onfocus="'+focus.group(1)+';DLTChatInputFocused();"') if focus else tag.replace('<TextEntry','<TextEntry onfocus="DLTChatInputFocused();"',1)
+        tag = tag.replace(focus.group(0),'onfocus="'+focus.group(1)+';DLTChatInputFocused();"') if focus else tag.replace('<TextEntry','<TextEntry onfocus="DLTChatInputFocused();"',1)
+        tag = tag.replace('onblur="CitadelChatInputBlur();"', 'onblur="DLTChatInputBlurred();CitadelChatInputBlur();"')
+        if tag.count('oninputsubmit="CitadelChatInputSubmitted();"') != 1:
+            raise ValueError('Native ChatInput submit contract changed')
+        tag = tag.replace('oninputsubmit="CitadelChatInputSubmitted();"', 'oninputsubmit="DLTChatInputSubmitted();CitadelChatInputSubmitted();"')
+        change = re.search(r'\bontextentrychange="([^"]*)"', tag)
+        return tag.replace(change.group(0), 'ontextentrychange="'+change.group(1)+';DLTChatInputChanged();"') if change else tag.replace('<TextEntry','<TextEntry ontextentrychange="DLTChatInputChanged();"',1)
     xml,focus_count=re.subn(r'<TextEntry\b[^>]*\bid="ChatInput"[^>]*>',native_focus,xml)
     if focus_count != 1: raise ValueError('Expected exactly one native ChatInput focus target')
     out = root/'mod/panorama/layout/chat.xml'; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(xml,encoding='utf-8')

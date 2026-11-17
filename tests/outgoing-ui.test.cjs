@@ -45,6 +45,7 @@ function world(opts = {}) {
         outgoingDisplayMode: opts.displayMode || 'translation'
     }, opts.config || {});
     w.deferResult = opts.deferResult !== false;
+    w.hotkeyEvents=[];w.releaseHotkeys=!opts.versionedHotkeys;
     w.spec = opts.spec || {};
     w.setTarget = (name) => { w.chat.target = TARGET_NAME[name]; target.text = TARGET_LABEL[name]; if(opts.nativeClasses){for(const value of Object.values(TARGET_NAME))context.classes.delete(value);context.classes.add(TARGET_NAME[name]);} };
     w.resetTarget = () => { if(!opts.nativeClasses){w.chat.target = TARGET_NAME.all; target.text = TARGET_LABEL.all;} };
@@ -126,7 +127,8 @@ function world(opts = {}) {
         outgoing.push(...w.synthetic.splice(0, w.synthetic.length));
         if (w.dropReleaseOnce && (data.outgoingStatus||[]).some(s=>s.state==='capture_ready')) { w.dropReleaseOnce=false; return; }
         panel.title = 'DLT:' + JSON.stringify({
-            seq: data.seq, serverId: w.serverId, results: [], hotkey: w.trigger > data.hotkeySeen ? w.trigger : 0,logAck:data.logs?.at(-1)?.seq||0,
+            seq: data.seq, serverId: w.serverId, results: [], hotkey: w.trigger > data.hotkeySeen ? w.trigger : 0,
+            ...(opts.versionedHotkeys ? {sendHotkeys:w.releaseHotkeys?w.hotkeyEvents.filter(event=>event.seq>data.hotkeySeen):[]} : {}),logAck:data.logs?.at(-1)?.seq||0,
             outgoing, config: w.config, configuredLlm: false
             ,capabilities: [...(opts.noPartyCapability ? ['outgoing-display-mode'] : opts.noLanguageCapability ? ['outgoing-display-mode','outgoing-party-channel'] : ['outgoing-display-mode','outgoing-party-channel','multilingual-targets']),...(opts.diagnostics?['diagnostic-logs']:[]),...(opts.statusCapability?['outgoing-status-v1']:[])]
         });
@@ -182,7 +184,9 @@ function world(opts = {}) {
     w.closeChat = () => { context.classes.delete('ChatExpanded'); input.focused = false; };
     w.blurNative = () => sandbox.$.DispatchEvent('CitadelChatInputBlur',input);
     w.shortcut = text => { input.text = text; w.trigger++; };
-    w.enterNative = () => sandbox.$.DispatchEvent('CitadelChatInputSubmitted',input);
+    w.enterNative = () => {if(opts.versionedHotkeys)sandbox.DLTChatInputSubmitted();return sandbox.$.DispatchEvent('CitadelChatInputSubmitted',input);};
+    w.typeDraft = text => {input.text=text;sandbox.DLTChatInputChanged();};
+    w.pressDelayed = (language='en') => {w.hotkeyEvents.push({seq:++w.trigger,at:w.now,language:{language,name:'',code:''}});};
     w.capture = (text) => { w.shortcut(text); w.step(9); };
     return w;
 }

@@ -84,6 +84,8 @@ public record Settings {
     public bool OutgoingSeparateBilingual { get; init; } = false;
     public bool OutgoingSplitLong { get; init; } = false;
     public QuickMessage[] QuickMessages { get; init; } = [];
+    public OutgoingLanguageBinding[] OutgoingLanguageBindings { get; init; } = [];
+    public bool DeepSeekCostPopup { get; init; } = true;
     public string OutgoingTone { get; init; } = "none";
     public string OutgoingCustomTone { get; init; } = "";
     public string OutgoingEnglishCase { get; init; } = "normal";
@@ -135,6 +137,9 @@ public sealed class ConfigStore {
         lock (gate) return (settings, revisionScope+"-"+revision);
     }
     public string Secret(string name) { lock (gate) return secrets.GetValueOrDefault(name, ""); }
+    public (bool Official,string Key) DeepSeekCredentials(){
+        lock(gate)return (DeepSeekUsage.IsOfficial(settings.LlmBaseUrl),secrets.GetValueOrDefault("llm",""));
+    }
     public string LlmSecretFor(Settings snapshot){lock(gate){
         if(snapshot.LlmBaseUrl!=settings.LlmBaseUrl || snapshot.Model!=settings.Model)throw new InvalidOperationException("大模型配置已变更，旧排队任务未继续请求，请重试");
         return secrets.GetValueOrDefault("llm","");
@@ -142,7 +147,7 @@ public sealed class ConfigStore {
     public object Public() {lock(gate)return new { settings = settings with { AzureKey = null, LlmKey = null }, hasAzureKey = secrets.GetValueOrDefault("azure","").Length > 0, hasLlmKey = secrets.GetValueOrDefault("llm","").Length > 0, revision=revisionScope+"-"+revision };}
     public bool Save(Settings value,string? expectedRevision=null) {
         Validate(value);
-        value=value with{OutgoingHotkey=HotkeyChord.Parse(value.OutgoingHotkey).Canonical,QuickMessages=value.QuickMessages.Select(q=>q with{Hotkey=HotkeyChord.Parse(q.Hotkey).Canonical}).ToArray()};
+        value=value with{OutgoingHotkey=HotkeyChord.Parse(value.OutgoingHotkey).Canonical,QuickMessages=value.QuickMessages.Select(q=>q with{Hotkey=HotkeyChord.Parse(q.Hotkey).Canonical}).ToArray(),OutgoingLanguageBindings=value.OutgoingLanguageBindings.Select(q=>q with{Hotkey=HotkeyChord.Parse(q.Hotkey).Canonical,Name=q.Name.Trim(),Code=q.Code.Trim()}).ToArray()};
         lock (gate) {
             if(expectedRevision!=null&&expectedRevision!=revisionScope+"-"+revision)throw new ConfigConflictException();
             var updated = new Dictionary<string,string>(secrets);
@@ -180,6 +185,7 @@ public sealed class ConfigStore {
         IncomingStyle.Validate(s);
         LlmProfiles.Validate(s);
         QuickMessages.Validate(s);
+        OutgoingLanguageHotkeys.Validate(s);
         DisplayPreviewOptions.From(s).Validate();
         if(!LlmRequestOptions.ValidBudget(s.LlmMaxTokens))throw new ArgumentException("模型输出上限须在 512 到 16384 token 之间");
         if(!LlmRequestOptions.ValidThinkingApi(s.LlmThinkingApi))throw new ArgumentException("无效的思考接口格式");

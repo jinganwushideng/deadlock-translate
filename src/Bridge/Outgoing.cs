@@ -9,7 +9,7 @@ public record OutgoingStatus(long Seq,string Id,int Part,string State,string Cha
 public record OutgoingPartStatus(int Part,string State="pending",long? SubmittedAt=null,long? ObservedAt=null,string? Reason=null);
 public record OutgoingRefusal(string Id,string Reason);
 public sealed record OutgoingDiagnostics(string State,string? FailureCode,string? RefusalCode,string? NetworkError=null,int? SocketError=null);
-public record OutgoingView(string Id,string Original,string English,string Channel,string State,string? Error,string DisplayMode="translation",string SendText="",string TargetLanguage="en",string TargetLanguageName="英语",int PartIndex=0,int PartCount=1,bool IsPreset=false) {
+public record OutgoingView(string Id,string Original,string English,string Channel,string State,string? Error,string DisplayMode="translation",string SendText="",string TargetLanguage="en",string TargetLanguageName="英语",int PartIndex=0,int PartCount=1,bool IsPreset=false,bool IsRetry=false) {
     // English remains on the wire for older clients; new settings render the language-neutral field.
     public string Translation=>English;
     public int SendCharacters=>OutgoingParts.CharacterCount(SendText);
@@ -28,6 +28,7 @@ public sealed class OutgoingJob(OutgoingInput input,CancellationToken token,Sett
     public long Sequence;
     public Dictionary<(int Part,string Kind),long> StatusSequences=[];
     public bool AwaitingNativeClose=input.HoldForInput;
+    public HashSet<int> RetriedParts=[];
     public LogReason FailureReason;
     public string? RefusalCode;
     public string? NetworkError;public int? SocketError;
@@ -49,6 +50,25 @@ public sealed class OutgoingService : IAsyncDisposable {
     public OutgoingDiagnostics Diagnostics {get{lock(gate){ExpireLocked();var latest=jobs.Values.MaxBy(j=>j.Sequence);return latest==null?new("idle",null,null):new(latest.View.State,latest.View.State=="failed"?latest.FailureReason.ToString():null,latest.RefusalCode,latest.View.State=="failed"?latest.NetworkError:null,latest.View.State=="failed"?latest.SocketError:null);}}}
     public OutgoingView[] Recent {get{lock(gate){ExpireLocked();return OrderedViews().ToArray();}}}
     public object Stats {get{lock(gate)return new{pending=jobs.Values.Count(j=>j.View.State is not ("failed" or "submitted")),limit=config.Current.OutgoingQueueLimit,workers=slots.Stats};}}
+    public string RetryUnobserved(string id,int part){
+        lock(gate){
+            var settings=config.Current;
+            if(!settings.OutgoingEnabled||sessionId.Length==0||!jobs.TryGetValue(id,out var old)||
+               old.View.State!="submitted"||part<0||part>=old.Parts.Length||
+               old.View.PartStatuses?.Any(p=>p.Part==part&&p.State=="echo_unobserved")!=true||old.RetriedParts.Contains(part))
+                throw new InvalidOperationException("该分条暂不能重新提交");
+            if(jobs.Values.Count(j=>j.View.State is not ("failed" or "submitted"))>=settings.OutgoingQueueLimit)
+                throw new InvalidOperationException("发送队列已满");
+            var request=old.Input with{Id="retry-"+Guid.NewGuid().ToString("N"),HoldForInput=false};
+            var text=old.Parts[part];
+            var job=new OutgoingJob(request,session.Token,old.Config){
+                Created=clock(),Sequence=++sequence,Parts=[text],
+                View=old.View with{Id=request.Id,State="ready",Error=null,WaitReason=null,SendText=text,PartIndex=0,PartCount=1,PartStatuses=null,IsRetry=true}
+            };
+            jobs.Add(request.Id,job);old.RetriedParts.Add(part);Audit(job,LogKind.SendQueued);
+            return request.Id;
+        }
+    }
     private IEnumerable<OutgoingView> OrderedViews(){
         var channels=new HashSet<string>();
         foreach(var job in jobs.Values.OrderBy(j=>j.Sequence)){

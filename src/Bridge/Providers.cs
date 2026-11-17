@@ -18,7 +18,8 @@ public sealed partial class Translators : ITranslator, IDisposable {
     public ProviderIssue[] Issues=>providerIssues.Values.OrderBy(x=>x.Provider).ToArray();
     private readonly DiagnosticLog? log;
     public LlmTelemetry Telemetry {get;}
-    public Translators(ConfigStore store,Terms terms,HttpClient http,DiagnosticLog? log=null){this.store=store;this.terms=terms;this.http=http;this.log=log;Telemetry=new(log);fastSlots=new(store.Current.FastConcurrency);llmSlots=new(store.Current.LlmConcurrency,store.Current.OutgoingEnabled&&store.Current.ReserveSendSlot);store.Changed+=UpdateLimits;}
+    public DeepSeekUsage Spend {get;}
+    public Translators(ConfigStore store,Terms terms,HttpClient http,DiagnosticLog? log=null){this.store=store;this.terms=terms;this.http=http;this.log=log;Telemetry=new(log);Spend=new(store,http);fastSlots=new(store.Current.FastConcurrency);llmSlots=new(store.Current.LlmConcurrency,store.Current.OutgoingEnabled&&store.Current.ReserveSendSlot);store.Changed+=UpdateLimits;}
     private void UpdateLimits(){CancelKeepAlive();fastSlots.SetLimit(store.Current.FastConcurrency);llmSlots.Configure(store.Current.LlmConcurrency,store.Current.OutgoingEnabled&&store.Current.ReserveSendSlot);Interlocked.Increment(ref qualityEpoch);qualityMemo.Clear();providerIssues.Clear();}
     public object Stats=>new{fast=fastSlots.Stats,llm=llmSlots.Stats,qualityCache=qualityMemo.Stats,recent=Telemetry.Recent};
     private void CheckCooldown(string provider){if(blockedUntil.TryGetValue(provider,out var until)&&until>Environment.TickCount64)throw new InvalidOperationException("服务限流冷却中，请稍后重试");}
@@ -141,11 +142,15 @@ public sealed partial class Translators : ITranslator, IDisposable {
     private string MemoKey(string direction,string text,string[] context,Settings config,int? termRevision=null) =>
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             JsonSerializer.Serialize(new{direction,text,context,outgoingTone=direction=="en"?config.OutgoingTone:"none",customTone=direction=="en"&&config.OutgoingTone=="custom"?config.OutgoingCustomTone:"",incomingTone=direction=="zh"?config.IncomingTone:"none",incomingCustomTone=direction=="zh"&&config.IncomingTone=="custom"?config.IncomingCustomTone:"",config.LlmBaseUrl,effectiveModel=LlmProfiles.Effective(config,direction=="en").Model,effectiveThinking=LlmProfiles.Effective(config,direction=="en").LlmThinkingEnabled,config.Model,config.LlmMaxTokens,config.LlmThinkingEnabled,config.LlmThinkingApi,config.LlmStreaming,config.BilingualNames,config.ChineseNameStyle,config.LlmTimeoutSeconds,incoming=TranslationLanguages.Incoming(config),outgoing=TranslationLanguages.Outgoing(config),Revision=termRevision??terms.Revision,epoch=Interlocked.Read(ref qualityEpoch)}))));
-    public Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct) {
+    public async Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct) {
+        using var receipt=Spend.Begin("incoming");
         var language=TranslationLanguages.Incoming(config);
-        var exact=terms.Exact(text,config.BilingualNames,language.ChineseGlossary);if(exact!=null)return Task.FromResult(terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy"));
+        var exact=terms.Exact(text,config.BilingualNames,language.ChineseGlossary);
+        if(exact!=null){receipt.CompletedWithoutCharge();return terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");}
         if(store.LlmSecretFor(config).Length==0)throw new InvalidOperationException("未配置大模型密钥");
-        return qualityMemo.Get(MemoKey("zh",text,context,config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),token=>QualityUncached(text,context,config,token),ct);
+        var result=await qualityMemo.Get(MemoKey("zh",text,context,config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),token=>QualityUncached(text,context,config,token),ct);
+        receipt.CompletedWithoutCharge();
+        return result;
     }
     private async Task<string> QualityUncached(string text, string[] context, Settings config, CancellationToken ct) {
         var epoch=Interlocked.Read(ref qualityEpoch);var previous=providerIssues.GetValueOrDefault("llm");
@@ -174,8 +179,12 @@ public sealed partial class Translators : ITranslator, IDisposable {
     }
     private static string NormalizeNames(string text,Dictionary<string,string> names){try{return Terms.NormalizeQualityNames(text,names);}catch(InvalidDataException){throw new TranslationOutputException(TranslationOutputFailure.NamesMissing);}}
     public Task<string> TranslateOutgoing(string text,Settings config,bool forceFast,CancellationToken ct)=>TranslateOutgoing(text,[],config,forceFast,ct);
-    public async Task<string> TranslateOutgoing(string text,string[] context,Settings config,bool forceFast,CancellationToken ct) =>
-        OutgoingStyle.ApplyCase(await TranslateOutgoingRaw(text,context,config,forceFast,ct),config);
+    public async Task<string> TranslateOutgoing(string text,string[] context,Settings config,bool forceFast,CancellationToken ct) {
+        using var receipt=Spend.Begin("outgoing");
+        var result=await TranslateOutgoingRaw(text,context,config,forceFast,ct);
+        if(!forceFast&&(config.OutgoingMode=="quality"||config.OutgoingMode=="auto"&&store.Secret("llm").Length>0))receipt.CompletedWithoutCharge();
+        return OutgoingStyle.ApplyCase(result,config);
+    }
     private Task<string> TranslateOutgoingRaw(string text,string[] context,Settings config,bool forceFast,CancellationToken ct) {
         context=config.OutgoingUseContext?context.TakeLast(config.OutgoingContextCount).Where(x=>x.Length<=1024).ToArray():[];
         ct.ThrowIfCancellationRequested();

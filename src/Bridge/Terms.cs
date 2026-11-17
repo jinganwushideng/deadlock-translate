@@ -32,6 +32,12 @@ public sealed class Terms {
     }
     private Snapshot current;
     private readonly object gate = new();
+    private readonly string revisionScope = Guid.NewGuid().ToString("N");
+    private string Tag(Snapshot state) => $"\"{revisionScope}-{state.Revision}\"";
+    public (Term[] Items, string Tag) ReadVersioned() {
+        var state=Volatile.Read(ref current);
+        return (state.Items.ToArray(),Tag(state));
+    }
     public int Revision => Volatile.Read(ref current).Revision;
     internal string Fingerprint => Volatile.Read(ref current).Fingerprint;
     public object Preview(TermPreviewInput input,Settings settings) {
@@ -53,10 +59,31 @@ public sealed class Terms {
         Validate(items);current=new(items);
     }
     public Term[] All => Volatile.Read(ref current).Items.ToArray();
-    public void Save(Term[] terms) { var copy=terms.ToArray();Validate(copy);lock(gate) { var next=new Snapshot(copy,current.Revision+1);ConfigStore.WriteAtomic(userPath, JsonSerializer.SerializeToUtf8Bytes(copy,ConfigStore.Json));Volatile.Write(ref current,next); } }
+    public void Save(Term[] terms) => TrySave(terms,null,out _);
+    public bool TrySave(Term[] terms,string? expectedTag,out string tag) {
+        var copy=terms.ToArray();
+        lock(gate) {
+            tag=Tag(current);
+            if(expectedTag!=null && expectedTag!=tag)return false;
+            Validate(copy);
+            var next=new Snapshot(copy,current.Revision+1);
+            ConfigStore.WriteAtomic(userPath,JsonSerializer.SerializeToUtf8Bytes(copy,ConfigStore.Json));
+            Volatile.Write(ref current,next);
+            tag=Tag(next);
+            return true;
+        }
+    }
     public static void Validate(Term[] terms) {
-        if (terms.Length > 5000 || terms.Any(t=>string.IsNullOrWhiteSpace(t.Source) || t.Source.Length > 100 || string.IsNullOrWhiteSpace(t.Target) || t.Target.Length > 150 || t.English.Length > 100 || t.LegacyTarget==null || t.LegacyTarget.Length>150 || (t.Kind != "name" && t.Kind != "phrase"))) throw new ArgumentException("词库最多 5000 条，词条不能为空或过长；旧译名最多 150 字");
-        if (terms.Select(t=>t.Source).Distinct(StringComparer.OrdinalIgnoreCase).Count() != terms.Length) throw new ArgumentException("词库中存在重复原词");
+        if (terms.Length > 5000) throw new ArgumentException("词库最多 5000 条");
+        var sources=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for(var i=0;i<terms.Length;i++){
+            var t=terms[i];
+            if(t==null || string.IsNullOrWhiteSpace(t.Source) || t.Source.Length>100)throw new ArgumentException($"第 {i+1} 条原词必填，最多 100 字");
+            if(string.IsNullOrWhiteSpace(t.Target) || t.Target.Length>150)throw new ArgumentException($"第 {i+1} 条当前中文必填，最多 150 字");
+            if(t.English==null || t.English.Length>100 || t.LegacyTarget==null || t.LegacyTarget.Length>150 || t.Kind is not ("name" or "phrase"))
+                throw new ArgumentException($"第 {i+1} 条英文全称、旧译名或类型无效");
+            if(!sources.Add(t.Source))throw new ArgumentException($"第 {i+1} 条原词重复，请编辑已有词条");
+        }
     }
     // Han sentences have no word spaces. Keep Latin/Cyrillic token boundaries, while
     // allowing both 中文外号没大招 and Bebop没大招. Never match QSR inside qsrhelper.

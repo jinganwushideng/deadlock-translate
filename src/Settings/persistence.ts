@@ -13,16 +13,16 @@ function readSettingsDraft(){
   value[key]=key==='incomingThinking'||key==='outgoingThinking'||key==='buildTextThinking'?(input.value===''?null:input.value==='true'):input.type==='checkbox'?input.checked:typeof current[key]==='number'?Number(input.value):input.value;
  }
  for(const [key,clear]of[['azureKey',clearAzure],['llmKey',clearLlm]]as const){const input=$<HTMLInputElement>(key);if(clear)value[key]='';else if(input.value.trim())value[key]=input.value.trim();else delete value[key];}
- value.quickMessages=quickMessages.map(q=>({...q}));return value;
+ value.quickMessages=quickMessages.map(q=>({...q}));value.outgoingLanguageBindings=outgoingLanguageBindings.map(q=>({...q}));return value;
 }
 function nonSecrets(value:Record<string,any>){const copy={...value};delete copy.azureKey;delete copy.llmKey;return copy;}
 function changedDraft(value:Record<string,any>){return 'azureKey'in value||'llmKey'in value||JSON.stringify(nonSecrets(value))!==JSON.stringify(nonSecrets(savedSettings));}
-function editingSettingsText(){const field=document.activeElement;return !!nativeEditorSession||field instanceof HTMLElement&&field.getClientRects().length>0&&(field instanceof HTMLTextAreaElement||field instanceof HTMLInputElement&&['text','search','password','url','email','tel'].includes(field.type))&&(fields.includes(field.id)||['llmKey','azureKey'].includes(field.id)||!!field.closest('#quickMessageRows'));}
+function editingSettingsText(){const field=document.activeElement;return !!nativeEditorSession||field instanceof HTMLElement&&field.getClientRects().length>0&&(field instanceof HTMLTextAreaElement||field instanceof HTMLInputElement&&['text','search','password','url','email','tel'].includes(field.type))&&(fields.includes(field.id)||['llmKey','azureKey'].includes(field.id)||!!field.closest('#quickMessageRows,#languageBindingRows'));}
 function scheduleAutoSave(){if(autoSaveTimer!==null)clearTimeout(autoSaveTimer);if(!settingsInitialized||settingsClosing||saveFailed||conflictPublic)return;autoSaveTimer=setTimeout(()=>{autoSaveTimer=null;if(!editingSettingsText())void flushSettings(false).catch(()=>{});},500);}
 function markSettingsDraft(){if(!settingsInitialized)return;settingsEpoch++;if(!conflictPublic)saveFailed=false;setSaveStatus(conflictPublic?'配置冲突 · 修改已保留':'有修改，等待自动保存',!!conflictPublic);scheduleAutoSave();}
 function showConflict(data:any){conflictPublic=data.current;$('saveConflict').hidden=false;const box=$('configConflictFields');clearChildren(box);let local:Record<string,any>;try{local=readSettingsDraft();}catch{return;}
  for(const key of Object.keys(local)){const secret=key==='azureKey'||key==='llmKey';if(!secret&&(JSON.stringify(local[key])===JSON.stringify(savedSettings[key])||JSON.stringify(conflictPublic.settings[key])===JSON.stringify(savedSettings[key])))continue;
-  const label=document.createElement('label'),checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=true;checkbox.dataset.configField=key;label.append(checkbox,document.createTextNode((document.getElementById(key)as HTMLInputElement|null)?.labels?.[0]?.childNodes[0]?.textContent?.trim().slice(0,60)||(key==='quickMessages'?'快捷短语':'设置项')));box.append(label);
+  const label=document.createElement('label'),checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=true;checkbox.dataset.configField=key;label.append(checkbox,document.createTextNode((document.getElementById(key)as HTMLInputElement|null)?.labels?.[0]?.childNodes[0]?.textContent?.trim().slice(0,60)||(key==='quickMessages'?'快捷短语':key==='outgoingLanguageBindings'?'发送语言快捷键':'设置项')));box.append(label);
  }
 }
 async function flushSettings(force:boolean):Promise<void>{
@@ -54,8 +54,8 @@ bind('resolveSettingsConflict',async()=>{
  loadFields({...remote,settings:{...remote.settings,...patch}});lastPublicConfig=remote;savedSettings=clone(remote.settings);conflictPublic=null;$('saveConflict').hidden=true;saveFailed=false;settingsEpoch++;await save();
 });
 bind('useRemoteSettings',async()=>{const remote=await api('config');await cancelNativeEditor();clearAzure=clearLlm=false;$<HTMLInputElement>('azureKey').value='';$<HTMLInputElement>('llmKey').value='';loadFields(remote);savedSettingsEpoch=++settingsEpoch;saveFailed=false;conflictPublic=null;$('saveConflict').hidden=true;setSaveStatus('已采用另一窗口的设置');});
-function markTermsDraft(){termsDirty=true;const hint=$('termHint');if(!hint.textContent?.includes('尚未保存'))hint.textContent+=' · 词库修改尚未保存';}
-bind('discardTermsDraft',async()=>{await cancelNativeEditor();terms=clone(savedTerms);termsDirty=false;drawTerms();notice('词库已恢复到上次保存的内容。');});
+function markTermsDraft(){termsDirty=true;updateTermsHint();}
+bind('discardTermsDraft',async()=>{await cancelNativeEditor();terms=clone(savedTerms);termsDirty=false;$('termConflicts').hidden=true;drawTerms();notice('词库已恢复到上次保存的内容。');});
 let leavingSettings:Promise<void>|null=null;
 function leaveSettings(reload=false):Promise<void>{
  if(settingsReloadRequested||settingsClosing)return Promise.resolve();
@@ -73,7 +73,7 @@ $('reloadSettings').addEventListener('click',async()=>{
  const button=$<HTMLButtonElement>('reloadSettings');if(settingsReloadRequested||button.disabled)return;button.disabled=true;
  try{await leaveSettings(true);}finally{button.disabled=settingsReloadRequested;}
 });
-for(const event of ['input','change'])document.addEventListener(event,e=>{const target=e.target as HTMLElement|null;if(!target||clipboardInProgress)return;if(target.closest('#termRows')){markTermsDraft();return;}if(fields.includes(target.id)||['llmKey','azureKey'].includes(target.id)||target.closest('#quickMessageRows')){target.removeAttribute('aria-invalid');markSettingsDraft();}});
+for(const event of ['input','change'])document.addEventListener(event,e=>{const target=e.target as HTMLElement|null;if(!target||clipboardInProgress)return;if(target.closest('#termRows')){markTermsDraft();return;}if(fields.includes(target.id)||['llmKey','azureKey'].includes(target.id)||target.closest('#quickMessageRows,#languageBindingRows')){target.removeAttribute('aria-invalid');markSettingsDraft();}});
 document.addEventListener('focusout',()=>scheduleAutoSave());
 document.addEventListener('compositionstart',()=>{settingsComposing=true;});
 document.addEventListener('compositionend',()=>{settingsComposing=false;scheduleAutoSave();});

@@ -5,12 +5,15 @@ public sealed record LlmRequestView(string Id,DateTime At,string Direction,strin
 public sealed class LlmTelemetry(DiagnosticLog? log=null) {
     private readonly DiagnosticLog? audit=log;
     private readonly object gate=new();private readonly Dictionary<string,Trace> items=new();
-    public Trace Begin(Settings settings,bool outgoing,int contextCount,bool probe=false){lock(gate){while(items.Count>=64){var old=items.Values.FirstOrDefault(x=>x.Terminal)??items.Values.First();items.Remove(old.View.Id);}var trace=new Trace(this,new(Guid.NewGuid().ToString("N")[..16],DateTime.UtcNow,probe?"probe":outgoing?"outgoing":"incoming","queued",settings.LlmMaxTokens,settings.LlmThinkingEnabled,LlmRequestOptions.AppliedThinking(settings.LlmBaseUrl,settings.Model,settings.LlmThinkingApi,settings.LlmThinkingEnabled),settings.LlmStreaming,"pending",contextCount,0));items.Add(trace.View.Id,trace);return trace;}}
+    public Trace Begin(Settings settings,bool outgoing,int contextCount,bool probe=false,string? category=null){lock(gate){while(items.Count>=64){var old=items.Values.FirstOrDefault(x=>x.Terminal)??items.Values.First();items.Remove(old.View.Id);}var trace=new Trace(this,new(Guid.NewGuid().ToString("N")[..16],DateTime.UtcNow,category??(probe?"probe":outgoing?"outgoing":"incoming"),"queued",settings.LlmMaxTokens,settings.LlmThinkingEnabled,LlmRequestOptions.AppliedThinking(settings.LlmBaseUrl,settings.Model,settings.LlmThinkingApi,settings.LlmThinkingEnabled),settings.LlmStreaming,"pending",contextCount,0),settings.Model);items.Add(trace.View.Id,trace);return trace;}}
     public LlmRequestView[] Recent {get{lock(gate)return items.Values.Reverse().Take(12).Select(t=>t.Snapshot()).ToArray();}}
     public object Summary {get{lock(gate){var active=items.Values.Where(t=>!t.Terminal).ToArray();return new{waiting=active.Count(t=>t.View.Phase is "queued" or "waiting"),thinking=active.Count(t=>t.View.Phase=="thinking"),generating=active.Count(t=>t.View.Phase=="generating"),validating=active.Count(t=>t.View.Phase=="validating")};}}}
     public sealed class Trace {
         private readonly LlmTelemetry owner;private readonly long started=Stopwatch.GetTimestamp();internal LlmRequestView View;internal bool Terminal;
-        internal Trace(LlmTelemetry owner,LlmRequestView view){this.owner=owner;View=view;}
+        internal Trace(LlmTelemetry owner,LlmRequestView view,string model){this.owner=owner;View=view;Model=model;}
+        public string Model {get;}
+        public DeepSeekTokens Tokens {get;private set;}=new(null,null,null,null,null);
+        public void ProviderUsage(DeepSeekTokens tokens){lock(owner.gate){if(!Terminal)Tokens=tokens;}}
         public string Id=>View.Id;
         public void Stage(string phase){lock(owner.gate){if(!Terminal)View=View with{Phase=phase is "queued" or "waiting" or "thinking" or "generating" or "validating"?phase:"waiting"};}}
         public void Response(string transport){lock(owner.gate){if(!Terminal)View=View with{Transport=transport=="stream"?"stream":"json",FirstResponseMs=View.FirstResponseMs??Stopwatch.GetElapsedTime(started).TotalMilliseconds};}}

@@ -48,6 +48,22 @@ test('ordinary Enter stays native and creates no manual queue',()=>{
 test('two captured shortcuts retain channel order and global 900ms spacing',()=>{
  const w=setup({spec:{'out-1':{sendText:'first translation'},'out-2':{sendText:'second translation'}}});w.openChat('team');w.capture('first');w.openChat('team');w.capture('second');w.deferResult=false;w.step(40);assert.deepEqual(w.submitted.map(s=>s.text),['first translation','second translation']);assert(w.submitted[1].at-w.submitted[0].at>=900);
 });
+test('two delayed shortcut events bind historical drafts and keep their language snapshots',()=>{
+ const w=setup({versionedHotkeys:true,deferResult:false,spec:{'send-1':{sendText:'first translation'},'send-2':{sendText:'second translation'}}});
+ w.openChat('team');w.typeDraft('original first');w.now++;w.pressDelayed('en');w.step(1);
+ w.typeDraft('original second');w.now++;w.pressDelayed('ru');w.releaseHotkeys=true;w.step(40);
+ assert.deepEqual(Object.values(w.jobs).map(x=>[x.item.text,x.item.targetLanguage]),[['original first','en'],['original second','ru']]);
+ assert.deepEqual(w.submitted.map(x=>x.text),['first translation','second translation']);
+});
+test('delayed shortcut after native Enter sends translation only and leaves newer input intact',()=>{
+ const w=setup({versionedHotkeys:true,deferResult:false,displayMode:'bilingual',spec:{'send-1':{sendText:'first translation'}}});
+ w.openChat('team');w.typeDraft('first plain');w.now++;w.pressDelayed();w.now++;w.enterNative();
+ w.openChat('team');w.typeDraft('newer draft');w.releaseHotkeys=true;w.step(15);
+ assert.equal(w.input.text,'newer draft');assert.equal(w.jobs['send-1'].item.displayMode,'translation');
+ assert.deepEqual(w.submitted.map(x=>x.text),['first plain']);
+ w.closeChat();w.step(20);
+ assert.deepEqual(w.submitted.map(x=>x.text),['first plain','first translation']);
+});
 test('bilingual separated segments finish despite retained submit text and missing echo',()=>{
  const w=setup({displayMode:'bilingual',config:{outgoingSeparateBilingual:true,outgoingSplitLong:true}});w.openChat('team');w.capture('原文');assert.equal(w.jobs['out-1'].item.separateBilingual,true);w.pushResults([part(w,0,'原文')]);w.step(10);assert.equal(w.submitted.length,1);w.step(85);assert(statuses(w).some(s=>s.part===0&&s.state==='echo_unobserved'));
  w.pushResults([part(w,1,'translation')]);w.step(20);assert.deepEqual(w.submitted.map(s=>s.text),['原文','translation']);assert(statuses(w).some(s=>s.part===1&&s.state==='dispatched'));

@@ -1,7 +1,7 @@
 {
-  "version": "0.7.4.1",
-  "buildId": "0.7.4.1-1d2c26e94f1f",
-  "featureRevision": "installer-powershell-path-and-admin-compatibility",
+  "version": "0.7.5",
+  "buildId": "0.7.5-972ca9a42961",
+  "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
       "file": ".gitattributes",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "17b31ad7e76bf9d8e479ac4f1750010b6a14643c727c0cf82fed1452dc5e3b8d"
+      "sha256": "a63deb06be496fb2aa77893e7e15adeb247b772559ccc5caf5581db19f7d1d45"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "f9e70ef572fd5f8dd1674f6386aae0c7820b29c9bb1b19c8ee9eadc3b1c3b528"
+      "sha256": "7935fa6d3f01325f28cdc75a341fbcab677773ead53ea2d228c76673385992d3"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -93,7 +93,7 @@
     },
     {
       "file": "docs/README.md",
-      "sha256": "69cc7c5feab7e7cf81698e003bdf7175269404d217607816a08afe02c415b540"
+      "sha256": "f1a60842e0d60ee3024fe4ab2ff26a3d9188a962df42f9ab704cad1a543273c5"
     },
     {
       "file": "docs/SOURCE-AUDIT.md",
@@ -144,8 +144,12 @@
       "sha256": "26d68efe521ac736e0437b86e131b2ceefc72cb69b13c7ccd345d68cf151f96a"
     },
     {
+      "file": "docs/UPDATE-0.7.5.md",
+      "sha256": "1b751cfdd792eb1bcba91b55dfafadefe1e91fbcea676006c943834c4c67a75c"
+    },
+    {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "fcb04817b87f11788463e33ad1cb12ebeb1ab1d8cce3c337caba7819e06f7a4a"
+      "sha256": "7d6c6dc992218ae3c3c9f5bb5befa6fdbdc56c4a5f7d72f6f55862a89f2fee0c"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -225,7 +229,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "6b5d869326b6cf6d38248557ff1efc1fc20c41fa70e6b1cf5ad900d0313a5c0d"
+      "sha256": "f326cb1e74dc9d4818d618a875bfa72376e125b38c5b8c11b1cad6fa3fa89794"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -265,7 +269,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "aaa2a8cb2db0e25010d2995276222988739094a5e16c5e6ba5ef1836af3a8b5a"
+      "sha256": "8f853551ff2d8a335c904f5122959477d810cb508e1a311bf8f28e2f5250154f"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
@@ -309,7 +313,7 @@
     },
     {
       "file": "scripts/export_source.py",
-      "sha256": "3468e1cc31a91e3499014441d2802a505d232897bc82ceb27742dc424a54afca"
+      "sha256": "8d0e4588402886ceefe5dd6b394e9c8d30d23818738856f803630b21fb989115"
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
@@ -365,7 +369,7 @@
     },
     {
       "file": "scripts/prepare_mod.py",
-      "sha256": "006e7b52cf90e25f62ac53e2cba36e5869e95365149785aa1eb32ef6914fc9f3"
+      "sha256": "6895bfa6fc0777c98886b09cf6ead9006ebcc568e6de95b43f26002bea6f3099"
     },
     {
       "file": "scripts/release_history.py",
@@ -437,11 +441,11 @@
     },
     {
       "file": "src/Bridge/Bridge.csproj",
-      "sha256": "d5a19cafbbd5a1cdaef3f2e5599d0369c6398663cf0596dfffba378b68e59b68"
+      "sha256": "4865cb4af993574d9e0e1e3a99295a08c96256c93657c4e7dccda7409458c55d"
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "9089be5f0d7ed77e58271aabd656d43cd2a7de09ddb4ea4b16166ddaae157c5e"
+      "sha256": "3d52689085538030ae2ed9e756c057b1376821ef49079458b82ebe3007971581"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -469,7 +473,7 @@
     },
     {
       "file": "src/Bridge/BuildTextTranslation.cs",
-      "sha256": "6956741ea36ec2885101e9e6ab09ee5ea0006b1854be1b27bbea7245ba657950"
+      "sha256": "b7c715aeaced72f0f86276cd7eed553e84e4c164afb77553a4f51e362da0599c"
     },
     {
       "file": "src/Bridge/CertificateDiagnostics.cs",
@@ -481,7 +485,7 @@
     },
     {
       "file": "src/Bridge/ChatCompletionReader.cs",
-      "sha256": "0371af319acded032c28d104b9ba2d1c7c9c9c6ce19e0afeddb0478c5b2eeac1"
+      "sha256": "86e56909babc65d9ccc2c77320547ed34dd1f0e6834f109a7eb62a4ee86a93db"
     },
     {
       "file": "src/Bridge/CommunityLinks.cs",
@@ -489,11 +493,15 @@
     },
     {
       "file": "src/Bridge/Configuration.cs",
-      "sha256": "902ceb1062bb2a44face11dc3c0fe39b7cf14eb4e419e033c5bd99cf2583fe5d"
+      "sha256": "3856e9e6517ccdf2ad6b185515779d14dbf45d17c4afdc1081c045aaaff1c17e"
     },
     {
       "file": "src/Bridge/data/build-abbreviations.json",
       "sha256": "e234c1fd34f94b35d7008e90821e9b68abe6ae45ff32691eda31b2f79c53cc9b"
+    },
+    {
+      "file": "src/Bridge/DeepSeekUsage.cs",
+      "sha256": "3a6f8d738d8ae42779a705232cbe9b4f05ccd97566cca211cd773318173c2d86"
     },
     {
       "file": "src/Bridge/DiagnosticExport.cs",
@@ -565,7 +573,7 @@
     },
     {
       "file": "src/Bridge/LlmTelemetry.cs",
-      "sha256": "fb60643e0aa2ec2aa5270fc795838ea23afd627c7faec44add497136c902c936"
+      "sha256": "02a0ec07ab14bdacd54bf024bfecd22048b0576760937fcf0815fe0a9dd2bc51"
     },
     {
       "file": "src/Bridge/LocalBuildCatalog.cs",
@@ -581,7 +589,7 @@
     },
     {
       "file": "src/Bridge/NativeHotkey.cs",
-      "sha256": "68b599bed5887488f12e2104561d75781be19a953a0eefd0a29a3789a0bde737"
+      "sha256": "e503afa956f359ed68f800556ac03653623d5392ee7c8da9e8a0326bbec0cfe6"
     },
     {
       "file": "src/Bridge/NativeSettingsEditor.cs",
@@ -589,7 +597,11 @@
     },
     {
       "file": "src/Bridge/Outgoing.cs",
-      "sha256": "45750558b83577d5e420bb3a04d83d79d895c2eec8270fab19e6f8bb9989da79"
+      "sha256": "47783a7215c9e613a5d689171bb91ab86f16be1b78b35f759f2a2e8ec1d67e8d"
+    },
+    {
+      "file": "src/Bridge/OutgoingLanguageHotkeys.cs",
+      "sha256": "5722fa94fd1bb5e4c1def04da9e1968a209f8a29bb1ee050e3ad6d66492a80b1"
     },
     {
       "file": "src/Bridge/OutgoingParts.cs",
@@ -609,7 +621,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "6340146bc679c1ab53a9dccfc5da4e04e5f2af9eef4362c2fc8652af00e8e47d"
+      "sha256": "30de323e6ab975211fa9e1456ad94b86f103d23baff17e5d7adc2ce8dc8d04d5"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -621,7 +633,7 @@
     },
     {
       "file": "src/Bridge/Providers.cs",
-      "sha256": "69dd84893fa1f05f308b3d9bd18567eb7f19d84b8d74f54a3d66589fe21c3e80"
+      "sha256": "d5e6474b662964ebaccb84e8a8621328cf1c582ddc474618420322c2831fa055"
     },
     {
       "file": "src/Bridge/QuickMessageHotkeys.cs",
@@ -649,7 +661,7 @@
     },
     {
       "file": "src/Bridge/Terms.cs",
-      "sha256": "bde87323f29f90c2416a8d682a298c2a9e7d65864cb945c85ff01e2598c61467"
+      "sha256": "a4d87cfe45c71b13ab3953929866d8b66b19ae4d35a0c5f056692dcc1d4d08bc"
     },
     {
       "file": "src/Bridge/TranslationLanguages.cs",
@@ -669,15 +681,15 @@
     },
     {
       "file": "src/Bridge/Translators.ApiDiagnostics.cs",
-      "sha256": "00d2b93032029b3a38b633fc97983236d29742377f4e5e0369822333256a7ff9"
+      "sha256": "66acc0ad550d8421c6b50e31dda5ae29eb08aa83216ac839bbe7571da065fa5d"
     },
     {
       "file": "src/Bridge/Translators.Completion.cs",
-      "sha256": "63b83849519f8eeb9c7ebb90c34337662c654356fef5ddcf0df31cc0941174bc"
+      "sha256": "4b8ca92f88cad7b4d930680723592e504ba4bfb0efa527bb35d0c7b34286a87a"
     },
     {
       "file": "src/Bridge/Translators.KeepAlive.cs",
-      "sha256": "302ea84c6843b4ef66370b0c96e58b2ab19352abf88382ed43e8ffa32823e13d"
+      "sha256": "ab18c905e5d5e3288d32f7289fec5dc69d5ce756abcaf36c9797aa5c93356539"
     },
     {
       "file": "src/Bridge/Translators.Timing.cs",
@@ -689,7 +701,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "bf6f35d9b03e8cd1f6950a1cdbe042b26a2aa8ee90d28bd80d38971ce725ae14"
+      "sha256": "1cd481af1df56b347a9b45afcdbb627b87a84f0e50a55fb578c388fc42746410"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -709,7 +721,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/style.css",
-      "sha256": "fa3776d6d5e721644700bfb640d5c4ba9c016a3c4c37edd76e41f402af96b011"
+      "sha256": "eb7a5405bbc286e5cace5df0fb97b78606ff0c64c3fea218ef983db81d1c4cc7"
     },
     {
       "file": "src/Installer/app.manifest",
@@ -717,7 +729,7 @@
     },
     {
       "file": "src/Installer/Installer.csproj",
-      "sha256": "c63b34679bdf65c0a16ef4e19913a08762ac1a9acf60df95c02b6f993e0ae338"
+      "sha256": "7c30dc62f9cdc6b86e2893753938dc288000d5e3f3c0cec7987366c0c68553c8"
     },
     {
       "file": "src/Installer/InstallerAnnouncement.cs",
@@ -785,7 +797,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "a4f66cd9d12c2b9b0e782a1bbb9433603cf2cb19abdca302d8af903bef8b3c18"
+      "sha256": "beee79f7286873b7a1364a3c8d4b3d240ef7c01b940fb8581dc1b60c9c40daa5"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -797,7 +809,7 @@
     },
     {
       "file": "src/Settings/persistence.ts",
-      "sha256": "dc5be111d225a648817134f276ea489aebd2b2bc2a770dbd3b8bfe737d001383"
+      "sha256": "ad9d860e57a2bff9de958d4b84174484321f109e3189db066f8cc7eaf3292533"
     },
     {
       "file": "src/Settings/tsconfig.json",
@@ -1265,7 +1277,7 @@
     },
     {
       "file": "tests/NativeSendTests/Program.cs",
-      "sha256": "9279b0c3ab6745ed560766c5d779d41a2d3e4a62011d882e01cd432f3d0ee58a"
+      "sha256": "f1b7a97c0bf8cf07ed293f1b26680df88b4209f9abf06da9552a097dba5d358c"
     },
     {
       "file": "tests/optimization-ui.test.cjs",
@@ -1293,7 +1305,7 @@
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
-      "sha256": "4dfb518071e68decee2c7631b5f74a474dfad581f415dc52634f8f0faeb86cf1"
+      "sha256": "187af6ec2f7b0871a35fdaf950f10307609e689f530be2ee544b6270827389e9"
     },
     {
       "file": "tests/package-lock.json",
@@ -1397,7 +1409,7 @@
     },
     {
       "file": "tests/send-isolation.test.cjs",
-      "sha256": "459d9711157773c549b712bdca2e31833dd404041b7dcf8f598a4e9a73ff2f6a"
+      "sha256": "c72c8f71305f75737f79df2af754da2dcc3759d4cc357f51b52ba768a02b966e"
     },
     {
       "file": "tests/SendRecoveryTests/Program.cs",
@@ -1529,7 +1541,7 @@
     },
     {
       "file": "version.json",
-      "sha256": "b814a414923e76b40be18d2a169ad202dfefc5be71c3ba09a0be4f6a402c7074"
+      "sha256": "957294e76521edd5f504b623c70b3ac958a8fd6a1c3f3990f3f8b3a0417452a3"
     }
   ]
 }

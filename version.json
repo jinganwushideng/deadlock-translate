@@ -1,5 +1,5 @@
 {
-  "version": "0.7.4.1",
+  "version": "0.7.5",
   "chatPipelineFix": "native-parent-size-nudge",
-  "featureRevision": "installer-powershell-path-and-admin-compatibility"
+  "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage"
 }

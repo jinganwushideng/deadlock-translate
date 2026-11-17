@@ -49,10 +49,21 @@ public static class ChatCompletionReader {
     public static string SafeFinish(string? reason)=>reason is "stop" or "length" or "content_filter" or "tool_calls" or "function_call"?reason:"other";
     private static bool HasText(JsonElement element,string key)=>element.TryGetProperty(key,out var value)&&value.ValueKind==JsonValueKind.String&&value.GetString()?.Length>0;
     private static int? Number(JsonElement element,string key)=>element.ValueKind==JsonValueKind.Object&&element.TryGetProperty(key,out var value)&&value.ValueKind==JsonValueKind.Number&&value.TryGetInt32(out var n)&&n is >=0 and <=2000000?n:null;
+    internal static DeepSeekTokens ReadTokens(JsonElement root){
+        if(!root.TryGetProperty("usage",out var usage)||usage.ValueKind!=JsonValueKind.Object)return new(null,null,null,null,null);
+        var reasoning=usage.TryGetProperty("completion_tokens_details",out var detail)?Number(detail,"reasoning_tokens"):null;
+        int? hits=Number(usage,"prompt_cache_hit_tokens");
+        if(hits==null&&usage.TryGetProperty("prompt_tokens_details",out var prompt))hits=Number(prompt,"cached_tokens");
+        int? total=Number(usage,"prompt_tokens"),misses=Number(usage,"prompt_cache_miss_tokens");
+        if(misses==null&&hits.HasValue&&total>=hits)misses=total-hits;
+        return new(total,Number(usage,"completion_tokens"),reasoning,hits,misses);
+    }
     private static void Usage(JsonElement root,LlmTelemetry.Trace trace,Answer answer){
         if(!root.TryGetProperty("usage",out var usage)||usage.ValueKind!=JsonValueKind.Object)return;
-        var reasoning=usage.TryGetProperty("completion_tokens_details",out var detail)?Number(detail,"reasoning_tokens"):null;
-        answer.Reasoning|=reasoning>0;trace.Usage(Number(usage,"prompt_tokens"),Number(usage,"completion_tokens"),reasoning);
+        var tokens=ReadTokens(root);
+        answer.Reasoning|=tokens.Reasoning>0;
+        trace.ProviderUsage(tokens);
+        trace.Usage(tokens.Input,tokens.Output,tokens.Reasoning);
     }
     private sealed class LimitedReadStream(Stream source,long maximum):Stream {
         private long count;

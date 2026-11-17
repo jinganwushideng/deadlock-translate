@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace DeadlockTranslate;
 public sealed partial class Translators {
     private async Task<string> ReadCompletion(HttpRequestMessage request,long epoch,LlmTelemetry.Trace trace,CancellationToken ct,int promptCharacters,int maximumCharacters=2500){
-        trace.Stage("waiting");var started=Stopwatch.GetTimestamp();
+        trace.Stage("waiting");var started=Stopwatch.GetTimestamp();var attempted=false;
         try{
             var bytes=request.Content==null?null:await request.Content.ReadAsByteArrayAsync(ct);
             for(var attempt=0;attempt<2;attempt++){
@@ -13,10 +13,10 @@ public sealed partial class Translators {
                 foreach(var header in request.Headers)send.Headers.TryAddWithoutValidation(header.Key,header.Value);
                 if(bytes!=null){send.Content=new ByteArrayContent(bytes);foreach(var header in request.Content!.Headers)send.Content.Headers.TryAddWithoutValidation(header.Key,header.Value);}
                 HttpResponseMessage response;
-                try{response=await http.SendAsync(send,HttpCompletionOption.ResponseHeadersRead,ct);}
+                try{attempted=true;response=await http.SendAsync(send,HttpCompletionOption.ResponseHeadersRead,ct);}
                 catch(HttpRequestException ex) when(attempt==0&&!ct.IsCancellationRequested&&ProviderNetworkFailure.CanRetryBeforeResponse(ex)){
                     log?.Record("translation",LogKind.TranslationTiming,new(Token:trace.Id,Stage:"provider-retry",Provider:"quality",Count:1,NetworkError:ProviderNetworkFailure.Code(ex),SocketError:(int?)ProviderNetworkFailure.SocketCode(ex)));
-                    await Task.Delay(150,ct);continue;
+                    attempted=false;await Task.Delay(150,ct);continue;
                 }
                 catch(HttpRequestException ex) when(ex.StatusCode==null){throw new ProviderNetworkException("llm","llm-connect",ex);}
                 using(response){
@@ -28,6 +28,6 @@ public sealed partial class Translators {
                 }
             }
             throw new InvalidOperationException("网络重试未完成");
-        }finally{Timing("provider-response",started,promptCharacters,trace.Snapshot().Direction=="outgoing",trace.Id);}
+        }finally{if(attempted)Spend.Record(trace.Id,trace.Snapshot().Direction,trace.Model,request.RequestUri,request.Headers.Authorization?.Parameter,trace.Tokens);Timing("provider-response",started,promptCharacters,trace.Snapshot().Direction=="outgoing",trace.Id);}
     }
 }

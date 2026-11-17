@@ -62,7 +62,7 @@ public sealed partial class Translators
         {
             return Failed(ApiConfigurationDiagnostics.NetworkFailure(ex),null);
         }
-        finally{trace?.Finish(cancellation.IsCancellationRequested?"cancelled":"failed");apiProbeGate.Release();}
+        finally{if(attempted&&trace!=null)Spend.Record(trace.Id,"probe",trace.Model,Uri.TryCreate(report.Endpoint,UriKind.Absolute,out var providerUri)?providerUri:null,resolved.Key,trace.Tokens);trace?.Finish(cancellation.IsCancellationRequested?"cancelled":"failed");apiProbeGate.Release();}
         ApiConnectionReport Failed(ApiFailureDiagnosis failure,int? status,string outcome="failed")
         {
             log?.Record("translation",LogKind.TranslationFailed,new(Reason:failure.Reason,Provider:report.Provider=="llm"?"quality":"azure",Stage:"api-config-test",HttpStatus:status,ElapsedMs:clock.ElapsedMilliseconds));

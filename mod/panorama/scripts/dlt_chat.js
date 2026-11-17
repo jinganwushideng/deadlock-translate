@@ -3,10 +3,13 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.4.1-1d2c26e94f1f';
+var BUILD_ID = '0.7.5-972ca9a42961';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
+var DLTChatInputChanged = function () {};
+var DLTChatInputBlurred = function () {};
+var DLTChatInputSubmitted = function () {};
 (function initialize(restartReason) {
     'use strict';
     var context = $.GetContextPanel();
@@ -34,7 +37,7 @@ var DLTChatInputFocused = function () {};
             outgoingEnabled: true, outgoingTimeoutSeconds: 30, incomingScope: 'all_players', outgoingDisplayMode: 'translation', incomingTargetLanguage: 'zh-Hans', outgoingTargetLanguage: 'en' },
         chatTarget: { readable: false, panel: null, source: '', evidencePanel: null, conflict: false, epoch: 0, lastNative: '', lastLabel: '', changes: 0 },
         channelLog: [], echoes: [], outgoingStatus: [], statusSerial: 0, statusSupported: false, turn: 0, channelFault: '', backendDisplayMode: true, partyAvailable: false, multiLanguageAvailable: false,
-        pendingHotkey: null, closeWatch: null, nativeSettleUntil: 0, nativeClosedAt: 0, outgoingOrdinal: 0, forcePoll: false, logs: [], logSeq: 0, diagSupported: false,
+        pendingHotkey: null, drafts: [], liveDraft: null, sendLanguageRevision: null, closeWatch: null, nativeSettleUntil: 0, nativeClosedAt: 0, outgoingOrdinal: 0, forcePoll: false, logs: [], logSeq: 0, diagSupported: false,
         heroRoster: [], heroTeams: [], nextHeroRoster: 0, heroRosterCount: -1,
         metrics: { scans: 0, rows: 0, submitted: 0, rendered: 0, bridges: 0, errors: 0, maxScanMs: 0,
             regularRows: 0, hudRows: 0, hudContainers: 0, hudRebinds: 0, hudRendered: 0, hudRecovered: 0, hudHostRepairs: 0, hudHiddenRepairs: 0, hudBindings: 0, hudExpiredResults: 0, hudDeferredScans: 0, hudWaits: 0, hudRetryRecovered: 0, hudNativeExpired: 0, hudPanelGone: 0, hudRetryDropped: 0, feedRendered: 0, feedExpired: 0, feedDropped: 0, gameLogDrops: 0, lobbyRows: 0, skippedSelf: 0, skippedUnknown: 0, sendAttempts: 0, sendErrors: 0,
@@ -157,7 +160,7 @@ var DLTChatInputFocused = function () {};
         try { if (valid(ROOT) && ROOT.__dltAdapterControl === control) ROOT.__dltAdapterControl = null; } catch (_) {}
         // The engine owns native chat/HTML destruction. Never navigate or delete it during teardown.
         closeDisplayPreview(); clearFeed(true); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = {}; state.render = []; state.outbox = []; state.hud = []; state.hudRoots = []; state.extraHudRoots = []; state.hudSearch = null;
-        state.chats = []; state.outgoingQueue = []; state.outgoingKnown = {}; state.pending = null; state.pendingHotkey = null;
+        state.chats = []; state.outgoingQueue = []; state.outgoingKnown = {}; state.pending = null; state.pendingHotkey = null; state.drafts = []; state.liveDraft = null;
         state.chat = state.rootChat = state.rootMessages = state.lobby = state.input = state.targetLabel = state.bridge = state.menuMount = null;
         state.chatTarget.panel = null; state.closeWatch = null; state.echoes = []; state.outgoingStatus = []; state.recentOwn = []; state.heroRoster = []; state.heroTeams = [];
     }
@@ -253,7 +256,46 @@ var DLTChatInputFocused = function () {};
     DLTChatInputFocused = function () {
         if (stopped) return;
         state.chatTarget.epoch++; state.nativeClosedAt = 0; state.nativeSettleUntil = Date.now() + 250;
+        rememberDraft();
     };
+    function rememberDraft(mode) {
+        var input = valid(state.input) ? state.input : find(context, 'ChatInput');
+        if (!valid(input)) return;
+        var now = Date.now(), epoch = state.chatTarget.epoch, previous = state.liveDraft;
+        var value = mode === 'closed' ? '' : text(input).trim();
+        var channel = value ? nativeChannel() || labelChannel() : '';
+        if (!previous || previous.epoch !== epoch || previous.value !== value || previous.channel !== channel || previous.input !== input) {
+            previous = {at:now, epoch:epoch, value:value, channel:channel, input:input, used:false, submitted:false, proof:channel?capturedChannelProof(channel):null};
+            state.drafts.push(previous); state.liveDraft = previous;
+        }
+        if (mode === 'submitted' && value) {
+            previous.submitted = true;
+            rememberDraft('closed');
+        }
+        while (state.drafts.length && (state.drafts.length > 128 || now - state.drafts[0].at >= 5500)) state.drafts.shift();
+    }
+    DLTChatInputChanged = function () { if (!stopped && inputOpen()) rememberDraft(); };
+    DLTChatInputBlurred = function () { if (!stopped) rememberDraft('closed'); };
+    DLTChatInputSubmitted = function () { if (!stopped) rememberDraft('submitted'); };
+
+    function captureVersionedHotkeys(events) {
+        if (!events.length) return;
+        if (inputOpen()) rememberDraft();
+        for (var i = 0; i < events.length; i++) {
+            var event = events[i];
+            if (!event || event.seq <= state.hotkeySeen) continue;
+            state.pendingHotkey = {seq:event.seq, at:event.at, language:event.language};
+            var selected = null;
+            for (var n = state.drafts.length - 1; n >= 0; n--) {
+                if (state.drafts[n].at <= event.at) { selected = state.drafts[n]; break; }
+            }
+            if (!selected || selected.used || !selected.value || !selected.channel || event.at-selected.at>=5500) {
+                state.metrics.hotkeyDrops++; hotkeyOutcome('input-not-open');
+                showLocalToast('未捕获到这次发送的原文，请重新按翻译快捷键。', false); continue;
+            }
+            captureOutgoing(selected);
+        }
+    }
     function capturedChannelProof(channel) {
         var current = nativeChannel();
         return current === channel && state.chatTarget.epoch > 0 && state.chatTarget.source === 'classes' && !state.chatTarget.conflict ? { channel: channel, panel: state.chatTarget.evidencePanel, input: state.input, epoch: state.chatTarget.epoch } : null;
@@ -314,6 +356,42 @@ var DLTChatInputFocused = function () {};
             return valid(state.input) && (has(context, 'ChatExpanded') || has(state.rootChat, 'ChatExpanded') || !!(state.input.BHasKeyFocus && state.input.BHasKeyFocus()));
         } catch (_) { return false; }
     }
+    function showLocalToast(message, expense) {
+        var panel = state.localToast;
+        if (!valid(panel)) {
+            panel = $.CreatePanel('Label', ROOT, 'DltTranslationToast');
+            panel.hittest = false; panel.html = false;
+            feedStyle(panel, { horizontalAlign:'center', verticalAlign:'bottom', marginBottom:'118px',
+                maxWidth:'650px', padding:'8px 16px', borderRadius:'5px', color:'#fff7dc',
+                backgroundColor:'#233638f2', border:'1px solid #718884', fontSize:'18px', zIndex:'301' });
+            state.localToast = panel;
+        }
+        panel.text = message; panel.visible = true;
+        state.toastUntil = Date.now() + (expense ? 4000 : 2400);
+    }
+    function showExpense(data) {
+        if (!data || !Array.isArray(data.items)) return;
+        var now=Date.now(), group=state.expenseToast;
+        if (!group || now>=group.until) group={tasks:0,category:'',minimum:0,maximum:0,priced:0,missing:0};
+        var names={incoming:'接收翻译',outgoing:'发送翻译',build:'出装翻译'};
+        var added=false;
+        for (var i=0;i<data.items.length;i++) {
+            var item=data.items[i];
+            if (item.id<=(state.deepSeekSeen||0)) continue;
+            state.deepSeekSeen=item.id; added=true;
+            group.tasks++; group.category=names[item.category]||'翻译'; group.missing+=item.missingUsage||0;
+            if (item.cost){group.priced++;group.minimum+=item.cost.minimum;group.maximum+=item.cost.maximum;}
+        }
+        if(!added)return;
+        function amount(value){return value===0?'0':value<0.000001?'<0.000001':value.toFixed(6);}
+        var cost=group.priced?'约 ¥'+amount(group.minimum)+(group.maximum!==group.minimum?'–'+amount(group.maximum):''):'费用暂不可估算';
+        var balance=(data.balance||[]).map(function(x){return x.currency+' '+x.total;}).join(' / ');
+        var seen=balance&&data.checkedAt?new Date(data.checkedAt):null;
+        var time=seen&&!isNaN(seen.getTime())?'（'+('0'+seen.getHours()).slice(-2)+':'+('0'+seen.getMinutes()).slice(-2)+'）':'';
+        showLocalToast('DeepSeek · '+(group.tasks===1?group.category:group.tasks+' 个翻译任务')+' · '+cost+
+            (group.missing&&group.priced?'（部分未计）':'')+(balance?' · 最近余额 '+balance+time:''),true);
+        group.until=now+4000;state.expenseToast=group;
+    }
     function settingsVisible() { var window = ROOT.__dltActiveSettingsWindow; return state.openSettings || valid(window) && !window.__dltClosing; }
     function inputOpen() { return nativeInputOpen(); }
     function hasPendingOutgoing() {
@@ -350,17 +428,17 @@ var DLTChatInputFocused = function () {};
         if (reason !== 'captured') audit('hotkey-dropped', null, null, reason === 'input-not-open' ? 'no-chat' : reason === 'unsupported-channel' ? 'unknown-channel' : reason.indexOf('backend-outdated') === 0 ? 'old-client' : reason);
         if (reason !== 'captured') logChannel('hotkey ignored: ' + reason);
     }
-    function captureOutgoing() {
+    function captureOutgoing(draft) {
         var held = state.pendingHotkey;
         if (settingsVisible()) { hotkeyOutcome('input-not-open'); return; }
         if (!state.config.outgoingEnabled) { hotkeyOutcome('disabled'); return; }
-        if (!inputOpen()) {
+        if (!draft && !inputOpen()) {
             // The reported chat focus can lag the keypress by a bridge round trip. Keep the chord
             // for a short bounded window and retry instead of losing it silently.
             if (held && Date.now() - held.at > 2500) { state.metrics.hotkeyDrops++; hotkeyOutcome('input-not-open'); }
             return;
         }
-        var input = state.input, value = text(input).trim();
+        var input = state.input, value = draft ? draft.value : text(input).trim();
         if (!value) { hotkeyOutcome('empty'); return; }
         if (outgoingCharacterCount(value) > 80) { hotkeyOutcome('input-truncated'); return; }
         var capacity = Math.max(3, Math.min(32, Number(state.config.outgoingQueueLimit) || 3));
@@ -370,7 +448,7 @@ var DLTChatInputFocused = function () {};
         var labelName = labelChannel();
         // The native value is the truth; the label is the player's visible choice and covers older
         // builds without a readable property. PARTY is a distinct recipient, never an alias of ALLIES.
-        var channel = nativeName || labelName;
+        var channel = draft ? draft.channel : nativeName || labelName;
         if (channel === 'party' && !state.partyAvailable) {
             state.metrics.hotkeyDrops++; hotkeyOutcome('backend-outdated-party');
             logChannel('party translation requires a matching backend; draft preserved'); return;
@@ -386,23 +464,32 @@ var DLTChatInputFocused = function () {};
             state.metrics.hotkeyDrops++; hotkeyOutcome('backend-outdated-language');
             logChannel('language target requires a matching backend; draft preserved'); return;
         }
-        var id = 'out-' + String(++state.serial);
-        var captured = { id: id, text: value, channel: channel, displayMode: outgoingDisplayMode(), separateBilingual: !!state.config.outgoingSeparateBilingual, splitLong: !!state.config.outgoingSplitLong,
-            targetLanguage: state.config.outgoingTargetLanguage || 'en', customLanguage: state.config.outgoingCustomLanguage || '',
-            customLanguageCode: state.config.outgoingCustomLanguageCode || '' };
-        state.outgoingKnown[id] = { id: id, channel: channel, capture: captured, timeoutSeconds: state.config.outgoingTimeoutSeconds, ordinal: ++state.outgoingOrdinal, channelProof: capturedChannelProof(channel), created: Date.now(), attempted: false, done: false, waiting: false, retargets: 0,
-            retryAt: 0, before: '', restored: false, original: value, displayMode: outgoingDisplayMode() };
+        var id = draft ? 'send-'+String(held.seq) : 'out-' + String(++state.serial);
+        var language = held && held.language;
+        var mode = draft && draft.submitted ? 'translation' : outgoingDisplayMode();
+        var captured = { id: id, text: value, channel: channel, displayMode: mode, separateBilingual: !!state.config.outgoingSeparateBilingual, splitLong: !!state.config.outgoingSplitLong,
+            targetLanguage: language ? language.language : state.config.outgoingTargetLanguage || 'en', customLanguage: language ? language.name : state.config.outgoingCustomLanguage || '',
+            customLanguageCode: language ? language.code : state.config.outgoingCustomLanguageCode || '' };
+        state.outgoingKnown[id] = { id: id, channel: channel, capture: captured, timeoutSeconds: state.config.outgoingTimeoutSeconds, ordinal: ++state.outgoingOrdinal, channelProof: draft ? draft.proof : capturedChannelProof(channel), created: Date.now(), attempted: false, done: false, waiting: false, retargets: 0,
+            retryAt: 0, before: '', restored: false, original: value, displayMode: mode };
         // New backends register the retained source immediately, but may not start
         // translation until the close gate releases it. Legacy backends keep the
         // snapshot locally until that gate, without receiving an unknown feature.
-        if (state.statusSupported) {
+        if (draft) {
+            draft.used = true;
+            state.outgoingKnown[id].capture = null;
+            state.outgoingQueue.push(captured); state.forcePoll = true;
+        } else if (state.statusSupported) {
             captured.holdForInput = true; state.outgoingKnown[id].captureRegistered = true;
             state.outgoingQueue.push(captured); state.forcePoll = true;
         }
         noteChannel('capture', { native: nativeName, label: labelName, channel: channel });
         audit('hotkey-captured', id, channel);
-        input.text = '';
-        requestNativeClose(id, channel);
+        if (!draft || state.liveDraft === draft && !draft.submitted && inputOpen() && input === draft.input && text(input).trim() === value) {
+            input.text = '';
+            if (draft) rememberDraft('closed');
+            requestNativeClose(id, channel);
+        }
         hotkeyOutcome('captured');
     }
     function requestNativeClose(id, channel) {
@@ -477,7 +564,7 @@ var DLTChatInputFocused = function () {};
         for (var i = 0; i < results.length; i++) {
             var result = results[i], job = state.outgoingKnown[result.id];
             if (!job && ['ready','waiting_channel','waiting_input'].indexOf(result.state) < 0) continue;
-            if (!job && result.isPreset === true) {
+            if (!job && (result.isPreset === true || result.isRetry === true)) {
                 var knownKeys = Object.keys(state.outgoingKnown);
                 for (var x = 0; knownKeys.length > 48 && x < knownKeys.length; x++) if (state.outgoingKnown[knownKeys[x]].done) { delete state.outgoingKnown[knownKeys[x]]; knownKeys.pop(); }
                 job = state.outgoingKnown[result.id] = { id: result.id, channel: result.channel, ordinal: ++state.outgoingOrdinal, created: Date.now(), original: result.original, displayMode: 'translation', done: false, nextPart: 0, retargets: 0, retryAt: 0, before: '', restored: false };
@@ -1848,7 +1935,7 @@ var DLTChatInputFocused = function () {};
         state.outgoingPartAcks = state.outgoingPartAcks.filter(function (item) { return !partAcknowledged.some(function (ack) { return ack.id === item.id && ack.part === item.part; }); });
         var statusAcknowledged = state.pending.outgoingStatus || [];
         state.outgoingStatus = state.outgoingStatus.filter(function (item) { return !statusAcknowledged.some(function (ack) { return ack.seq === item.seq; }); });
-        if (state.pending.refused) state.outgoingRefused = [];
+        if (state.pending.refused) state.outgoingRefused = state.outgoingRefused.filter(function (e) { return !state.pending.refused.some(function (r) { return r.id === e.id && r.reason === e.reason; }); });
         state.pending = null; state.online = true;
         if (state.config.transport === 'fragment' && !state.autoFallback) state.fragmentWorked = true;
         // A newly created chat adapter cannot inherit a keypress from the previous scene.
@@ -1856,6 +1943,7 @@ var DLTChatInputFocused = function () {};
         if (payload.serverId && state.serverId && payload.serverId !== state.serverId) {
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingPartAcks = []; state.outgoingKnown = {}; state.nextSendAt = 0;
             state.pendingHotkey = null; state.closeWatch = null; state.outgoingRefused = [];
+            state.deepSeekSeen = 0; state.expenseToast = null; state.sendLanguageRevision = null;
             state.echoes = []; state.outgoingStatus = []; state.channelFault = ''; state.recentOwn = [];
             state.hotkeySeen = payload.hotkey || 0;
             audit('bridge-reset');
@@ -1896,7 +1984,15 @@ var DLTChatInputFocused = function () {};
             (!capabilities || capabilities.indexOf('outgoing-display-mode') >= 0);
         if (!state.config.outgoingDisplayMode) state.config.outgoingDisplayMode = 'translation';
         if (state.autoFallback) state.config.transport = 'navigation';
-        if (payload.hotkey && payload.hotkey > state.hotkeySeen) {
+        showExpense(payload.deepSeekNotice);
+        if (payload.sendLanguage) {
+            var revision = payload.sendLanguage.revision;
+            if (state.sendLanguageRevision !== null && state.sendLanguageRevision !== revision)
+                showLocalToast('发送语言已切换为 '+payload.sendLanguage.label, false);
+            state.sendLanguageRevision = revision;
+        }
+        if (Array.isArray(payload.sendHotkeys)) captureVersionedHotkeys(payload.sendHotkeys);
+        else if (payload.hotkey && payload.hotkey > state.hotkeySeen) {
             // Do not mark the chord as seen yet: captureOutgoing retries while the sendable
             // outcome is still unknown, and only then advances hotkeySeen.
             if (!state.pendingHotkey || state.pendingHotkey.seq !== payload.hotkey)
@@ -2044,7 +2140,7 @@ var DLTChatInputFocused = function () {};
         var messages = state.outbox.slice(0, 8);
         var payload = { clientVersion: CLIENT_VERSION, clientBuildId: BUILD_ID, multipartSupported: true, displayPreviewSupported: true, settingsBackgroundSupported: true, session: state.session, seq: ++state.seq, messages: messages, poll: ids,
             openSettings: state.openSettings, metrics: wantMetrics ? state.metrics : null,
-            chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, outgoing: state.outgoingQueue.slice(0, 3),
+            chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, deepSeekNoticeSeen: state.deepSeekSeen || 0, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingPartAcks: state.outgoingPartAcks.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),
             outgoingStatus: state.statusSupported ? state.outgoingStatus.slice(0, 24) : undefined, outgoingRefused: state.outgoingRefused.slice(0, 12), serverId: state.serverId || '', logs: state.diagSupported || !state.serverId ? state.logs.slice(0, 8) : [] };
         var buildText = ROOT.__dltBuildText;
@@ -2085,7 +2181,7 @@ var DLTChatInputFocused = function () {};
         }
         if (liveBubbles.length) state.hudPollCursor = (state.hudPollCursor + 24) % liveBubbles.length;
         if (pendingRecords.length) state.pollCursor = (state.pollCursor + 24) % pendingRecords.length;
-        state.pending = { seq: payload.seq, at: now, messages: payload.messages, outgoing: payload.outgoing, outgoingSent: payload.outgoingSent, outgoingPartAcks: payload.outgoingPartAcks, outgoingStatus: payload.outgoingStatus, refused: payload.outgoingRefused.length > 0, nativeEditor: editorCommand ? { id: editorCommand.id, request: editorCommand.request } : null };
+        state.pending = { seq: payload.seq, at: now, messages: payload.messages, outgoing: payload.outgoing, outgoingSent: payload.outgoingSent, outgoingPartAcks: payload.outgoingPartAcks, outgoingStatus: payload.outgoingStatus, refused: payload.outgoingRefused, nativeEditor: editorCommand ? { id: editorCommand.id, request: editorCommand.request } : null };
         state.openSettings = false; state.nextPoll = now + (chatOpen ? 80 : state.config.transport === 'navigation' ? 800 : 250);
         state.nextHeartbeat = now + (state.config.quickMessagesEnabled ? 500 : 2000);
         if (wantMetrics) state.nextMetrics = now + 10000;
@@ -2116,7 +2212,7 @@ var DLTChatInputFocused = function () {};
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingPartAcks = []; state.outgoingKnown = {}; state.nextSendAt = 0;
             state.hotkeySeen = Math.max(state.hotkeySeen, state.pendingHotkey ? state.pendingHotkey.seq : 0);
             state.echoes = []; state.outgoingStatus = []; state.channelFault = ''; state.outgoingRefused = [];
-            state.pendingHotkey = null; state.closeWatch = null; state.nativeClosedAt = 0; state.forcePoll = true;
+            state.pendingHotkey = null; state.drafts = []; state.liveDraft = null; state.closeWatch = null; state.nativeClosedAt = 0; state.forcePoll = true;
             state.chat = newChat; state.chats = []; state.hud = []; state.hudRoots = []; state.extraHudRoots = []; state.hudSearch = null; state.pollCursor = state.hudPollCursor = 0;
             state.rootChat = state.rootMessages = state.lobby = state.input = state.targetLabel = null;
             state.chatTarget.panel = null; state.chatTarget.readable = false;
@@ -2146,6 +2242,9 @@ var DLTChatInputFocused = function () {};
                 }); state.nextScan = started + state.config.scanIntervalMs;
             }
             // A chord whose chat box was not open yet is retried here until its window expires.
+            if (valid(state.localToast) && Date.now() >= state.toastUntil) state.localToast.visible = false;
+            if (inputOpen()) rememberDraft();
+            else if (state.liveDraft && state.liveDraft.value) rememberDraft('closed');
             if (state.pendingHotkey) captureOutgoing();
             state.turn++; watchClose();
             expireEchoes(); processOutgoing();

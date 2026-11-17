@@ -70,3 +70,8 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 .build-cost-notice{margin:0 0 25px;padding:18px 23px;border-left:4px solid #d4b16e;background:#302a20d9;color:#f2d59e}.build-cost-notice strong{display:block;font-size:clamp(23px,1.55vw,34px);line-height:1.4;font-weight:900}.build-cost-notice p{margin:9px 0 0;font-size:clamp(16px,1.05vw,23px);line-height:1.65;color:#e4dcc8}.build-cost-notice p.build-cost-detail{font-size:clamp(14px,.9vw,18px);color:#c9c1ae}
 
 .llm-provider-action{display:grid;grid-template-columns:minmax(180px,26%) minmax(0,1fr);align-items:center;gap:18px;min-height:78px;padding:18px 0;border-bottom:1px solid #54554e;color:var(--text);font-weight:600}.llm-provider-action button{justify-self:start;max-width:100%}@media(max-width:760px){.llm-provider-action{grid-template-columns:minmax(0,1fr);gap:10px}}
+
+#settingsExpenseToast{position:fixed;z-index:20;bottom:5vh;left:50%;transform:translateX(-50%);padding:.5em 1em;border:1px solid #718884;border-radius:5px;background:#233638;color:#fff7dc;max-width:85vw;pointer-events:none}
+#deepSeekUsageCard .table-scroll{overflow-x:auto}
+#deepSeekUsageCard th,#deepSeekUsageCard td{white-space:nowrap}
+#languageBindingRows input{min-width:0;max-width:15em}
