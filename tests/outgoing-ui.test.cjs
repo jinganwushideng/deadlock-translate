@@ -20,6 +20,7 @@ class Panel {
     GetParent() { return this.parent; }
     BHasClass(c) { return this.classes.has(c); }
     AddClass(c) { this.classes.add(c); }
+    SetHasClass(c, enabled) { if (enabled) this.classes.add(c); else this.classes.delete(c); }
     BHasKeyFocus() { return this.focused === true; }
     GetChildCount() { return this.children.length; }
     GetChild(i) { return this.children[i]; }

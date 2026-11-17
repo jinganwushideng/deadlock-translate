@@ -71,7 +71,24 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 
 .llm-provider-action{display:grid;grid-template-columns:minmax(180px,26%) minmax(0,1fr);align-items:center;gap:18px;min-height:78px;padding:18px 0;border-bottom:1px solid #54554e;color:var(--text);font-weight:600}.llm-provider-action button{justify-self:start;max-width:100%}@media(max-width:760px){.llm-provider-action{grid-template-columns:minmax(0,1fr);gap:10px}}
 
-#settingsExpenseToast{position:fixed;z-index:20;bottom:5vh;left:50%;transform:translateX(-50%);padding:.5em 1em;border:1px solid #718884;border-radius:5px;background:#233638;color:#fff7dc;max-width:85vw;pointer-events:none}
+#settingsExpenseToast{position:fixed;z-index:20;bottom:5vh;left:50%;transform:translateX(-50%);width:430px;max-width:calc(100vw - 32px);height:56px;pointer-events:none;color:#f5f0df;font-family:inherit}
+#settingsExpenseToast .toast-body{position:relative;margin-left:18px;height:100%;display:flex;align-items:center;gap:10px;padding:6px 11px 6px 34px;background:repeating-linear-gradient(135deg,transparent 0,transparent 5px,#ffffff08 5px,#ffffff08 6px),#1b2622f5;border:1px solid #3c5749;border-radius:4px;box-shadow:0 2px 6px #0005}
+#settingsExpenseToast .toast-body:before{content:"";position:absolute;inset:3px;border:1px solid #90b09a13;border-radius:2px}
+#settingsExpenseToast .toast-summary,#settingsExpenseToast .toast-cost{display:flex;flex-direction:column;min-width:0;position:relative;line-height:1.2}
+#settingsExpenseToast .toast-summary{flex:1}
+#settingsExpenseToast .toast-summary strong{font-size:16px;font-weight:600;white-space:nowrap}
+#settingsExpenseToast .toast-summary span,#settingsExpenseToast .toast-cost span{color:#879e90;font-size:11px}
+#settingsExpenseToast .toast-summary span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#settingsExpenseToast .toast-cost{width:100px;text-align:right}
+#settingsExpenseToast .toast-cost strong{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#settingsExpenseToast .toast-diamond{width:5px;height:5px;background:#56816a;transform:rotate(45deg);flex:none}
+#settingsExpenseToast .toast-balance{font-size:15px;font-weight:700;text-align:center;background:#7bdd9a;color:#10251a;width:100px;min-height:29px;display:flex;align-items:center;justify-content:center;flex:none;padding:4px 8px;white-space:nowrap;overflow:hidden;clip-path:polygon(3% 0,97% 2%,100% 13%,97% 50%,100% 90%,94% 100%,2% 96%,0 86%,3% 54%,0 9%)}
+#settingsExpenseToast .toast-balance.pending{font-size:12px;background:#789383}
+#settingsExpenseToast .toast-badge{position:absolute;top:7px;left:0;width:42px;height:42px;border:3px solid #17251e;border-radius:50%;background:#d9d4c7;color:#16241f}
+#settingsExpenseToast .toast-badge span{position:absolute;font-size:17px;font-weight:700}
+#settingsExpenseToast .toast-badge span:first-child{left:6px;top:2px}
+#settingsExpenseToast .toast-badge span:last-child{left:19px;top:13px}
+@media(max-width:430px){#settingsExpenseToast .toast-body{gap:7px;padding-right:8px}#settingsExpenseToast .toast-cost{width:80px}#settingsExpenseToast .toast-balance{width:85px;font-size:13px}#settingsExpenseToast .toast-summary strong{font-size:14px}}
 #deepSeekUsageCard .table-scroll{overflow-x:auto}
 #deepSeekUsageCard th,#deepSeekUsageCard td{white-space:nowrap}
 #languageBindingRows input{min-width:0;max-width:15em}

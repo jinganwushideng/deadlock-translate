@@ -1107,7 +1107,7 @@ type DeepSeekCost={minimum:number;maximum:number};
 type DeepSeekSummary={requests:number;input:number;output:number;reasoning:number;cacheHit:number;unreported:number;unpriced:number;cost:DeepSeekCost|null};
 function deepSeekCostLabel(cost:DeepSeekCost|null){
  if(!cost)return '费用暂不可估算';
- const amount=(value:number)=>value===0?'0':value<0.000001?'<0.000001':value.toFixed(6);
+ const amount=(value:number)=>value===0?'0.00':value<0.000001?'<0.000001':value.toFixed(6).replace(/0+$/,'').replace(/\.$/,'');
  return '约 ¥'+amount(cost.minimum)+(cost.maximum===cost.minimum?'':'–'+amount(cost.maximum));
 }
 function refreshDeepSeekVisibility(){
@@ -1153,8 +1153,20 @@ async function showProbeExpense(expense:{cost:DeepSeekCost|null;missingUsage:num
  const data=await api('deepseek/usage').catch(()=>null);
  if(!isDeepSeekUsageAddress(String(current.llmBaseUrl||'')))return;
  const box=$('settingsExpenseToast');
- box.textContent='DeepSeek · 本次试译 '+deepSeekCostLabel(expense.cost)+(data?.balance?.length?' · 最近余额 '+formatBalance(data):'');
- box.hidden=false;if(expenseToastTimer!==undefined)clearTimeout(expenseToastTimer);
+ putText($('expenseToastTitle'),'试译完成');
+ const time=data?.checkedAt?new Date(data.checkedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+ putText($('expenseToastSource'),'DeepSeek'+(time?' · 余额 '+time:''));
+ putText($('expenseToastCost'),deepSeekCostLabel(expense.cost));
+ const balance=data?.balance?.map((entry:any)=>(entry.currency==='CNY'?'¥':entry.currency==='USD'?'$':entry.currency+' ')+
+  (Number(entry.total)>0&&Number(entry.total)<0.01?String(entry.total):Number(entry.total).toFixed(2))).join(' / ');
+ putText($('expenseToastBalance'),balance?'余额 '+balance:'余额待查询');
+ $('expenseToastBalance').classList.toggle('pending',!balance);
+ box.hidden=false;
+ for(const [id,size] of [['expenseToastCost',14],['expenseToastBalance',15]] as const){
+  const field=$(id);field.style.fontSize=size+'px';
+  if(field.scrollWidth>field.clientWidth)field.style.fontSize=Math.max(8,size*field.clientWidth/field.scrollWidth)+'px';
+ }
+ if(expenseToastTimer!==undefined)clearTimeout(expenseToastTimer);
  expenseToastTimer=setTimeout(()=>{box.hidden=true;},4000);
 }
 bind('refreshDeepSeekBalance',()=>refreshDeepSeekUsage(true));

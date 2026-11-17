@@ -20,6 +20,7 @@ BUILD_TEXT_RESOURCES = {
     'panorama/scripts/dlt_build_browser.vjs_c',
     'panorama/scripts/dlt_build_text.vjs_c',
     'panorama/styles/dlt_build_text.vcss_c',
+    'panorama/styles/dlt_toast.vcss_c',
     *(f'panorama/layout/{name}.vxml_c' for name in BUILD_TEXT_LAYOUTS),
 }
 
@@ -49,7 +50,8 @@ def preserve_native_label_tree(xml):
 
 def patch_build_text_layout(xml, name):
     anchors = BUILD_TEXT_LAYOUTS[name]
-    includes = ('<include src="s2r://panorama/styles/dlt_build_text.vcss_c" />'
+    includes = ('<include src="s2r://panorama/styles/dlt_toast.vcss_c" />'
+                '<include src="s2r://panorama/styles/dlt_build_text.vcss_c" />'
                 '</styles><scripts><include src="s2r://panorama/scripts/dlt_build_transport.vjs_c" />'
                 '<include src="s2r://panorama/scripts/dlt_build_text.vjs_c" /></scripts>')
     if xml.count('</styles>') != 1 or '<scripts>' in xml:
@@ -114,10 +116,16 @@ def patch_build_text_layout(xml, name):
     bridge = ('<HTML id="DltBuildBridge" class="DltBuildBridge" hittest="false" '
               'hittestchildren="false" acceptsinput="false" acceptsfocus="false" />')
     def progress(prefix):
-        return (f'<Panel id="{prefix}Progress" class="DltBuildProgress DltBuildProgressPopup" hittest="false" visible="false">'
+        return (f'<Panel id="{prefix}Progress" class="DltToastHost DltBuildProgressPopup" hittest="false" hittestchildren="false" visible="false">'
+                '<Panel class="DltToastBody"><Panel class="DltToastPattern" /><Panel class="DltToastInset" />'
+                '<Panel class="DltBuildToastContent"><Panel class="DltBuildToastHeading">'
                 '<Label class="DltBuildProgressHeading" text="出装翻译" />'
+                '<Label id="DltBuildProgressCount" class="DltToastChip DltBuildProgressCount" text="准备中" /></Panel>'
+                '<Label id="DltBuildProgressText" class="DltBuildProgressText" />'
                 '<Panel class="DltBuildProgressTrack"><Panel id="DltBuildProgressFill" class="DltBuildProgressFill" /></Panel>'
-                '<Label id="DltBuildProgressText" class="DltBuildProgressText" /></Panel>')
+                '</Panel></Panel><Panel class="DltToastBadge">'
+                '<Label class="DltToastBadgePrimary" text="文" /><Label class="DltToastBadgeSecondary" text="A" />'
+                '</Panel></Panel>')
     def actions(prefix, button, classes, event):
         return ('<Panel class="DltBuildActions">'
                 f'<{button} id="{prefix}Translate" class="{classes}" text="翻译当前出装" {event}="DLTBuildTextAction();" />'
@@ -191,7 +199,8 @@ def prepare():
     for anchor in ('</styles>', '<snippets>', '<Panel id="ChatControls">'):
         if xml.count(anchor) != 1:
             raise ValueError('Game chat layout changed: expected exactly one ' + anchor)
-    xml = xml.replace('</styles>', '\t<include src="s2r://panorama/styles/dlt_chat.vcss_c" />\n'
+    xml = xml.replace('</styles>', '\t<include src="s2r://panorama/styles/dlt_toast.vcss_c" />\n'
+                      '\t<include src="s2r://panorama/styles/dlt_chat.vcss_c" />\n'
                       f'\t\t<include src="{NATIVE_BUBBLE_STYLE}" />\n\t</styles>')
     xml = xml.replace('<snippets>', '<scripts><include src="s2r://panorama/scripts/dlt_chat.vjs_c" /></scripts>\n\t<snippets>')
     xml = xml.replace('<Panel id="ChatControls">','<HTML id="DltBridge" class="DltBridge" hittest="false" hittestchildren="false" acceptsinput="false" acceptsfocus="false" />\n\t\t<Panel id="ChatControls">')

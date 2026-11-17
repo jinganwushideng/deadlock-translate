@@ -142,7 +142,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          foreach ($test in @('incoming-feed.test.cjs', 'native-root-reflow.test.cjs', 'native-plain-birth.test.cjs', 'native-layout-controller.test.cjs', 'native-context.test.cjs', 'native-paint.test.cjs', 'native-template.test.cjs', 'hud-refresh.test.cjs', 'native-label-rendering.test.cjs', 'native-hero-identity.test.cjs', 'feed-width.test.cjs', 'display-customization.test.cjs', 'display-reliability.test.cjs', 'bridge-recovery.test.cjs', 'chat-pipeline-audit.test.cjs', 'scene-lifecycle.test.cjs', 'bubble-lifecycle.test.cjs', 'panorama.test.cjs', 'outgoing-ui.test.cjs', 'game-window.test.cjs', 'menu-layout.test.cjs')) {
+          foreach ($test in @('incoming-feed.test.cjs', 'native-root-reflow.test.cjs', 'native-plain-birth.test.cjs', 'native-layout-controller.test.cjs', 'native-context.test.cjs', 'native-paint.test.cjs', 'native-template.test.cjs', 'hud-refresh.test.cjs', 'native-label-rendering.test.cjs', 'native-hero-identity.test.cjs', 'feed-width.test.cjs', 'display-customization.test.cjs', 'display-reliability.test.cjs', 'bridge-recovery.test.cjs', 'chat-pipeline-audit.test.cjs', 'scene-lifecycle.test.cjs', 'bubble-lifecycle.test.cjs', 'panorama.test.cjs', 'outgoing-ui.test.cjs', 'translation-toast.test.cjs', 'game-window.test.cjs', 'menu-layout.test.cjs')) {
             node (Join-Path tests $test)
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }

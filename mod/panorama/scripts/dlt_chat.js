@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-540522399a24';
+var BUILD_ID = '0.7.5-c31f1cdb5ae3';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -157,6 +157,8 @@ var DLTChatInputChanged = function () {};
         try { if (valid(ROOT) && ROOT.__dltOwner === context) { ROOT.__dltOwner = null; ROOT.__dltTranslationProgress = null; } } catch (_) {}
         try { if (valid(ROOT) && ROOT.__dltAdapterControl === control) ROOT.__dltAdapterControl = null; } catch (_) {}
         // The engine owns native chat/HTML destruction. Never navigate or delete it during teardown.
+        if (valid(state.localToast)) { state.localToast.visible = false; if (state.localToast.DeleteAsync) state.localToast.DeleteAsync(0); }
+        state.localToast = null;
         closeDisplayPreview(); clearFeed(true); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = {}; state.render = []; state.outbox = []; state.hud = []; state.hudRoots = []; state.extraHudRoots = []; state.hudSearch = null;
         state.chats = []; state.outgoingQueue = []; state.outgoingKnown = {}; state.pending = null; state.pendingHotkey = null; state.drafts = []; state.liveDraft = null;
         state.chat = state.rootChat = state.rootMessages = state.lobby = state.input = state.targetLabel = state.bridge = state.menuMount = null;
@@ -348,41 +350,83 @@ var DLTChatInputChanged = function () {};
             return valid(state.input) && (has(context, 'ChatExpanded') || has(state.rootChat, 'ChatExpanded') || !!(state.input.BHasKeyFocus && state.input.BHasKeyFocus()));
         } catch (_) { return false; }
     }
-    function showLocalToast(message, expense) {
+    function showLocalToast(message, details) {
         var panel = state.localToast;
         if (!valid(panel)) {
-            panel = $.CreatePanel('Label', ROOT, 'DltTranslationToast');
-            panel.hittest = false; panel.html = false;
-            feedStyle(panel, { horizontalAlign:'center', verticalAlign:'bottom', marginBottom:'118px',
-                maxWidth:'650px', padding:'8px 16px', borderRadius:'5px', color:'#fff7dc',
-                backgroundColor:'#233638f2', border:'1px solid #718884', fontSize:'18px', zIndex:'301' });
+            panel = $.CreatePanel('Panel', ROOT, 'DltTranslationToast');
+            panel.hittest = false; panel.hittestchildren = false;
+            panel.SetHasClass('DltToastHost', true); panel.SetHasClass('DltTranslationToast', true);
+            function child(type, parent, id, classes) {
+                var value = $.CreatePanel(type, parent, id);
+                value.hittest = false; value.hittestchildren = false;
+                for (var i = 0; i < classes.length; i++) value.SetHasClass(classes[i], true);
+                if (type === 'Label') value.html = false;
+                return value;
+            }
+            var body = child('Panel', panel, 'DltToastBody', ['DltToastBody']);
+            child('Panel', body, '', ['DltToastPattern']);
+            child('Panel', body, '', ['DltToastInset']);
+            var content = child('Panel', body, '', ['DltToastContent']);
+            var summary = child('Panel', content, '', ['DltToastSummary']);
+            panel.heading = child('Label', summary, 'DltToastTitle', ['DltToastTitle']);
+            panel.subtitle = child('Label', summary, 'DltToastSubtitle', ['DltToastSubtitle']);
+            var cost = child('Panel', content, '', ['DltToastCost']);
+            panel.costCaption = child('Label', cost, 'DltToastCostCaption', ['DltToastSubtitle']);
+            panel.costValue = child('Label', cost, 'DltToastCostValue', ['DltToastTitle', 'DltToastCostValue']);
+            child('Panel', content, '', ['DltToastDiamond']);
+            panel.balance = child('Label', content, 'DltToastBalance', ['DltToastChip']);
+            var badge = child('Panel', panel, '', ['DltToastBadge']);
+            child('Label', badge, '', ['DltToastBadgePrimary']).text = '文';
+            child('Label', badge, '', ['DltToastBadgeSecondary']).text = 'A';
             state.localToast = panel;
         }
-        panel.text = message; panel.visible = true;
-        state.toastUntil = Date.now() + (expense ? 4000 : 2400);
+        panel.SetHasClass('DltToastSimple', !details);
+        panel.heading.text = message;
+        panel.subtitle.text = details ? details.subtitle : '同频翻译';
+        if (details) {
+            panel.costCaption.text = details.costCaption;
+            panel.costValue.text = details.cost;
+            panel.balance.text = details.balance;
+            panel.balance.SetHasClass('DltToastBalancePending', details.balancePending);
+        }
+        panel.visible = true;
+        state.toastUntil = Date.now() + (details ? 4000 : 2400);
     }
     function showExpense(data) {
         if (!data || !Array.isArray(data.items)) return;
-        var now=Date.now(), group=state.expenseToast;
-        if (!group || now>=group.until) group={tasks:0,category:'',minimum:0,maximum:0,priced:0,missing:0};
-        var names={incoming:'接收翻译',outgoing:'发送翻译',build:'出装翻译'};
-        var added=false;
-        for (var i=0;i<data.items.length;i++) {
-            var item=data.items[i];
-            if (item.id<=(state.deepSeekSeen||0)) continue;
-            state.deepSeekSeen=item.id; added=true;
-            group.tasks++; group.category=names[item.category]||'翻译'; group.missing+=item.missingUsage||0;
-            if (item.cost){group.priced++;group.minimum+=item.cost.minimum;group.maximum+=item.cost.maximum;}
+        var now = Date.now(), group = state.expenseToast;
+        if (!group || now >= group.until) group = {tasks:0, builds:0, minimum:0, maximum:0, priced:0, missing:0};
+        var added = false;
+        for (var i = 0; i < data.items.length; i++) {
+            var item = data.items[i];
+            if (item.id <= (state.deepSeekSeen || 0)) continue;
+            state.deepSeekSeen = item.id; added = true;
+            group.tasks++; if (item.category === 'build') group.builds++;
+            group.missing += item.missingUsage || 0;
+            if (item.cost) { group.priced++; group.minimum += item.cost.minimum; group.maximum += item.cost.maximum; }
         }
-        if(!added)return;
-        function amount(value){return value===0?'0':value<0.000001?'<0.000001':value.toFixed(6);}
-        var cost=group.priced?'约 ¥'+amount(group.minimum)+(group.maximum!==group.minimum?'–'+amount(group.maximum):''):'费用暂不可估算';
-        var balance=(data.balance||[]).map(function(x){return x.currency+' '+x.total;}).join(' / ');
-        var seen=balance&&data.checkedAt?new Date(data.checkedAt):null;
-        var time=seen&&!isNaN(seen.getTime())?'（'+('0'+seen.getHours()).slice(-2)+':'+('0'+seen.getMinutes()).slice(-2)+'）':'';
-        showLocalToast('DeepSeek · '+(group.tasks===1?group.category:group.tasks+' 个翻译任务')+' · '+cost+
-            (group.missing&&group.priced?'（部分未计）':'')+(balance?' · 最近余额 '+balance+time:''),true);
-        group.until=now+4000;state.expenseToast=group;
+        if (!added) return;
+        function amount(value) {
+            if (!value) return '0.00';
+            return value < 0.000001 ? '<0.000001' : value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+        }
+        var cost = group.priced ? '约 ¥' + amount(group.minimum) +
+            (group.maximum !== group.minimum ? '–' + amount(group.maximum) : '') : '暂不可估算';
+        var balance = (data.balance || []).map(function (value) {
+            var symbol = value.currency === 'CNY' ? '¥' : value.currency === 'USD' ? '$' : value.currency + ' ';
+            var number = Number(value.total);
+            return symbol + (number > 0 && number < 0.01 ? amount(number) : number.toFixed(2));
+        }).join(' / ');
+        var seen = balance && data.checkedAt ? new Date(data.checkedAt) : null;
+        var time = seen && !isNaN(seen.getTime()) ? ('0' + seen.getHours()).slice(-2) + ':' + ('0' + seen.getMinutes()).slice(-2) : '';
+        var heading = group.builds === group.tasks ? group.tasks === 1 ? '出装翻译完成' : '已翻译 ' + group.tasks + ' 套出装' :
+            group.builds ? '已完成 ' + group.tasks + ' 个翻译' : '已翻译 ' + group.tasks + ' 条';
+        showLocalToast(heading, {
+            subtitle: 'DeepSeek' + (time ? ' · 余额 ' + time : ''),
+            costCaption: '本次花费' + (group.missing && group.priced ? '（部分）' : ''),
+            cost: cost, balance: balance ? '余额 ' + balance : '余额待查询', balancePending: !balance
+        });
+        group.until = now + 4000; state.expenseToast = group;
     }
     function settingsVisible() { var window = ROOT.__dltActiveSettingsWindow; return state.openSettings || valid(window) && !window.__dltClosing; }
     function inputOpen() { return nativeInputOpen(); }

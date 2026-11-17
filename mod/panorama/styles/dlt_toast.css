@@ -1,0 +1,119 @@
+.DltToastHost {
+    ignore-parent-flow: true;
+    width: 430px;
+    height: 56px;
+    font-family: sans;
+    overflow: noclip;
+}
+.DltTranslationToast {
+    horizontal-align: center;
+    vertical-align: bottom;
+    margin-bottom: 92px;
+    z-index: 301;
+}
+.DltToastBody {
+    margin-left: 18px;
+    width: 412px;
+    height: 100%;
+    background-color: #1b2622f5;
+    border: 1px solid #3c5749;
+    border-radius: 4px;
+    box-shadow: 0px 2px 6px #00000055;
+}
+.DltToastPattern {
+    ignore-parent-flow: true;
+    width: 100%;
+    height: 100%;
+    background-image: url("s2r://panorama/images/textures/diagonal_stripes.vsvg");
+    background-repeat: repeat;
+    background-size: 12px 12px;
+    background-img-opacity: 0.035;
+}
+.DltToastInset {
+    ignore-parent-flow: true;
+    margin: 3px;
+    width: 404px;
+    height: 48px;
+    border: 1px solid #90b09a13;
+    border-radius: 2px;
+}
+.DltToastBadge {
+    ignore-parent-flow: true;
+    width: 42px;
+    height: 42px;
+    vertical-align: center;
+    background-color: #d9d4c7;
+    border: 3px solid #17251e;
+    border-radius: 50%;
+}
+.DltToastBadge Label {
+    ignore-parent-flow: true;
+    color: #16241f;
+    font-weight: bold;
+}
+.DltToastBadgePrimary { font-size: 17px; margin-left: 6px; margin-top: 4px; }
+.DltToastBadgeSecondary { font-size: 17px; margin-left: 19px; margin-top: 15px; }
+.DltToastContent {
+    flow-children: right;
+    width: 100%;
+    height: 100%;
+    padding: 6px 11px 6px 34px;
+}
+.DltToastSummary {
+    flow-children: down;
+    width: fill-parent-flow(1.0);
+    vertical-align: center;
+    margin-right: 8px;
+}
+.DltToastTitle {
+    color: #f5f0df;
+    font-size: 16px;
+    font-weight: semi-bold;
+    width: 100%;
+    text-overflow: shrink;
+    white-space: nowrap;
+}
+.DltToastSubtitle {
+    color: #879e90;
+    font-size: 11px;
+    width: 100%;
+    text-overflow: shrink;
+    white-space: nowrap;
+}
+.DltToastCost {
+    flow-children: down;
+    width: 100px;
+    vertical-align: center;
+    margin-right: 10px;
+}
+.DltToastCost Label { text-align: right; }
+.DltToastCostValue { color: #f5f0df; font-size: 15px; }
+.DltToastDiamond {
+    width: 5px;
+    height: 5px;
+    vertical-align: center;
+    margin-right: 10px;
+    background-color: #56816a;
+    transform: rotateZ(45deg);
+}
+.DltToastChip {
+    vertical-align: center;
+    width: 100px;
+    min-height: 29px;
+    padding: 4px 8px;
+    background-image: url("s2r://panorama/images/buttons/play/btn_background.vsvg");
+    background-size: 100% 100%;
+    background-img-tint: #7bdd9a;
+    color: #10251a;
+    font-size: 15px;
+    font-weight: bold;
+    text-align: center;
+    text-overflow: shrink;
+    white-space: nowrap;
+}
+.DltToastSimple .DltToastTitle { font-size: 14px; }
+.DltToastSimple .DltToastCost,
+.DltToastSimple .DltToastDiamond,
+.DltToastSimple .DltToastChip { visibility: collapse; }
+
+.DltToastBalancePending { background-img-tint: #789383; color: #10251a; font-size: 12px; }

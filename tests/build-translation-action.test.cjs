@@ -38,6 +38,7 @@ function fixture(autoEnabled, withText = true, initialTitle = 'Build title') {
     const bridge = panel('DltShopBridge', root), actions = panel('actions',root), translate = panel('DltShopTranslate', actions);
     const progress = panel('DltShopProgress', root);
     panel('DltBuildProgressFill', progress);
+    panel('DltBuildProgressCount', progress);
     const status = panel('DltBuildProgressText', progress);
     bridge.SetURL = url => {
         navigations.push(url);
@@ -154,6 +155,7 @@ reply(complete, { translations: ['Title result', null, 'Note result', null], cac
 assert.deepEqual(complete.sent[2].texts, ['Early group', 'Unseen annotation']);
 reply(complete, { translations: ['Group result', 'Annotation result'], translated: 2 });
 assert.equal(complete.scene.__dltBuildText.job.total, 4);
+assert.equal(complete.progress.FindChildTraverse('DltBuildProgressCount').text, '4/4');
 const later = complete.category('Early group', 'Unseen   annotation');
 complete.frame(); complete.frame();
 assert.equal(shown(later.first), 'Group result');

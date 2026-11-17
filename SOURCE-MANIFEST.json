@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-540522399a24",
+  "buildId": "0.7.5-c31f1cdb5ae3",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "3979b0c0865f3c64254628d295abf3dba779630c95afdd847c929c674bf733dc"
+      "sha256": "ec6c222613672850e91c4d7558b07cde188e7790ddd804c41d0535dcacfa3e33"
     },
     {
       "file": ".gitignore",
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "8b30daf98967c5c6200ab81b8e38b78ebd78edd138d2b6752d151a0a749158f6"
+      "sha256": "9b914110b020f528ac4ecb10a2e54f98682bd1cd55e3d1b854fd946d2b6036ab"
     },
     {
       "file": "CHANGELOG.md",
@@ -221,7 +221,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_build_text.js",
-      "sha256": "daa6a62c632779f6db2ebee3b542b53a95b7b4292002338517a7a2650791086e"
+      "sha256": "9f65ab3e95bb242605656d335fb9ca80c7e5fa1a5910257f494c85906f1c2097"
     },
     {
       "file": "mod/panorama/scripts/dlt_build_transport.js",
@@ -229,7 +229,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "2b5b880cb9f73437eb8d19621ce9df22b17ea9380cfe98164ecbaecfadc59090"
+      "sha256": "1857ec903fe4efb94417e04d9557bd215e47fbc8febe4a826ab1b9167ef8450a"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -245,7 +245,7 @@
     },
     {
       "file": "mod/panorama/styles/dlt_build_text.css",
-      "sha256": "30c814aa26a16282ef487391c66254fb31bd71257049c5ca2138738074f2df95"
+      "sha256": "851cc637a46eba6fe4d4d6147e30f4ee3e6e8d6bcb5c1dd48338ff3b40e45a69"
     },
     {
       "file": "mod/panorama/styles/dlt_chat.css",
@@ -264,6 +264,10 @@
       "sha256": "a4dcea0c1ebfd165dc4de22e569f021726e5da8622369464b2d0849331b74d5d"
     },
     {
+      "file": "mod/panorama/styles/dlt_toast.css",
+      "sha256": "b99ff8908a6b3bf099073019f9dbd4ddf8e415e7fea7771797f040e7a66a9c72"
+    },
+    {
       "file": "NOTICE",
       "sha256": "9969362fc8266820b2c0aaaee70359160afb138d05f32a6a2e32335eba321707"
     },
@@ -277,7 +281,7 @@
     },
     {
       "file": "scripts/build.ps1",
-      "sha256": "3e12255acbe1698426cf3691d7b05943b407da00ab208e2303e2d243fa054dfd"
+      "sha256": "5c3044d78abed0abf47a02b2d8d79aa68d56faf568c03922d031e444ff949d15"
     },
     {
       "file": "scripts/build_external_updater.py",
@@ -369,7 +373,7 @@
     },
     {
       "file": "scripts/prepare_mod.py",
-      "sha256": "c10abaa12db3f14586d217f6caaa3ffec89bd288c735791f4767a6f7e1d5ebb7"
+      "sha256": "e0850cb6203d571ef03af7834a81bda5e14a233e6d978963bb83b14874410d6e"
     },
     {
       "file": "scripts/release_history.py",
@@ -445,7 +449,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "47a36b08f72458241c48d9b2d2a1ee783437efaee3ff5d2b8bf1ffc0d8dc7aa3"
+      "sha256": "e3a3c0d4b07fca3ae2b204d5bcdeef7557f1a9a09ebb0423d1dab3f7c226af36"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -701,7 +705,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "81ea972a342fa13b279555d68f4d6043c5a86ee242884d781c711e72dc859ba5"
+      "sha256": "2b707525c1e4da9a91bc488ada77260d5b281ef73b5c9369c8d17fd5081766e4"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -721,7 +725,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/style.css",
-      "sha256": "eb7a5405bbc286e5cace5df0fb97b78606ff0c64c3fea218ef983db81d1c4cc7"
+      "sha256": "c7eb5cb3d5317e93eab471a7f4e02d04f6da0a4534751a76a3d7d55665e99d78"
     },
     {
       "file": "src/Installer/app.manifest",
@@ -797,7 +801,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "16a025a31b9aba95f153114b8e8060b7e905568714ef2d0c1f2a2e9c59b3843d"
+      "sha256": "19b0b5577a82c8d16bf4cdb0657055a278b5d90898b05aba18f8b0eb21cece32"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -889,7 +893,7 @@
     },
     {
       "file": "tests/build-translation-action.test.cjs",
-      "sha256": "646181de3e5dc61af169f1724a1950277135d2706f23dc0687e9c0c1e986ace0"
+      "sha256": "1067c089fd5763258099d962009da1cbe18eacf7663d1ca43b37665c62f061f4"
     },
     {
       "file": "tests/build-translation-transport.test.cjs",
@@ -1305,7 +1309,7 @@
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
-      "sha256": "36811bd79a96bb649acc21c734ffcf27505d3fcfd729f401221d0edfe01178fa"
+      "sha256": "26f41397b463d226f63f269a7cbe502013adf8eb0fed003d7b7e665c048084fa"
     },
     {
       "file": "tests/package-lock.json",
@@ -1506,6 +1510,10 @@
     {
       "file": "tests/terms-merge.test.py",
       "sha256": "d4f56e11c7277630f9a24d87ba0a3cc6b443508afc4f56ad7e6af812df6045b5"
+    },
+    {
+      "file": "tests/translation-toast.test.cjs",
+      "sha256": "5d859901599dd3dbfaae54425b1174e15f746e4c001d9748d9eaba17a515d333"
     },
     {
       "file": "tests/ui-visual.cjs",

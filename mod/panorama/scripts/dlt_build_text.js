@@ -251,6 +251,7 @@ function DLTChineseBuildTitle(title) {
             var progress = root.FindChildTraverse(shop ? 'DltShopProgress' : 'DltBuildProgress');
             var fill = progress.FindChildTraverse('DltBuildProgressFill');
             var status = progress.FindChildTraverse('DltBuildProgressText');
+            var count = progress.FindChildTraverse('DltBuildProgressCount');
             var control = {
                 root: root, visible: function () { return eligibleController() && isVisible(); }, request: send, receive: receive, reopening: false, kind: button ? 'details' : 'shop',
                 cancel: function () { if (bridge.IsValid()) transport.cancel(); },
@@ -272,6 +273,11 @@ function DLTChineseBuildTitle(title) {
                     if (running) percent = Math.min(99, percent);
                     var width = percent + '%';
                     if (fill.style.width !== width) fill.style.width = width;
+                    if (count && count.IsValid()) {
+                        var total = job && job.total || 0;
+                        var counter = total ? job.done + '/' + total : job && job.failed ? '需重试' : '准备中';
+                        if (count.text !== counter) count.text = counter;
+                    }
                     var looking = job && (job.pending && job.pending.batch.lookup || job.queue.some(function (batch) { return batch.lookup; }));
                     var sourceErrors = { 'account-unavailable': '未找到当前 Steam 账号', 'cache-missing': '本地出装缓存尚未生成，请先加载该方案',
                         'cache-too-large': '本地出装缓存超出读取限制', 'cache-changing': '游戏正在保存出装，请稍后重试',
@@ -284,12 +290,12 @@ function DLTChineseBuildTitle(title) {
                     var caption = state.error ? '出装界面读取异常，请重新打开商店' : job && job.failed && sourceErrors[job.sourceStatus] ? sourceErrors[job.sourceStatus] :
                         !online ? '后台翻译已停用' : state.awaitingBuild ? '等待游戏加载出装名称' : !job ? '正在读取出装' : job.manualCapture ?
                         '请在出装选项中点击「复制到剪贴板」' : job.receiving ?
-                        '接收译文 ' + job.cursor + (job.fieldCount ? '/' + job.fieldCount : '') : job.downloadComplete && !job.finishedAt ?
+                        '正在接收译文' : job.downloadComplete && !job.finishedAt ?
                         '正在显示译文' : job.bg && job.bg.accepted && !job.total ? '等待后台任务' : !job.total ?
                         (sourceErrors[job.sourceStatus] || (job.failed ? '读取整套出装失败，请重试' : '正在读取本地整套出装')) : running ?
-                        (looking || job.bg && !job.working ? '读取本地译文 ' : job.refining ? '大模型翻译 ' : '后台翻译 ') + job.done + '/' + job.total :
-                        job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
-                        (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
+                        (looking || job.bg && !job.working ? '读取本地译文' : job.refining ? '大模型翻译中' : '后台翻译中') :
+                        job.failed ? '部分完成 · ' + job.failed + ' 段失败' :
+                        (job.translated ? '译文已就绪' : '本地译文已就绪');
                     if (job && job.total) caption += ' · 缓存 ' + job.cacheHits + (job.localHits ? ' · 本地直译 ' + job.localHits : '') + ' · 新译 ' + job.translated;
                     if (job && job.visibleOnly) caption += ' · 当前页';
                     if (status.text !== caption) status.text = caption;
