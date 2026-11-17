@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-9a2cf7118d8b';
+var BUILD_ID = '0.7.5-5a76550b72ac';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -420,14 +420,17 @@ var DLTChatInputChanged = function () {};
     function showExpense(data) {
         if (!data || !Array.isArray(data.items)) return;
         var now = Date.now(), group = state.expenseToast;
-        group = !group || now >= group.until ? {tasks:0, builds:0, minimum:0, maximum:0, priced:0, missing:0} :
-            {tasks:group.tasks, builds:group.builds, minimum:group.minimum, maximum:group.maximum, priced:group.priced, missing:group.missing};
+        group = !group || now >= group.until ? {tasks:0, builds:0, incoming:0, outgoing:0, minimum:0, maximum:0, priced:0, missing:0} :
+            {tasks:group.tasks, builds:group.builds, incoming:group.incoming, outgoing:group.outgoing, minimum:group.minimum, maximum:group.maximum, priced:group.priced, missing:group.missing};
         var added = false, sequence = state.deepSeekSeen || 0;
         for (var i = 0; i < data.items.length; i++) {
             var item = data.items[i];
             if (item.id <= sequence) continue;
             sequence = item.id; added = true;
-            group.tasks++; if (item.category === 'build') group.builds++;
+            group.tasks++;
+            if (item.category === 'build') group.builds++;
+            else if (item.category === 'incoming') group.incoming++;
+            else if (item.category === 'outgoing') group.outgoing++;
             group.missing += item.missingUsage || 0;
             if (item.cost) { group.priced++; group.minimum += item.cost.minimum; group.maximum += item.cost.maximum; }
         }
@@ -446,7 +449,9 @@ var DLTChatInputChanged = function () {};
         var seen = balance && data.checkedAt ? new Date(data.checkedAt) : null;
         var time = seen && !isNaN(seen.getTime()) ? ('0' + seen.getHours()).slice(-2) + ':' + ('0' + seen.getMinutes()).slice(-2) : '';
         var heading = group.builds === group.tasks ? group.tasks === 1 ? '出装翻译完成' : '已翻译 ' + group.tasks + ' 套出装' :
-            group.builds ? '已完成 ' + group.tasks + ' 个翻译' : '已翻译 ' + group.tasks + ' 条';
+            group.builds ? '已完成 ' + group.tasks + ' 个翻译' :
+            group.incoming && group.outgoing ? '发送 ' + group.outgoing + ' · 接收 ' + group.incoming :
+            group.outgoing ? '发送翻译 ' + group.outgoing + ' 条' : '接收翻译 ' + group.incoming + ' 条';
         if (!showLocalToast(heading, {
             subtitle: 'DeepSeek' + (time ? ' · 余额 ' + time : ''),
             costCaption: '本次花费' + (group.missing && group.priced ? '（部分）' : ''),
@@ -843,6 +848,9 @@ var DLTChatInputChanged = function () {};
         var sender = text(classes(row, kind === 'lobby' ? 'ChatPersona' : 'SenderName')[0]).slice(0, 100);
         var nativeId = nativeMessageId(row);
         var identity = readHeroIdentity(row, contents, value + '\n' + sender, kind, team, sender, nativeId);
+        // The native roster's LocalPlayer marker also identifies server-returned
+        // history/HUD rows that lack the local-only SenderLocalClient snippet.
+        if (identity && identity.local === true) role = 'self';
         var freshText = value !== row.__dltEchoObservedText;
         row.__dltEchoObservedText = value;
         checkEcho(value, channel, role, freshText);

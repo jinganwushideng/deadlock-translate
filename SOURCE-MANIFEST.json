@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-9a2cf7118d8b",
+  "buildId": "0.7.5-5a76550b72ac",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "2a140af5d9004a15799ca1e533c5cd66a3711bab45c8db2958653e9b0331ecb8"
+      "sha256": "dd8b1e510563285ee0cada2626153af5918c63aec9e80f55e455a90748d2fe0b"
     },
     {
       "file": "CHANGELOG.md",
@@ -233,7 +233,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "98307905d9e0bf54ec1c9901cfdb69e91c61b124f15cbe874c02e799efa07c45"
+      "sha256": "04ef4db658f756d9dff3ca57a428a94d0d51e0d35e97a20eaf5986c13e382644"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -453,7 +453,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "fcd89df9acfde624d47b9fd68bb63a85652a4ecde9bb7c35a9b05592211a9e9c"
+      "sha256": "2e805dd23fff3efd9003888535639205b5eb35331855009a63c8c11188db4837"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -1089,7 +1089,7 @@
     },
     {
       "file": "tests/incoming-feed.test.cjs",
-      "sha256": "056d96ecbf8c2e3a7098521356da4ad6369270bcde2f922bc6048882f6eaab32"
+      "sha256": "a62bbbe80b491ce0ac0a3dad4c280af09469af48eed058c742f004a1dc19af10"
     },
     {
       "file": "tests/incoming-style-ui.test.cjs",
@@ -1517,7 +1517,7 @@
     },
     {
       "file": "tests/translation-toast.test.cjs",
-      "sha256": "3b555711300099c288d11e9c5b43d7455084af216567d95b270e1689cbc9cb61"
+      "sha256": "0642b7930428a9226fb78deed8e009daa24ce5fd1eb6c321c03d6683c813da76"
     },
     {
       "file": "tests/ui-visual.cjs",

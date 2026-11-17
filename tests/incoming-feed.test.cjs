@@ -47,6 +47,42 @@ check('delayed own results stay hidden while other players continue to display',
     const b = w.bubble('delayed own'); b.AddClass('IsSelf'); w.bubble('delayed peer'); w.step(20);
     assert(!b.__dltLabel?.text); assert.equal(active(w).length, 1); assert(active(w)[0].children[1].text.includes('delayed peer'));
 });
+function rosterEchoFixture() {
+    const native = exposed.replace('var heroLabels = {}; // __DLT_HERO_LABELS__',
+        'var heroLabels = '+JSON.stringify({'local-hero':{name:'local-hero'},'peer-hero':{name:'peer-hero'}})+';');
+    const w=world(native);
+    Object.assign(w.config,{incomingDisplayMode:'both',incomingScope:'all_players'});
+    const team=new w.Panel('TeamFriendly',w.root,'team1');
+    const players=new w.Panel('PlayersContainer',team);
+    const local=new w.Panel('',players,'LocalPlayer');
+    new w.Panel('',local,'HeroName').text='local-hero';new w.Panel('',local,'PlayerName').text='native local';
+    const peer=new w.Panel('',players);
+    new w.Panel('',peer,'HeroName').text='peer-hero';new w.Panel('',peer,'PlayerName').text='native peer';
+    w.refresh();w.step(6);
+    state(w).recentOwn.push({text:'hello team',original:'你好',channel:'team',displayMode:'bilingual',at:w.now,views:{}});
+    return w;
+}
+check('native local roster marker identifies a server-returned sent echo without SenderLocalClient',()=>{
+    const w=rosterEchoFixture();
+    const row=w.row('hello team');
+    row.FindChildrenWithClassTraverse('SenderName')[0].text='native local';
+    new w.Panel('',row,'SenderHeroImage');
+    const hud=w.bubble('hello team');hud.AddClass('PlayerIndex1');
+    w.step(8);
+    assert.equal(w.requests.length,0);
+    assert.equal(state(w).metrics.localEchoReused,2);
+    assert.equal(active(w).length,0);
+});
+check('another player sending the same text still receives a real incoming translation',()=>{
+    const w=rosterEchoFixture();
+    const row=w.row('hello team');
+    row.FindChildrenWithClassTraverse('SenderName')[0].text='native peer';
+    new w.Panel('',row,'SenderHeroImage');
+    const hud=w.bubble('hello team');hud.AddClass('PlayerIndex2');
+    w.step(8);
+    assert.equal(w.requests.length,1);
+    assert.equal(state(w).metrics.localEchoReused,0);
+});
 check('history self marker is authoritative without guessing from an account name', () => {
     const w = fresh('both', false), own = w.row('marked local'); new w.Panel('', own, 'SenderLocalClient'); const peer = w.row('unmarked peer'); w.step(8);
     assert(!own.__dltLabel?.text); assert(peer.__dltLabel?.text);
