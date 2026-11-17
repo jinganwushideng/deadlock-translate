@@ -148,7 +148,7 @@ public sealed partial class Wizard
         var label=new Label{AutoSize=true,MaximumSize=new Size(500,0)};
         var notes=new TextBox{Dock=DockStyle.Fill,ReadOnly=true,Multiline=true,ScrollBars=ScrollBars.Vertical,BackColor=card,ForeColor=ink};
         var buttons=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
-        var check=Button("检查更新",()=>{});var download=Button("下载安装包",()=>{});var cancel=Button("取消下载",releaseUpdates.CancelDownload);var start=Button("打开安装器",()=>{});
+        var check=Button("检查更新",()=>{});var download=Button("下载更新",()=>{});var cancel=Button("取消下载",releaseUpdates.CancelDownload);var start=Button("打开安装器",()=>{});
         var channels=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
         channels.Controls.AddRange([
             Button("GitHub 发布页 ↗",()=>OpenChannel(ReleaseUpdates.GitHubReleases)),
@@ -157,7 +157,7 @@ public sealed partial class Wizard
         ]);
         buttons.Controls.AddRange([check,download,cancel,start]);
         layout.Controls.Add(label);layout.Controls.Add(notes);layout.Controls.Add(buttons);layout.Controls.Add(channels);dialog.Controls.Add(layout);
-        string? error=null;bool checking=false;
+        string? error=null;string? routeStatus=null;bool checking=false,routing=false;
         void OpenChannel(string url){
             try{using var browser=Process.Start(new ProcessStartInfo(url){UseShellExecute=true});}
             catch(Exception ex)when(ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException){
@@ -170,13 +170,13 @@ public sealed partial class Wizard
                 result.Version!=null?$" · GitHub {result.Version} · {result.Size/1048576.0:F1} MB":
                 result.CheckError!=null?" · GitHub 版本暂无法确认":result.LastChecked!=null?" · GitHub 暂无新版":" · 尚未检查更新";
             label.Text=$"当前 {result.CurrentVersion}"+version+
-                (checking?" · 正在检查":result.Download=="downloading"?$" · {result.Downloaded/1048576.0:F1} MB 已下载":"");
+                (routing?" · 正在检测 GitHub 下载速度":checking?" · 正在检查":result.Download=="downloading"?$" · {result.Downloaded/1048576.0:F1} MB 已下载":"");
             var mirrorDetails=result.Mirrors is { } mirrors?
                 $"网盘文件夹标记 · 夸克 {mirrors.QuarkVersion??"暂无法确认"} · 百度 {mirrors.BaiduVersion??"暂无法确认"}":null;
-            var description=string.Join(Environment.NewLine,new[]{error,result.CheckError,result.DownloadError,mirrorDetails,
-                "网盘打开后，请按标有「最新版」的文件夹名确认版本，下载完整安装器。",result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
+            var description=string.Join(Environment.NewLine,new[]{routeStatus,error,result.CheckError,result.DownloadError,mirrorDetails,
+                "下载更新会检测 GitHub 安装包链接，达到 512 KB/s 时打开 GitHub 发布页，连接失败、超时或过慢时打开夸克网盘。","网盘打开后，请按标有「最新版」的文件夹名确认版本，下载完整安装器。",result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
             if(notes.Text!=description)notes.Text=description;
-            check.Enabled=!checking;download.Enabled=result.Version!=null&&result.Download!="downloading";cancel.Enabled=result.Download=="downloading";start.Enabled=result.Download=="ready";
+            check.Enabled=!checking&&!routing;download.Enabled=!checking&&!routing&&result.Download!="downloading";cancel.Enabled=result.Download=="downloading";start.Enabled=result.Download=="ready";
         }
         async Task Act(Func<Task> action){
             try{error=null;await action();}
@@ -185,7 +185,17 @@ public sealed partial class Wizard
             if(!dialog.IsDisposed)Render();
         }
         check.Click+=async(_,_)=>{checking=true;Render();await Act(async()=>{await releaseUpdates.Check(false,lifetime.Token);});checking=false;if(!dialog.IsDisposed)Render();};
-        download.Click+=async(_,_)=>await Act(()=>{releaseUpdates.StartDownload();return Task.CompletedTask;});
+        download.Click+=async(_,_)=>{
+            if(routing||checking)return;
+            routing=true;routeStatus="正在检测 GitHub 下载速度，最多约 6 秒…";Render();
+            await Act(async()=>{
+                var route=await releaseUpdates.SelectDownloadChannel(lifetime.Token);
+                lifetime.Token.ThrowIfCancellationRequested();
+                routeStatus=route.Message;
+                OpenChannel(route.Url);
+            });
+            routing=false;if(!dialog.IsDisposed)Render();
+        };
         start.Click+=async(_,_)=>await Act(async()=>{
             if(MessageBox.Show(dialog,"退出 Deadlock 后打开已校验的安装器？",Text,MessageBoxButtons.OKCancel)!=DialogResult.OK)return;
             await releaseUpdates.StartInstaller(lifetime.Token,waitPrevious:true);dialog.Close();

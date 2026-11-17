@@ -242,6 +242,14 @@ app.MapGet("/api/updates",()=>releaseUpdates.Status());
 app.MapPost("/api/updates/open/github",()=>OpenCommunityLink(ReleaseUpdates.GitHubReleases, "GitHub 发布页链接", true));
 app.MapPost("/api/updates/open/quark",()=>OpenCommunityLink(ReleaseUpdates.QuarkShare, "夸克网盘链接", true));
 app.MapPost("/api/updates/open/baidu",()=>OpenCommunityLink(ReleaseUpdates.BaiduShare, "百度网盘链接", true));
+app.MapPost("/api/updates/open/auto",async(HttpContext ctx)=>{
+    try{
+        var route=await releaseUpdates.SelectDownloadChannel(ctx.RequestAborted);
+        ctx.RequestAborted.ThrowIfCancellationRequested();
+        var opened=OpenCommunityLink(route.Url,"更新下载地址",true);
+        return opened is IStatusCodeHttpResult {StatusCode:>=400}?opened:Results.Ok(route);
+    }catch(IOException ex){return Results.Conflict(new{error=ex.Message});}
+});
 app.MapPost("/api/updates/check",(HttpContext ctx,CancellationToken cancellation)=>MaintenanceResult(async()=>await releaseUpdates.Check(false,ctx.RequestAborted)));
 app.MapPost("/api/updates/dismiss",()=>MaintenanceResult(()=>{releaseUpdates.Dismiss();return Task.FromResult<object?>(releaseUpdates.Status());}));
 app.MapPost("/api/updates/automatic",(UpdatePreference value)=>MaintenanceResult(()=>{releaseUpdates.SetAutomatic(value.Enabled);return Task.FromResult<object?>(releaseUpdates.Status());}));

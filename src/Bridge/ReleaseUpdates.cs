@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,7 @@ internal sealed record UpdateCache(DateTimeOffset? LastAttempt = null, DateTimeO
 internal sealed record UpdateStatus(string CurrentVersion, bool Available, string? Version, string? Summary, long Size,
     DateTimeOffset? LastChecked, DateTimeOffset? RetryAt, string? CheckError, string Download, long Downloaded, string? DownloadError, bool Automatic,
     UpdateMirrors? Mirrors, string? MirrorVersion, bool MirrorAvailable);
+internal sealed record UpdateDownloadRoute(string Source,string Url,string Reason,double? BytesPerSecond,long SampleBytes,string Message);
 
 internal sealed class ReleaseUpdates : IDisposable
 {
@@ -43,6 +45,55 @@ internal sealed class ReleaseUpdates : IDisposable
     private string? downloadError;
     private long downloaded;
     private string? downloadVersion;
+    private readonly SemaphoreSlim routeGate=new(1,1);
+    internal const int SpeedSampleBytes=1024*1024;
+    internal const int GitHubMinimumBytesPerSecond=512*1024;
+
+    public async Task<UpdateDownloadRoute> SelectDownloadChannel(CancellationToken token){
+        if(!await routeGate.WaitAsync(0,token))throw new IOException("正在检测 GitHub 下载速度，请稍候。");
+        try{
+            var watch=Stopwatch.StartNew();
+            long received=0;
+            using var deadline=CancellationTokenSource.CreateLinkedTokenSource(token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(6));
+            try{
+                UpdateRelease? release=null;
+                try{release=Read().Release;}catch(IOException){}catch(UnauthorizedAccessException){}
+                if(release==null||!ValidReleaseUrls(release)){
+                    using var metadata=await http.GetAsync(Latest,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
+                    metadata.EnsureSuccessStatusCode();
+                    using var document=JsonDocument.Parse(await ReadLimited(metadata.Content,65536,deadline.Token));
+                    release=ReadRelease(document.RootElement);
+                }
+                if(release==null||!ValidReleaseUrls(release)||release.Installer.Bytes<2)
+                    throw new IOException("无法确认 GitHub 安装包。");
+                var maximum=(int)Math.Min(SpeedSampleBytes,release.Installer.Bytes);
+                using var response=await GetAsset(release.Installer.Url,deadline.Token,maximum);
+                await using var stream=await response.Content.ReadAsStreamAsync(deadline.Token);
+                var signature=new byte[2];
+                received=await stream.ReadAtLeastAsync(signature,2,false,deadline.Token);
+                if(received!=2||signature[0]!='M'||signature[1]!='Z')throw new IOException("下载响应不是安装包。");
+                var buffer=new byte[32768];
+                while(received<maximum){
+                    var count=await stream.ReadAsync(buffer.AsMemory(0,(int)Math.Min(buffer.Length,maximum-received)),deadline.Token);
+                    if(count==0)throw new IOException("下载测试响应不完整。");
+                    received+=count;
+                }
+                token.ThrowIfCancellationRequested();
+                var speed=received/Math.Max(0.001,watch.Elapsed.TotalSeconds);
+                if(speed>=GitHubMinimumBytesPerSecond)
+                    return new("github",GitHubReleases+"/latest","fast",speed,received,
+                        $"GitHub 下载约 {speed/1048576:F2} MB/s，已选择 GitHub 发布页。");
+                return new("quark",QuarkShare,"slow",speed,received,
+                    $"GitHub 下载约 {speed/1024:F0} KB/s，已选择夸克网盘。");
+            }catch(OperationCanceledException)when(!token.IsCancellationRequested){
+                return new("quark",QuarkShare,"timeout",null,received,"GitHub 下载检测超时，已选择夸克网盘。");
+            }catch(Exception ex)when(ex is HttpRequestException or IOException or JsonException or InvalidOperationException){
+                token.ThrowIfCancellationRequested();
+                return new("quark",QuarkShare,"unavailable",null,received,"GitHub 下载检测未通过，已选择夸克网盘。");
+            }
+        }finally{routeGate.Release();}
+    }
 
     public ReleaseUpdates(string stateRoot, string current, HttpMessageHandler? transport = null, Func<DateTimeOffset>? clock = null)
     {
@@ -279,12 +330,14 @@ internal sealed class ReleaseUpdates : IDisposable
 
     private static bool IsAllowedAssetHost(Uri uri) => uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort && uri.UserInfo.Length == 0 &&
         uri.Host is "github.com" or "release-assets.githubusercontent.com" or "objects.githubusercontent.com" or "github-releases.githubusercontent.com";
-    private async Task<HttpResponseMessage> GetAsset(string url, CancellationToken ct)
+    private async Task<HttpResponseMessage> GetAsset(string url, CancellationToken ct,long? sampleBytes=null)
     {
         var uri = new Uri(url);
         for (int i = 0; i < 5; i++) {
             if (!IsAllowedAssetHost(uri)) throw new IOException("更新文件来源不符合校验规则。");
-            var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var request=new HttpRequestMessage(HttpMethod.Get,uri);
+            if(sampleBytes is long size)request.Headers.Range=new RangeHeaderValue(0,size-1);
+            var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location) {
                 uri = new Uri(uri, location);response.Dispose();continue;
             }
@@ -294,7 +347,7 @@ internal sealed class ReleaseUpdates : IDisposable
         throw new IOException("更新文件重定向次数过多。");
     }
 
-    private static bool ValidReleaseUrls(UpdateRelease release) => ParseVersion(release.Version) != null &&
+    private static bool ValidReleaseUrls(UpdateRelease release) => ParseVersion(release.Version) != null && release.Installer!=null && release.Checksum!=null &&
         release.Installer.Url == $"https://github.com/{Repository}/releases/download/v{release.Version}/DeadlockTranslate-Setup-{release.Version}.exe" &&
         release.Checksum.Url == release.Installer.Url + ".sha256";
 

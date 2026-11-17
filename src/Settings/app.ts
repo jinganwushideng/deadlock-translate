@@ -563,7 +563,7 @@ function renderUpdate(view:ReleaseView){
     $('releaseMirrors').hidden=!view.mirrors;
     $('releaseMirrors').textContent=view.mirrors?`网盘文件夹标记 · 夸克 ${view.mirrors.quarkVersion||'暂无法确认'} · 百度 ${view.mirrors.baiduVersion||'暂无法确认'}`:'';
     $<HTMLInputElement>('releaseAutomatic').checked=view.automatic;
-    $('releaseDownload').hidden=!view.version||view.download==='downloading'||view.download==='ready';
+    $('releaseDownload').hidden=view.download==='downloading';
     $('releaseCancel').hidden=view.download!=='downloading';
     $('releaseInstall').hidden=view.download!=='ready';
     if(updatePoll!==null)clearTimeout(updatePoll);
@@ -606,7 +606,13 @@ if(document.getElementById('maintenanceHealth')){
         catch(e){$('maintenanceState').textContent=(e as Error).message;}
     });
     bind('releaseCheck',()=>updateAction('check'));
-    bind('releaseDownload',()=>updateAction('download'));
+    bind('releaseDownload',async()=>{
+        if(updateBusy)return;updateBusy=true;
+        $('releaseLinkStatus').textContent='正在检测 GitHub 下载速度，最多约 6 秒…';
+        try{const route=await api('updates/open/auto','POST',{});$('releaseLinkStatus').textContent=route.message||'已在系统浏览器打开下载页。';}
+        catch(e){$('releaseLinkStatus').textContent=(e as Error).message;}
+        finally{updateBusy=false;void refreshUpdates();}
+    });
     bind('releaseCancel',()=>updateAction('cancel'));
     bind('releaseInstall',()=>{if(!inGame&&window.confirm('确认打开已校验的安装器？'))return updateAction('install');$('releaseError').textContent='请退出游戏后，在浏览器设置或安装器中打开更新。';});
     bind('releaseDismiss',()=>updateAction('dismiss'));
