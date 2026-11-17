@@ -3,13 +3,11 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-972ca9a42961';
+var BUILD_ID = '0.7.5-b85396ff013e';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
 var DLTChatInputChanged = function () {};
-var DLTChatInputBlurred = function () {};
-var DLTChatInputSubmitted = function () {};
 (function initialize(restartReason) {
     'use strict';
     var context = $.GetContextPanel();
@@ -265,18 +263,12 @@ var DLTChatInputSubmitted = function () {};
         var value = mode === 'closed' ? '' : text(input).trim();
         var channel = value ? nativeChannel() || labelChannel() : '';
         if (!previous || previous.epoch !== epoch || previous.value !== value || previous.channel !== channel || previous.input !== input) {
-            previous = {at:now, epoch:epoch, value:value, channel:channel, input:input, used:false, submitted:false, proof:channel?capturedChannelProof(channel):null};
+            previous = {at:now, epoch:epoch, value:value, channel:channel, input:input, used:false, proof:channel?capturedChannelProof(channel):null};
             state.drafts.push(previous); state.liveDraft = previous;
-        }
-        if (mode === 'submitted' && value) {
-            previous.submitted = true;
-            rememberDraft('closed');
         }
         while (state.drafts.length && (state.drafts.length > 128 || now - state.drafts[0].at >= 5500)) state.drafts.shift();
     }
     DLTChatInputChanged = function () { if (!stopped && inputOpen()) rememberDraft(); };
-    DLTChatInputBlurred = function () { if (!stopped) rememberDraft('closed'); };
-    DLTChatInputSubmitted = function () { if (!stopped) rememberDraft('submitted'); };
 
     function captureVersionedHotkeys(events) {
         if (!events.length) return;
@@ -466,7 +458,8 @@ var DLTChatInputSubmitted = function () {};
         }
         var id = draft ? 'send-'+String(held.seq) : 'out-' + String(++state.serial);
         var language = held && held.language;
-        var mode = draft && draft.submitted ? 'translation' : outgoingDisplayMode();
+        // A draft from a closed native input may already have been sent with Enter.
+        var mode = draft && (!inputOpen() || draft.epoch !== state.chatTarget.epoch || draft.input !== input) ? 'translation' : outgoingDisplayMode();
         var captured = { id: id, text: value, channel: channel, displayMode: mode, separateBilingual: !!state.config.outgoingSeparateBilingual, splitLong: !!state.config.outgoingSplitLong,
             targetLanguage: language ? language.language : state.config.outgoingTargetLanguage || 'en', customLanguage: language ? language.name : state.config.outgoingCustomLanguage || '',
             customLanguageCode: language ? language.code : state.config.outgoingCustomLanguageCode || '' };
@@ -485,7 +478,7 @@ var DLTChatInputSubmitted = function () {};
         }
         noteChannel('capture', { native: nativeName, label: labelName, channel: channel });
         audit('hotkey-captured', id, channel);
-        if (!draft || state.liveDraft === draft && !draft.submitted && inputOpen() && input === draft.input && text(input).trim() === value) {
+        if (!draft || state.liveDraft === draft && inputOpen() && input === draft.input && text(input).trim() === value) {
             input.text = '';
             if (draft) rememberDraft('closed');
             requestNativeClose(id, channel);

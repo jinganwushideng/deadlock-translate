@@ -44,4 +44,15 @@ existing=ET.fromstring(patch_native_bubble(fixture.replace('<snippets>', '<scrip
 check([n.get('src') for n in existing.find('scripts')]==['original.vjs',SCRIPT])
 try:patch_native_bubble(fixture.replace('<snippets>', '<scripts/><scripts/><snippets>'));raise AssertionError('duplicate native script sections accepted')
 except ValueError:passed+=1
+# A registered native submit/blur action must remain a single call in the packaged XML.
+import os
+os.environ.setdefault('DEADLOCK_TRANSLATE_GAME', str(Path(__file__).resolve().parent))
+from prepare_mod import patch_chat_input
+native_input = '<root><TextEntry id="ChatInput" oninputsubmit="CitadelChatInputSubmitted();" onblur="CitadelChatInputBlur();" /></root>'
+for extra in ('', ' onfocus="NativeFocus();" ontextentrychange="NativeChange();"'):
+    original=ET.fromstring(native_input.replace(' />',extra+' />')).find('TextEntry')
+    patched=ET.fromstring(patch_chat_input(native_input.replace(' />',extra+' />'))).find('TextEntry')
+    check(all(patched.attrib[key]==value for key,value in original.attrib.items()))
+    check(patched.attrib['onfocus']==original.attrib.get('onfocus','DLTChatInputFocused();'))
+    check(patched.attrib['ontextentrychange']==original.attrib.get('ontextentrychange','DLTChatInputChanged();'))
 print({'passed':passed,'realGame':False,'nativeChildrenPreserved':True})

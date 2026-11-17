@@ -184,7 +184,7 @@ function world(opts = {}) {
     w.closeChat = () => { context.classes.delete('ChatExpanded'); input.focused = false; };
     w.blurNative = () => sandbox.$.DispatchEvent('CitadelChatInputBlur',input);
     w.shortcut = text => { input.text = text; w.trigger++; };
-    w.enterNative = () => {if(opts.versionedHotkeys)sandbox.DLTChatInputSubmitted();return sandbox.$.DispatchEvent('CitadelChatInputSubmitted',input);};
+    w.enterNative = () => sandbox.$.DispatchEvent('CitadelChatInputSubmitted',input);
     w.typeDraft = text => {input.text=text;sandbox.DLTChatInputChanged();};
     w.pressDelayed = (language='en') => {w.hotkeyEvents.push({seq:++w.trigger,at:w.now,language:{language,name:'',code:''}});};
     w.capture = (text) => { w.shortcut(text); w.step(9); };

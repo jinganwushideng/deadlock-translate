@@ -45,6 +45,14 @@ test('a different channel draft is untouched and closing it waits for the origin
 test('ordinary Enter stays native and creates no manual queue',()=>{
  const w=setup();w.openChat('team');w.capture('first');w.openChat('team');w.input.text='Plain "text";';w.enterNative();assert.equal(w.submitted[0].text,'Plain "text";');w.deferResult=false;w.step(20);assert.equal(w.submitted.length,2);assert.equal(Object.keys(w.jobs).length,1);assert(!w.packets.some(p=>(p.outgoing||[]).some(x=>x.id.startsWith('manual-'))));
 });
+test('ordinary Enter closes an empty native box or sends one plain message with the new bridge enabled',()=>{
+ const w=setup({versionedHotkeys:true,deferResult:false});
+ w.openChat('team');w.enterNative();w.step(4);
+ assert(!w.input.focused&&!w.context.classes.has('ChatExpanded'));assert.equal(w.submitted.length,0);
+ w.openChat('team');w.typeDraft('native only');w.enterNative();w.step(10);
+ assert(!w.input.focused&&!w.context.classes.has('ChatExpanded'));
+ assert.deepEqual(w.submitted.map(x=>x.text),['native only']);assert.deepEqual(Object.keys(w.jobs),[]);
+});
 test('two captured shortcuts retain channel order and global 900ms spacing',()=>{
  const w=setup({spec:{'out-1':{sendText:'first translation'},'out-2':{sendText:'second translation'}}});w.openChat('team');w.capture('first');w.openChat('team');w.capture('second');w.deferResult=false;w.step(40);assert.deepEqual(w.submitted.map(s=>s.text),['first translation','second translation']);assert(w.submitted[1].at-w.submitted[0].at>=900);
 });

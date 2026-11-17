@@ -157,6 +157,27 @@ def stage_build_text_layouts(viewer, stage):
         target.write_text(patch_build_text_layout(source.read_text(encoding='utf-8-sig'), name), encoding='utf-8')
 
 
+def patch_chat_input(xml):
+    def patch_input(match):
+        tag = match.group(0)
+        # Native registered events must stay native. Turning one into a compound
+        # script action can swallow Enter and blur before the game handles them.
+        for handler in ('oninputsubmit="CitadelChatInputSubmitted();"', 'onblur="CitadelChatInputBlur();"'):
+            if tag.count(handler) != 1:
+                raise ValueError('Native ChatInput submit or blur contract changed')
+        observers = []
+        if not re.search(r'\bonfocus=', tag):
+            observers.append('onfocus="DLTChatInputFocused();"')
+        if not re.search(r'\bontextentrychange=', tag):
+            observers.append('ontextentrychange="DLTChatInputChanged();"')
+        return tag.replace('<TextEntry', ' '.join(['<TextEntry', *observers]), 1)
+
+    patched, count = re.subn(r'<TextEntry\b[^>]*\bid="ChatInput"[^>]*>', patch_input, xml)
+    if count != 1:
+        raise ValueError('Expected exactly one native ChatInput')
+    return patched
+
+
 def prepare():
     source = root/'artifacts/decompiled/panorama/layout/chat.xml'
     source.parent.mkdir(parents=True, exist_ok=True)
@@ -174,20 +195,7 @@ def prepare():
                       f'\t\t<include src="{NATIVE_BUBBLE_STYLE}" />\n\t</styles>')
     xml = xml.replace('<snippets>', '<scripts><include src="s2r://panorama/scripts/dlt_chat.vjs_c" /></scripts>\n\t<snippets>')
     xml = xml.replace('<Panel id="ChatControls">','<HTML id="DltBridge" class="DltBridge" hittest="false" hittestchildren="false" acceptsinput="false" acceptsfocus="false" />\n\t\t<Panel id="ChatControls">')
-    def native_focus(match):
-        tag=match.group(0)
-        if tag.count('onblur="CitadelChatInputBlur();"') != 1:
-            raise ValueError('Native ChatInput blur contract changed; native focus observation was not applied')
-        focus=re.search(r'\bonfocus="([^"]*)"',tag)
-        tag = tag.replace(focus.group(0),'onfocus="'+focus.group(1)+';DLTChatInputFocused();"') if focus else tag.replace('<TextEntry','<TextEntry onfocus="DLTChatInputFocused();"',1)
-        tag = tag.replace('onblur="CitadelChatInputBlur();"', 'onblur="DLTChatInputBlurred();CitadelChatInputBlur();"')
-        if tag.count('oninputsubmit="CitadelChatInputSubmitted();"') != 1:
-            raise ValueError('Native ChatInput submit contract changed')
-        tag = tag.replace('oninputsubmit="CitadelChatInputSubmitted();"', 'oninputsubmit="DLTChatInputSubmitted();CitadelChatInputSubmitted();"')
-        change = re.search(r'\bontextentrychange="([^"]*)"', tag)
-        return tag.replace(change.group(0), 'ontextentrychange="'+change.group(1)+';DLTChatInputChanged();"') if change else tag.replace('<TextEntry','<TextEntry ontextentrychange="DLTChatInputChanged();"',1)
-    xml,focus_count=re.subn(r'<TextEntry\b[^>]*\bid="ChatInput"[^>]*>',native_focus,xml)
-    if focus_count != 1: raise ValueError('Expected exactly one native ChatInput focus target')
+    xml = patch_chat_input(xml)
     out = root/'mod/panorama/layout/chat.xml'; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(xml,encoding='utf-8')
     bubble_source = root/'artifacts/decompiled/panorama/layout/citadel_hud_top_bar_chat.xml'
     subprocess.run([str(viewer), '-i', str(game/'pak01_dir.vpk'), '-o', str(bubble_source),

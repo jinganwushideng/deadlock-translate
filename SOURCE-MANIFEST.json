@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-972ca9a42961",
+  "buildId": "0.7.5-b85396ff013e",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "a63deb06be496fb2aa77893e7e15adeb247b772559ccc5caf5581db19f7d1d45"
+      "sha256": "b45935c52c4d507802d262438daa77d2e0f504ac88b2e60b3b0b97603d8f504e"
     },
     {
       "file": "CHANGELOG.md",
@@ -229,7 +229,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "f326cb1e74dc9d4818d618a875bfa72376e125b38c5b8c11b1cad6fa3fa89794"
+      "sha256": "65cc276e8c2ad27da35748f650a824a40db7a681778e304f9a9167bf03fb3e4b"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -369,7 +369,7 @@
     },
     {
       "file": "scripts/prepare_mod.py",
-      "sha256": "6895bfa6fc0777c98886b09cf6ead9006ebcc568e6de95b43f26002bea6f3099"
+      "sha256": "c10abaa12db3f14586d217f6caaa3ffec89bd288c735791f4767a6f7e1d5ebb7"
     },
     {
       "file": "scripts/release_history.py",
@@ -445,7 +445,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "3d52689085538030ae2ed9e756c057b1376821ef49079458b82ebe3007971581"
+      "sha256": "834afde3cf9ac9bdce88bf4c100791aea034f0e7b34a1c44a056197e0f5c7196"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -1201,7 +1201,7 @@
     },
     {
       "file": "tests/native-bubble-layout.test.py",
-      "sha256": "3a956a9efe5021b9b388e09609e8627d55dc6f6f7f76b7f55e489eb611dac586"
+      "sha256": "7ad32c2915fc9eeafbefc1c62c124e0939538f63d4c410bfb328bda0cfad249f"
     },
     {
       "file": "tests/native-context.test.cjs",
@@ -1305,7 +1305,7 @@
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
-      "sha256": "187af6ec2f7b0871a35fdaf950f10307609e689f530be2ee544b6270827389e9"
+      "sha256": "36811bd79a96bb649acc21c734ffcf27505d3fcfd729f401221d0edfe01178fa"
     },
     {
       "file": "tests/package-lock.json",
@@ -1409,7 +1409,7 @@
     },
     {
       "file": "tests/send-isolation.test.cjs",
-      "sha256": "c72c8f71305f75737f79df2af754da2dcc3759d4cc357f51b52ba768a02b966e"
+      "sha256": "74264ddbbbaef149c111eea60b60423f3972d8b36c2d5ead74c9870f0400966d"
     },
     {
       "file": "tests/SendRecoveryTests/Program.cs",
