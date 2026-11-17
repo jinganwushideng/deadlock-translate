@@ -18,6 +18,7 @@ public sealed class JobState(Incoming input, long created) {
 public sealed class JobEngine : IAsyncDisposable {
     private readonly ConfigStore config; private readonly ITranslator translator;
     private readonly DiagnosticLog? log;
+    private readonly Func<string,Incoming,Settings,string?>? reuseIncoming;
     private readonly object gate = new();
     private readonly Dictionary<string, JobState> jobs = new();
     private readonly HashSet<string> retiredSessions = new();
@@ -38,8 +39,8 @@ public sealed class JobEngine : IAsyncDisposable {
     private readonly AsyncConcurrency fastSlots,qualitySlots;
     private long cacheEpoch;
     private readonly ConcurrentDictionary<string,(long Until,string Value)> fastCache = new();
-    public JobEngine(ConfigStore config, ITranslator translator,DiagnosticLog? log=null) {
-        this.config=config; this.translator=translator;this.log=log;
+    public JobEngine(ConfigStore config, ITranslator translator,DiagnosticLog? log=null,Func<string,Incoming,Settings,string?>? reuseIncoming=null) {
+        this.config=config; this.translator=translator;this.log=log;this.reuseIncoming=reuseIncoming;
         fastSlots=new(1);qualitySlots=new(1);
         config.Changed+=UpdateLimits;
         workers = Enumerable.Range(0,8).Select(_=>Worker(fast.Reader,false)).Concat(Enumerable.Range(0,8).Select(_=>Worker(quality.Reader,true))).ToArray();
@@ -79,6 +80,12 @@ public sealed class JobEngine : IAsyncDisposable {
                 jobs.Add(input.Id,job);
                 history.Add(currentSession,channel,input.Text);
                 if(input.ContextOnly||!job.Config.Enabled) { job.View=job.View with{Done=true,Stage="skipped"}; continue; }
+                if(reuseIncoming?.Invoke(currentSession,input,job.Config) is string cached){
+                    job.View=job.View with{Text=cached,Stage="local",Revision=1,Done=true};
+                    completed++;
+                    log?.Record("translation",LogKind.TranslationCompleted,new(Token:DiagnosticLog.Token(currentSession,input.Id),Stage:"send-local-reuse"));
+                    continue;
+                }
                 var wantFast = job.Config.Mode != "quality"; var wantQuality = job.Config.Mode != "fast";
                 job.Remaining=(wantFast?1:0)+(wantQuality?1:0);
                 unfinishedReceive++;

@@ -17,7 +17,7 @@ function localEcho(w, text = 'hello team', original = '你好', channel = 'team'
 check('local outgoing echo enters the left feed without another cloud request', () => {
     const w = fresh(), b = localEcho(w); w.step(8);
     assert.equal(b.__dltRecord.hudSeen, true); assert.equal(active(w).length, 1); assert.equal(active(w)[0].children[1].text, '你好');
-    assert(active(w)[0].children[0].text.includes('友军 · 原文回显')); assert.equal(w.requests.length, 0); assert.equal(state(w).metrics.localEchoReused, 1);
+    assert(active(w)[0].children[0].text.includes('友军 · 本地复用')); assert.equal(w.requests.length, 0); assert.equal(state(w).metrics.localEchoReused, 1);
 });
 check('independent-only mode also receives local all-chat echo', () => {
     const w = fresh('independent'); localEcho(w, 'hello all', '大家好', 'all'); w.step(8);
@@ -73,7 +73,7 @@ check('native local roster marker identifies a server-returned sent echo without
     assert.equal(state(w).metrics.localEchoReused,2);
     assert.equal(active(w).length,0);
 });
-check('another player sending the same text still receives a real incoming translation',()=>{
+check('another player sending the same text retains its own incoming message',()=>{
     const w=rosterEchoFixture();
     const row=w.row('hello team');
     row.FindChildrenWithClassTraverse('SenderName')[0].text='native peer';

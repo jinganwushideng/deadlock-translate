@@ -139,7 +139,8 @@ var restart=new DeepSeekUsage(spendConfig,spendHttp);
 Check(StatusOf(spend).GetProperty("balance")[0].GetProperty("total").GetDecimal()==17m&&
     StatusOf(restart).GetProperty("lifetime").GetProperty("total").GetProperty("requests").GetInt32()==2,
     "official balance stays separate from estimated spend and journal aggregates survive restart");
-using(var translatedHttp=new HttpClient(new DeepSeekTranslationFixture())){
+var providerFixture=new DeepSeekTranslationFixture();
+using(var translatedHttp=new HttpClient(providerFixture)){
  var translationTerms=new Terms(spendFolder,Path.Combine(spendFolder,"no-default-terms.json"));
  using var translator=new Translators(spendConfig,translationTerms,translatedHttp);
  await translator.Quality("incoming receipt",[],spendConfig.Current,CancellationToken.None);
@@ -149,6 +150,61 @@ using(var translatedHttp=new HttpClient(new DeepSeekTranslationFixture())){
  Check(items.Length==2&&items[0].GetProperty("category").GetString()=="incoming"&&items[1].GetProperty("category").GetString()=="outgoing"&&
   items.All(item=>item.GetProperty("requests").GetInt32()==1),
   "real incoming and outgoing provider entry points each publish a completion receipt to the game bridge");
+ spendConfig.Save(spendConfig.Current with{OutgoingSeparateBilingual=true,OutgoingSplitLong=true});
+ long reuseNow=1000;
+ await using var sent=new OutgoingService(spendConfig,translator.TranslateOutgoing,()=>reuseNow);
+ var beforeSendingRequests=providerFixture.Completions;
+ sent.Exchange("echo-session",[new("sent-once","你好","party","bilingual")],[]);
+ async Task ReadyEcho(string id){
+  for(var i=0;i<200;i++){if(sent.Recent.Single(x=>x.Id==id).State is "ready" or "waiting_order")return;await Task.Delay(5);}
+  throw new TimeoutException(id);
+ }
+ await ReadyEcho("sent-once");
+ var beforeEchoRequests=providerFixture.Completions;
+ Check(beforeEchoRequests==beforeSendingRequests+1,"one outgoing translation produces exactly one model request before echo reuse");
+ var receiptBefore=JsonSerializer.SerializeToElement(translator.Spend.GameNotice(0),ConfigStore.Json);
+ long lastReceipt=receiptBefore.GetProperty("items").EnumerateArray().Max(item=>item.GetProperty("id").GetInt64());
+ await using(var receiving=new JobEngine(spendConfig,translator,reuseIncoming:sent.ReuseIncoming)){
+  var echo=receiving.Exchange("echo-session",[new("echo-return","translated","unmarked sender","party")],[]).Single();
+  Check(echo.Done&&echo.Stage=="local"&&echo.Text=="你好"&&providerFixture.Completions==beforeEchoRequests&&
+   translator.Spend.GameNotice(lastReceipt)==null,
+   "unmarked party echo reuses the exact outgoing result with zero receive requests, tokens, or extra expense receipt");
+  var secondView=receiving.Exchange("echo-session",[new("echo-hud","translated","another native view","hud")],[]).Single();
+  Check(secondView.Stage=="local"&&providerFixture.Completions==beforeEchoRequests,
+   "a second native view of the same complete output is also handled locally");
+  foreach(var body in new[]{"你好 translated","translated 你好"}){
+   var combined=receiving.Exchange("echo-session",[new("echo-combined-"+body,body,"unmarked party sender","party")],[]).Single();
+   Check(combined.Stage=="local"&&combined.Text=="你好"&&providerFixture.Completions==beforeEchoRequests,
+    "bilingual native source/translation label composition reuses locally: "+(body.StartsWith("你好")?"source first":"translation first"));
+  }
+
+ }
+ Check(sent.ReuseIncoming("different-session",new("a","translated","","party"),spendConfig.Current)==null&&
+       sent.ReuseIncoming("echo-session",new("b","translated","","all"),spendConfig.Current)==null&&
+       sent.ReuseIncoming("echo-session",new("c","different text","","party"),spendConfig.Current)==null&&
+       sent.ReuseIncoming("echo-session",new("d","translated","","party"),spendConfig.Current with{IncomingTargetLanguage="ru"})==null,
+       "reverse reuse requires an exact complete translation, matching session/channel and original language");
+ sent.Exchange("echo-session",[],[],partAcks:[new("sent-once",0)]);
+ sent.Exchange("echo-session",[],[],partAcks:[new("sent-once",1)]);
+ reuseNow+=15001;
+ Check(sent.ReuseIncoming("echo-session",new("expired","translated","","party"),spendConfig.Current)==null,
+       "sent-output reuse expires after its short dispatch window");
+ sent.Exchange("echo-session",[new("source-a","甲你好","party"),new("source-b","乙你好","party")],[]);
+ await ReadyEcho("source-a");await ReadyEcho("source-b");
+ Check(sent.ReuseIncoming("echo-session",new("ambiguous","translated","","party"),spendConfig.Current)==null,
+       "different originals producing the same output never choose an arbitrary reverse translation");
+
+ await using(var longSend=new OutgoingService(spendConfig,(text,settings,fast,token)=>Task.FromResult(new string('x',180)),()=>reuseNow)){
+  longSend.Exchange("long-echo",[new("long","中文原文","party","bilingual")],[]);
+  for(var i=0;i<200&&longSend.Recent.Single().State!="ready";i++)await Task.Delay(5);
+  var first=longSend.Recent.Single();
+  var allParts=OutgoingParts.Plan("中文原文",new string('x',180),"bilingual",true,true).Parts;
+  Check(first.State=="ready"&&allParts.Length>2&&
+    longSend.ReuseIncoming("long-echo",new("merged",string.Join(" ",allParts.Reverse()),"","party"),spendConfig.Current)=="中文原文"&&
+    longSend.ReuseIncoming("long-echo",new("partial",allParts[1],"","party"),spendConfig.Current)==null,
+    "a long merged bilingual echo keeps its source mapping while a standalone translation fragment remains a distinct message");
+ }
+
 }
 spendConfig.Save(spendConfig.Current with{LlmKey="other-simulated-key"});
 Check(StatusOf(spend).GetProperty("lifetime").GetProperty("total").GetProperty("requests").GetInt32()==0&&spend.GameNotice(0)==null,
@@ -177,10 +233,12 @@ sealed class DeepSeekFixture:HttpMessageHandler {
 
 
 sealed class DeepSeekTranslationFixture:HttpMessageHandler {
+ public int Completions;
  protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
   if(request.RequestUri?.AbsolutePath=="/user/balance")
    return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(
     """{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"17.00","granted_balance":"2.00","topped_up_balance":"15.00"}]}""")});
+  Interlocked.Increment(ref Completions);
   return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(
    """{"choices":[{"message":{"content":"translated"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":25,"prompt_cache_hit_tokens":40,"prompt_cache_miss_tokens":60}}""",
    Encoding.UTF8,"application/json")});

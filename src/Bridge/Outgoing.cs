@@ -26,6 +26,7 @@ public sealed class OutgoingJob(OutgoingInput input,CancellationToken token,Sett
     public string[] Parts=[];
     public bool SupportsMultipart=true;
     public long Sequence;
+    public long LastDispatch;
     public Dictionary<(int Part,string Kind),long> StatusSequences=[];
     public bool AwaitingNativeClose=input.HoldForInput;
     public HashSet<int> RetriedParts=[];
@@ -50,6 +51,39 @@ public sealed class OutgoingService : IAsyncDisposable {
     public OutgoingDiagnostics Diagnostics {get{lock(gate){ExpireLocked();var latest=jobs.Values.MaxBy(j=>j.Sequence);return latest==null?new("idle",null,null):new(latest.View.State,latest.View.State=="failed"?latest.FailureReason.ToString():null,latest.RefusalCode,latest.View.State=="failed"?latest.NetworkError:null,latest.View.State=="failed"?latest.SocketError:null);}}}
     public OutgoingView[] Recent {get{lock(gate){ExpireLocked();return OrderedViews().ToArray();}}}
     public object Stats {get{lock(gate)return new{pending=jobs.Values.Count(j=>j.View.State is not ("failed" or "submitted")),limit=config.Current.OutgoingQueueLimit,workers=slots.Stats};}}
+    public string? ReuseIncoming(string owner,Incoming input,Settings settings){
+        if(TranslationLanguages.Incoming(settings).Id!="zh-Hans")return null;
+        var text=NormalizeLine(input.Text);
+        lock(gate){
+            if(owner!=sessionId)return null;
+            string? original=null;
+            foreach(var job in jobs.Values){
+                if(job.View.IsPreset||job.View.State is not ("ready" or "waiting_input" or "waiting_channel" or "submitted"))continue;
+                if(job.LastDispatch>0?clock()-job.LastDispatch>15000:clock()-job.Created>(job.Config.OutgoingTimeoutSeconds+5)*1000)continue;
+                if(input.Channel is "team" or "all" or "party" && input.Channel!=job.Input.Channel)continue;
+                if(!job.Input.Text.Any(c=>c is >= '\u3400' and <= '\u9fff')||
+                   job.Input.Text.Any(c=>c is >= '\u3040' and <= '\u30ff' or >= '\uac00' and <= '\ud7af'))continue;
+                var knownTexts=new List<string>{NormalizeLine(job.View.English)};
+                if(job.Parts.Length==1)knownTexts.Add(NormalizeLine(job.Parts[0]));
+                if(job.Input.DisplayMode=="bilingual"&&job.Config.OutgoingSeparateBilingual&&
+                   job.Parts.Length>1&&job.Parts[0]==CleanMessage(job.Input.Text)){
+                    // Native MessageContents can contain both source and translated
+                    // labels. Its tree reader can expose them in either traversal order.
+                    // Every accepted composite includes the complete original source.
+                    for(var count=2;count<=job.Parts.Length;count++){
+                        var parts=job.Parts.Take(count);
+                        knownTexts.Add(NormalizeLine(string.Join(" ",parts)));
+                        knownTexts.Add(NormalizeLine(string.Join(" ",parts.Reverse())));
+                    }
+                }
+                if(!knownTexts.Contains(text,StringComparer.Ordinal))continue;
+                var source=NormalizeLine(job.Input.Text);
+                if(original!=null&&original!=source)return null;
+                original=source;
+            }
+            return original;
+        }
+    }
     public string RetryUnobserved(string id,int part){
         lock(gate){
             var settings=config.Current;
@@ -103,10 +137,11 @@ public sealed class OutgoingService : IAsyncDisposable {
         lock(gate){
             if(id!=sessionId){session.Cancel();session.Dispose();session=new();sessionId=id;while(queue.Reader.TryRead(out _)){}jobs.Clear();sequence=0;}
             ExpireLocked();
-            foreach(var ack in sent)if(jobs.TryGetValue(ack,out var job) && !job.AwaitingNativeClose && job.View.PartCount==1 && job.View.State is "ready" or "waiting_channel" or "waiting_input"){job.View=job.View with{State="submitted",Error=null,WaitReason=null};Audit(job,LogKind.SendPhase);}
+            foreach(var ack in sent)if(jobs.TryGetValue(ack,out var job) && !job.AwaitingNativeClose && job.View.PartCount==1 && job.View.State is "ready" or "waiting_channel" or "waiting_input"){job.LastDispatch=clock();job.View=job.View with{State="submitted",Error=null,WaitReason=null};Audit(job,LogKind.SendPhase);}
             var acknowledgedJobs=new HashSet<string>();
             foreach(var ack in partAcks??[])if(jobs.TryGetValue(ack.Id,out var job) && !job.AwaitingNativeClose && job.View.PartIndex==ack.Part && !acknowledgedJobs.Contains(ack.Id) && job.View.State is "ready" or "waiting_channel" or "waiting_input") {
                 acknowledgedJobs.Add(ack.Id);
+                job.LastDispatch=clock();
                 var next=ack.Part+1;
                 job.View=next<job.Parts.Length?job.View with{PartIndex=next,SendText=job.Parts[next],State="ready",Error=null,WaitReason=null}:job.View with{State="submitted",Error=null,WaitReason=null};
                 Audit(job,LogKind.SendPhase);
@@ -157,7 +192,7 @@ public sealed class OutgoingService : IAsyncDisposable {
                     if(job.AwaitingNativeClose)continue;
                     var parts=job.View.PartStatuses?.ToArray()??Enumerable.Range(0,job.View.PartCount).Select(n=>new OutgoingPartStatus(n)).ToArray();
                     var previous=parts[item.Part];
-                    if(item.State=="dispatched") {if(previous.SubmittedAt!=null)continue;parts[item.Part]=previous with{State="dispatched",SubmittedAt=item.At};}
+                    if(item.State=="dispatched") {if(previous.SubmittedAt!=null)continue;job.LastDispatch=clock();parts[item.Part]=previous with{State="dispatched",SubmittedAt=item.At};}
                     else {if(previous.SubmittedAt==null || previous.State is "echo_observed" or "echo_unobserved")continue;parts[item.Part]=previous with{State=item.State,ObservedAt=item.State=="echo_observed"?item.At:null,Reason=item.Reason};}
                     job.View=job.View with{PartStatuses=parts};
                     log?.Record("sending",LogKind.SendPhase,new(Token:DiagnosticLog.Token(sessionId,item.Id),Stage:item.State,Channel:item.Channel,Count:item.Part));

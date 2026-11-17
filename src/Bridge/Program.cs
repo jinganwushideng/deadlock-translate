@@ -99,10 +99,12 @@ using var http=new HttpClient(handler) {Timeout=Timeout.InfiniteTimeSpan,MaxResp
 using var translators=new Translators(config,terms,http,audit);
 _ = translators.Spend.RefreshAsync(false);
 config.Changed+=()=>{_ = translators.Spend.RefreshAsync(false);};
-await using var engine=new JobEngine(config,translators,audit);
+OutgoingService? outgoingSource=null;
+await using var engine=new JobEngine(config,translators,audit,reuseIncoming:(session,input,settings)=>outgoingSource?.ReuseIncoming(session,input,settings));
 var displayPreview=new DisplayPreviewService();
 using var nativeEditor=new NativeSettingsEditor();
 await using var outgoing=new OutgoingService(config,translators.TranslateOutgoing,log:audit,context:engine.OutgoingContext,translateContext:translators.TranslateOutgoing);
+outgoingSource=outgoing;
 using var hotkey=args.Contains("--no-hotkey")?null:new NativeHotkey(config,audit);
 await using var app=builder.Build();
 using var releaseUpdates=new ReleaseUpdates(dataDir,BuildInfo.Version);

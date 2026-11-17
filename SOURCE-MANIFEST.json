@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-5a76550b72ac",
+  "buildId": "0.7.5-97c97d32d128",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "dd8b1e510563285ee0cada2626153af5918c63aec9e80f55e455a90748d2fe0b"
+      "sha256": "f8adce888898d780e82c9b8d462b920ed75bb69a5b220118957b7688fac46986"
     },
     {
       "file": "CHANGELOG.md",
@@ -233,7 +233,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "04ef4db658f756d9dff3ca57a428a94d0d51e0d35e97a20eaf5986c13e382644"
+      "sha256": "d681fc666326137e4d95dc9cc36ecfccd9739d20b55980429b997a1c7fc14db1"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -453,7 +453,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "2e805dd23fff3efd9003888535639205b5eb35331855009a63c8c11188db4837"
+      "sha256": "ffa280bdb3668cc167323431dd7afe5be1cf185c325606346b9fcdb6d2214af5"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -517,7 +517,7 @@
     },
     {
       "file": "src/Bridge/DiagnosticLog.cs",
-      "sha256": "f307819eb4615fe5edffaac74bdac51a81c15a82fd9c8f3cb0622ae5a4a1b694"
+      "sha256": "996c9cbb3d30daf8e08f6d94e1fc258ff294c6c46964531c240131cf9f6cba9d"
     },
     {
       "file": "src/Bridge/GameLifecycle.cs",
@@ -565,7 +565,7 @@
     },
     {
       "file": "src/Bridge/Jobs.cs",
-      "sha256": "24a01e66a3c17b1fb97e5692a95198a989fa33f4ff28ab868220186a7d97e9e2"
+      "sha256": "385089dc9c6a002e9f268b28015367f7bb3cb89e7f1c345993bef63bdee6d54c"
     },
     {
       "file": "src/Bridge/LlmKeepAlive.cs",
@@ -605,7 +605,7 @@
     },
     {
       "file": "src/Bridge/Outgoing.cs",
-      "sha256": "47783a7215c9e613a5d689171bb91ab86f16be1b78b35f759f2a2e8ec1d67e8d"
+      "sha256": "da9fe630892fe40925e290e43acd376bc16495675a9ecba1dd1a928e485f4c94"
     },
     {
       "file": "src/Bridge/OutgoingLanguageHotkeys.cs",
@@ -629,7 +629,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "385207ee82d24f4c2827b0c4c9244d6227ccba32131119e34035709a40ba496e"
+      "sha256": "2f5dd9c6f50d045448dd79c89009011365fc4c5d7b0168d55cb7c4eaee85be03"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -1089,7 +1089,7 @@
     },
     {
       "file": "tests/incoming-feed.test.cjs",
-      "sha256": "a62bbbe80b491ce0ac0a3dad4c280af09469af48eed058c742f004a1dc19af10"
+      "sha256": "0415e26345736e639d53dec2abb3961f031584e15684569530f634954aa8ba47"
     },
     {
       "file": "tests/incoming-style-ui.test.cjs",
@@ -1285,7 +1285,7 @@
     },
     {
       "file": "tests/NativeSendTests/Program.cs",
-      "sha256": "fb0793de9a388e9b0d22812e7e86b9954be4d63a88e6cece9cb04e5759dc8554"
+      "sha256": "1f7c1db9acbcddc53de36bad563b46cfd45364599f2686cd02b44f738d811a0e"
     },
     {
       "file": "tests/optimization-ui.test.cjs",
