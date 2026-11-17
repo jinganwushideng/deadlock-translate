@@ -1,0 +1,30 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/citadel_base_styles.vcss_c" />
+        <include src="s2r://panorama/styles/dlt_toast.vcss_c" />
+    </styles>
+    <Panel class="DltToastViewport" hittest="false" hittestchildren="false" acceptsinput="false" acceptsfocus="false">
+        <Panel id="DltTranslationToast" class="DltToastHost DltTranslationToast" hittest="false" hittestchildren="false" visible="false">
+            <Panel class="DltToastBody">
+                <Panel class="DltToastPattern" />
+                <Panel class="DltToastInset" />
+                <Panel class="DltToastContent">
+                    <Panel class="DltToastSummary">
+                        <Label id="DltToastTitle" class="DltToastTitle" html="false" />
+                        <Label id="DltToastSubtitle" class="DltToastSubtitle" html="false" />
+                    </Panel>
+                    <Panel class="DltToastCost">
+                        <Label id="DltToastCostCaption" class="DltToastSubtitle" html="false" />
+                        <Label id="DltToastCostValue" class="DltToastTitle DltToastCostValue" html="false" />
+                    </Panel>
+                    <Panel class="DltToastDiamond" />
+                    <Label id="DltToastBalance" class="DltToastChip" html="false" />
+                </Panel>
+            </Panel>
+            <Panel class="DltToastBadge">
+                <Label class="DltToastBadgePrimary" text="文" html="false" />
+                <Label class="DltToastBadgeSecondary" text="A" html="false" />
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

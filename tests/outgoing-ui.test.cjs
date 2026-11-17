@@ -21,6 +21,27 @@ class Panel {
     BHasClass(c) { return this.classes.has(c); }
     AddClass(c) { this.classes.add(c); }
     SetHasClass(c, enabled) { if (enabled) this.classes.add(c); else this.classes.delete(c); }
+    BLoadLayout(uri) {
+        if (uri !== 'file://{resources}/layout/dlt_toast.xml') return false;
+        this.loadedLayout = uri;
+        if (this.failLayout) return false;
+        const xml = fs.readFileSync(path.join(__dirname, '../mod/panorama/layout/dlt_toast.xml'), 'utf8');
+        this.loadedStyles = [...xml.matchAll(/<include src="([^"]+)"/g)].map(match => match[1]);
+        const stack = [];
+        let rootSeen = false;
+        for (const match of xml.matchAll(/<(\/?)(Panel|Label)\b([^>]*?)(\/?)>/g)) {
+            if (match[1]) { stack.pop(); continue; }
+            const attrs = Object.fromEntries([...match[3].matchAll(/([\w-]+)="([^"]*)"/g)].map(attr => [attr[1], attr[2]]));
+            const node = rootSeen ? new Panel(match[2], attrs.id || '', stack.at(-1), attrs.class || '') : this;
+            rootSeen = true;
+            if (node === this) for (const cls of (attrs.class || '').split(' ')) this.AddClass(cls);
+            for (const key of ['hittest','hittestchildren','acceptsinput','acceptsfocus','visible'])
+                if (attrs[key] !== undefined) node[key] = attrs[key] === 'true';
+            if (attrs.text !== undefined) node.text = attrs.text;
+            if (!match[4]) stack.push(node);
+        }
+        return true;
+    }
     BHasKeyFocus() { return this.focused === true; }
     GetChildCount() { return this.children.length; }
     GetChild(i) { return this.children[i]; }
@@ -176,7 +197,11 @@ function world(opts = {}) {
                 if (name === 'CitadelConCommand') return false;
                 return true;
             },
-            CreatePanel: (type, parent, id) => new Panel(type, id, parent)
+            CreatePanel: (type, parent, id) => {
+                const panel = new Panel(type, id, parent);
+                if (id === 'DltToastViewport') panel.failLayout = !!w.failToastLayout;
+                return panel;
+            }
         }
     };
     vm.runInNewContext(CHAT_SCRIPT, sandbox);

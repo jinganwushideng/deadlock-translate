@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-c31f1cdb5ae3",
+  "buildId": "0.7.5-3e4dade580bf",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "9b914110b020f528ac4ecb10a2e54f98682bd1cd55e3d1b854fd946d2b6036ab"
+      "sha256": "ecc0248abe62e0282ab6d50bc854b09170c4322bed755d977d68e3baeb727331"
     },
     {
       "file": "CHANGELOG.md",
@@ -216,6 +216,10 @@
       "sha256": "2b68afe8864a9631adec3fc710a5d5d5718db81d4b8cf02a540e3f145a475294"
     },
     {
+      "file": "mod/panorama/layout/dlt_toast.xml",
+      "sha256": "cb600968e24b9d9e2c4ae23726dda52845960e832d6c44ea1aeb771e4e48336c"
+    },
+    {
       "file": "mod/panorama/scripts/dlt_build_browser.js",
       "sha256": "1719d940489f84b2cb06e5a408aaddcdbcc9ca31894eb05757e9cf183e8535b8"
     },
@@ -229,7 +233,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "1857ec903fe4efb94417e04d9557bd215e47fbc8febe4a826ab1b9167ef8450a"
+      "sha256": "8a7d28e4a6049b8d3a042af039617adc5b8fed1143e94580b3e21b0dc5d5f096"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -265,7 +269,7 @@
     },
     {
       "file": "mod/panorama/styles/dlt_toast.css",
-      "sha256": "b99ff8908a6b3bf099073019f9dbd4ddf8e415e7fea7771797f040e7a66a9c72"
+      "sha256": "400e732f4887060f0bbec2b62bc36d0a9dd02f489c66b2a2a5071fa67363dbeb"
     },
     {
       "file": "NOTICE",
@@ -281,7 +285,7 @@
     },
     {
       "file": "scripts/build.ps1",
-      "sha256": "5c3044d78abed0abf47a02b2d8d79aa68d56faf568c03922d031e444ff949d15"
+      "sha256": "b846b0a5cb5f089a89a3531205a380843a0c75ace6483ac827abc2a117c6e17e"
     },
     {
       "file": "scripts/build_external_updater.py",
@@ -449,7 +453,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "e3a3c0d4b07fca3ae2b204d5bcdeef7557f1a9a09ebb0423d1dab3f7c226af36"
+      "sha256": "72e5609a8534639bf8eda5132eb193da51ba198017e7694b7101ac611190bb4c"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -513,7 +517,7 @@
     },
     {
       "file": "src/Bridge/DiagnosticLog.cs",
-      "sha256": "d0340fde54f446e932f6f43ccea63f013bf51aca0e526544f78ee0a281f5d8b3"
+      "sha256": "f307819eb4615fe5edffaac74bdac51a81c15a82fd9c8f3cb0622ae5a4a1b694"
     },
     {
       "file": "src/Bridge/GameLifecycle.cs",
@@ -521,7 +525,7 @@
     },
     {
       "file": "src/Bridge/GameLogCollector.cs",
-      "sha256": "f4c4ddbed50c511216a390b9eb3d29dcc26330263aab905c4766e568642b8fd9"
+      "sha256": "29a80aeebda174d48bdc61c9a3fdddc6fb936e4358ef57d43ade282adb246d43"
     },
     {
       "file": "src/Bridge/GameMetricCollector.cs",
@@ -1281,7 +1285,7 @@
     },
     {
       "file": "tests/NativeSendTests/Program.cs",
-      "sha256": "f1b7a97c0bf8cf07ed293f1b26680df88b4209f9abf06da9552a097dba5d358c"
+      "sha256": "fb0793de9a388e9b0d22812e7e86b9954be4d63a88e6cece9cb04e5759dc8554"
     },
     {
       "file": "tests/optimization-ui.test.cjs",
@@ -1309,7 +1313,7 @@
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
-      "sha256": "26f41397b463d226f63f269a7cbe502013adf8eb0fed003d7b7e665c048084fa"
+      "sha256": "3c9c27504f38fbc1247d0964a05d211896d812170b4a683363c7a694c827afd9"
     },
     {
       "file": "tests/package-lock.json",
@@ -1513,7 +1517,7 @@
     },
     {
       "file": "tests/translation-toast.test.cjs",
-      "sha256": "5d859901599dd3dbfaae54425b1174e15f746e4c001d9748d9eaba17a515d333"
+      "sha256": "9ab492c37fe713ccf5386b41d8a8eb6f768a4719cac24207b1ae710ca4b2722c"
     },
     {
       "file": "tests/ui-visual.cjs",

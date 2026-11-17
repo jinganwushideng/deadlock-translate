@@ -139,6 +139,17 @@ var restart=new DeepSeekUsage(spendConfig,spendHttp);
 Check(StatusOf(spend).GetProperty("balance")[0].GetProperty("total").GetDecimal()==17m&&
     StatusOf(restart).GetProperty("lifetime").GetProperty("total").GetProperty("requests").GetInt32()==2,
     "official balance stays separate from estimated spend and journal aggregates survive restart");
+using(var translatedHttp=new HttpClient(new DeepSeekTranslationFixture())){
+ var translationTerms=new Terms(spendFolder,Path.Combine(spendFolder,"no-default-terms.json"));
+ using var translator=new Translators(spendConfig,translationTerms,translatedHttp);
+ await translator.Quality("incoming receipt",[],spendConfig.Current,CancellationToken.None);
+ await translator.TranslateOutgoing("outgoing receipt",spendConfig.Current with{OutgoingMode="quality"},false,CancellationToken.None);
+ var packet=JsonSerializer.SerializeToElement(translator.Spend.GameNotice(0),ConfigStore.Json);
+ var items=packet.GetProperty("items").EnumerateArray().ToArray();
+ Check(items.Length==2&&items[0].GetProperty("category").GetString()=="incoming"&&items[1].GetProperty("category").GetString()=="outgoing"&&
+  items.All(item=>item.GetProperty("requests").GetInt32()==1),
+  "real incoming and outgoing provider entry points each publish a completion receipt to the game bridge");
+}
 spendConfig.Save(spendConfig.Current with{LlmKey="other-simulated-key"});
 Check(StatusOf(spend).GetProperty("lifetime").GetProperty("total").GetProperty("requests").GetInt32()==0&&spend.GameNotice(0)==null,
     "switching credentials isolates old charge details and pending notifications");
@@ -161,5 +172,17 @@ sealed class DeepSeekFixture:HttpMessageHandler {
   if(request.RequestUri?.AbsoluteUri!="https://api.deepseek.com/user/balance")throw new InvalidOperationException();
   return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(
     """{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"17.00","granted_balance":"2.00","topped_up_balance":"15.00"}]}""")});
+ }
+}
+
+
+sealed class DeepSeekTranslationFixture:HttpMessageHandler {
+ protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
+  if(request.RequestUri?.AbsolutePath=="/user/balance")
+   return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(
+    """{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"17.00","granted_balance":"2.00","topped_up_balance":"15.00"}]}""")});
+  return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(
+   """{"choices":[{"message":{"content":"translated"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":25,"prompt_cache_hit_tokens":40,"prompt_cache_miss_tokens":60}}""",
+   Encoding.UTF8,"application/json")});
  }
 }

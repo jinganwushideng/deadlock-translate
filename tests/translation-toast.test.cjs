@@ -21,6 +21,14 @@ const charge = (id, category = 'outgoing', cost = {minimum:.0009,maximum:.0009})
 w.notification = {items:[charge(1)],balance:[{currency:'CNY',total:2.72}],checkedAt:'2026-11-17T08:00:00Z'};
 w.step(25);
 assert(toast()?.visible);
+const layer = toast().GetParent();
+assert.equal(layer.GetParent(), w.root);
+assert.equal(layer.loadedLayout, 'file://{resources}/layout/dlt_toast.xml');
+assert(layer.loadedStyles.includes('s2r://panorama/styles/dlt_toast.vcss_c'));
+assert.equal(layer.style.width, '100%');
+assert.equal(layer.style.height, '100%');
+assert.equal(layer.hittest, false);
+assert.equal(layer.hittestchildren, false);
 assert.equal(field('DltToastTitle').text, '已翻译 1 条');
 assert.equal(field('DltToastCostValue').text, '约 ¥0.0009');
 assert.equal(field('DltToastBalance').text, '余额 ¥2.72');
@@ -55,3 +63,17 @@ w.notification = {items:[charge(5,'outgoing',{minimum:.0000002,maximum:.000002})
 w.step(25);
 assert.equal(field('DltToastCostValue').text,'约 ¥<0.000001–0.000002');
 console.log('PASS compact toast preserves separate cost, balance and counts, groups receipts, suppresses replay, and shows missing/zero/multi-currency values.');
+
+const failed = loaded.exports({nativeClasses:true,diagnostics:true});
+failed.failToastLayout = true; failed.step(50);
+failed.notification = {items:[charge(1,'incoming')],balance:[]};
+failed.step(30);
+assert(!failed.packets.some(p => p.deepSeekNoticeSeen > 0), 'a layout failure must retain the pending receipt');
+assert.equal(failed.root.FindChildTraverse('DltToastViewport').IsValid(), false);
+failed.failToastLayout = false; failed.step(30);
+const recovered = failed.root.children.filter(p => p.id === 'DltToastViewport' && p.IsValid()).at(-1);
+assert(recovered?.FindChildTraverse('DltTranslationToast').visible);
+assert.equal(recovered.FindChildTraverse('DltToastTitle').text, '已翻译 1 条');
+failed.step(20);
+assert(failed.packets.some(p => p.deepSeekNoticeSeen === 1));
+console.log('PASS viewport loads its own stylesheet outside chat, retries loading failures, and acknowledges incoming receipts only after displaying.');

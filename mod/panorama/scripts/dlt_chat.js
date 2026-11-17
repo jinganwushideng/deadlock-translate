@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-c31f1cdb5ae3';
+var BUILD_ID = '0.7.5-3e4dade580bf';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -157,8 +157,8 @@ var DLTChatInputChanged = function () {};
         try { if (valid(ROOT) && ROOT.__dltOwner === context) { ROOT.__dltOwner = null; ROOT.__dltTranslationProgress = null; } } catch (_) {}
         try { if (valid(ROOT) && ROOT.__dltAdapterControl === control) ROOT.__dltAdapterControl = null; } catch (_) {}
         // The engine owns native chat/HTML destruction. Never navigate or delete it during teardown.
-        if (valid(state.localToast)) { state.localToast.visible = false; if (state.localToast.DeleteAsync) state.localToast.DeleteAsync(0); }
-        state.localToast = null;
+        if (valid(state.localToastLayer)) { state.localToastLayer.visible = false; state.localToastLayer.DeleteAsync(0); }
+        state.localToast = state.localToastLayer = null;
         closeDisplayPreview(); clearFeed(true); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = {}; state.render = []; state.outbox = []; state.hud = []; state.hudRoots = []; state.extraHudRoots = []; state.hudSearch = null;
         state.chats = []; state.outgoingQueue = []; state.outgoingKnown = {}; state.pending = null; state.pendingHotkey = null; state.drafts = []; state.liveDraft = null;
         state.chat = state.rootChat = state.rootMessages = state.lobby = state.input = state.targetLabel = state.bridge = state.menuMount = null;
@@ -353,32 +353,32 @@ var DLTChatInputChanged = function () {};
     function showLocalToast(message, details) {
         var panel = state.localToast;
         if (!valid(panel)) {
-            panel = $.CreatePanel('Panel', ROOT, 'DltTranslationToast');
-            panel.hittest = false; panel.hittestchildren = false;
-            panel.SetHasClass('DltToastHost', true); panel.SetHasClass('DltTranslationToast', true);
-            function child(type, parent, id, classes) {
-                var value = $.CreatePanel(type, parent, id);
-                value.hittest = false; value.hittestchildren = false;
-                for (var i = 0; i < classes.length; i++) value.SetHasClass(classes[i], true);
-                if (type === 'Label') value.html = false;
-                return value;
+            if (Date.now() < (state.nextToastLoad || 0)) return false;
+            state.nextToastLoad = Date.now() + 2000;
+            var layer = null;
+            try {
+                layer = $.CreatePanel('Panel', ROOT, 'DltToastViewport');
+                layer.hittest = false; layer.hittestchildren = false;
+                layer.style.width = '100%'; layer.style.height = '100%';
+                layer.style.position = '0px 0px 0px'; layer.style.zIndex = '301';
+                if (layer.BLoadLayout('file://{resources}/layout/dlt_toast.xml', false, false) === false)
+                    throw new Error('Toast layout not loaded');
+                panel = layer.FindChildTraverse('DltTranslationToast');
+                if (!valid(panel)) throw new Error('Toast panel missing');
+                panel.heading = panel.FindChildTraverse('DltToastTitle');
+                panel.subtitle = panel.FindChildTraverse('DltToastSubtitle');
+                panel.costCaption = panel.FindChildTraverse('DltToastCostCaption');
+                panel.costValue = panel.FindChildTraverse('DltToastCostValue');
+                panel.balance = panel.FindChildTraverse('DltToastBalance');
+                if (![panel.heading, panel.subtitle, panel.costCaption, panel.costValue, panel.balance].every(valid))
+                    throw new Error('Toast fields missing');
+                state.localToastLayer = layer;
+                state.localToast = panel;
+            } catch (_) {
+                if (valid(layer)) layer.DeleteAsync(0);
+                audit('toast-load-failed');
+                return false;
             }
-            var body = child('Panel', panel, 'DltToastBody', ['DltToastBody']);
-            child('Panel', body, '', ['DltToastPattern']);
-            child('Panel', body, '', ['DltToastInset']);
-            var content = child('Panel', body, '', ['DltToastContent']);
-            var summary = child('Panel', content, '', ['DltToastSummary']);
-            panel.heading = child('Label', summary, 'DltToastTitle', ['DltToastTitle']);
-            panel.subtitle = child('Label', summary, 'DltToastSubtitle', ['DltToastSubtitle']);
-            var cost = child('Panel', content, '', ['DltToastCost']);
-            panel.costCaption = child('Label', cost, 'DltToastCostCaption', ['DltToastSubtitle']);
-            panel.costValue = child('Label', cost, 'DltToastCostValue', ['DltToastTitle', 'DltToastCostValue']);
-            child('Panel', content, '', ['DltToastDiamond']);
-            panel.balance = child('Label', content, 'DltToastBalance', ['DltToastChip']);
-            var badge = child('Panel', panel, '', ['DltToastBadge']);
-            child('Label', badge, '', ['DltToastBadgePrimary']).text = '文';
-            child('Label', badge, '', ['DltToastBadgeSecondary']).text = 'A';
-            state.localToast = panel;
         }
         panel.SetHasClass('DltToastSimple', !details);
         panel.heading.text = message;
@@ -391,16 +391,18 @@ var DLTChatInputChanged = function () {};
         }
         panel.visible = true;
         state.toastUntil = Date.now() + (details ? 4000 : 2400);
+        return true;
     }
     function showExpense(data) {
         if (!data || !Array.isArray(data.items)) return;
         var now = Date.now(), group = state.expenseToast;
-        if (!group || now >= group.until) group = {tasks:0, builds:0, minimum:0, maximum:0, priced:0, missing:0};
-        var added = false;
+        group = !group || now >= group.until ? {tasks:0, builds:0, minimum:0, maximum:0, priced:0, missing:0} :
+            {tasks:group.tasks, builds:group.builds, minimum:group.minimum, maximum:group.maximum, priced:group.priced, missing:group.missing};
+        var added = false, sequence = state.deepSeekSeen || 0;
         for (var i = 0; i < data.items.length; i++) {
             var item = data.items[i];
-            if (item.id <= (state.deepSeekSeen || 0)) continue;
-            state.deepSeekSeen = item.id; added = true;
+            if (item.id <= sequence) continue;
+            sequence = item.id; added = true;
             group.tasks++; if (item.category === 'build') group.builds++;
             group.missing += item.missingUsage || 0;
             if (item.cost) { group.priced++; group.minimum += item.cost.minimum; group.maximum += item.cost.maximum; }
@@ -421,12 +423,14 @@ var DLTChatInputChanged = function () {};
         var time = seen && !isNaN(seen.getTime()) ? ('0' + seen.getHours()).slice(-2) + ':' + ('0' + seen.getMinutes()).slice(-2) : '';
         var heading = group.builds === group.tasks ? group.tasks === 1 ? '出装翻译完成' : '已翻译 ' + group.tasks + ' 套出装' :
             group.builds ? '已完成 ' + group.tasks + ' 个翻译' : '已翻译 ' + group.tasks + ' 条';
-        showLocalToast(heading, {
+        if (!showLocalToast(heading, {
             subtitle: 'DeepSeek' + (time ? ' · 余额 ' + time : ''),
             costCaption: '本次花费' + (group.missing && group.priced ? '（部分）' : ''),
             cost: cost, balance: balance ? '余额 ' + balance : '余额待查询', balancePending: !balance
-        });
+        })) return;
+        state.deepSeekSeen = sequence;
         group.until = now + 4000; state.expenseToast = group;
+        audit('toast-shown', null, null, null, group.tasks);
     }
     function settingsVisible() { var window = ROOT.__dltActiveSettingsWindow; return state.openSettings || valid(window) && !window.__dltClosing; }
     function inputOpen() { return nativeInputOpen(); }
