@@ -1,6 +1,6 @@
 {
   "version": "0.7.5",
-  "buildId": "0.7.5-b85396ff013e",
+  "buildId": "0.7.5-540522399a24",
   "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
   "files": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "b45935c52c4d507802d262438daa77d2e0f504ac88b2e60b3b0b97603d8f504e"
+      "sha256": "8b30daf98967c5c6200ab81b8e38b78ebd78edd138d2b6752d151a0a749158f6"
     },
     {
       "file": "CHANGELOG.md",
@@ -153,7 +153,7 @@
     },
     {
       "file": "docs/USER-GUIDE.md",
-      "sha256": "ccaeab763cb9689995dd921288cf28c26018f4aae995a1bc3018d115003a16bf"
+      "sha256": "00af212a5fa55425fd33f8192a7f6c69bc9338b80a53d96b3bba89966adbd0c9"
     },
     {
       "file": "docs/VALIDATION.md",
@@ -221,7 +221,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_build_text.js",
-      "sha256": "a26901fe18d084cef15f34f75da9c9e93df0b735430d11acbcafd2b574dee532"
+      "sha256": "daa6a62c632779f6db2ebee3b542b53a95b7b4292002338517a7a2650791086e"
     },
     {
       "file": "mod/panorama/scripts/dlt_build_transport.js",
@@ -229,7 +229,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "65cc276e8c2ad27da35748f650a824a40db7a681778e304f9a9167bf03fb3e4b"
+      "sha256": "2b5b880cb9f73437eb8d19621ce9df22b17ea9380cfe98164ecbaecfadc59090"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -445,7 +445,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "834afde3cf9ac9bdce88bf4c100791aea034f0e7b34a1c44a056197e0f5c7196"
+      "sha256": "47a36b08f72458241c48d9b2d2a1ee783437efaee3ff5d2b8bf1ffc0d8dc7aa3"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -549,7 +549,7 @@
     },
     {
       "file": "src/Bridge/IncomingStyle.cs",
-      "sha256": "72644b0bd436cfb76b68ae952165f2b2e2243e1db8183bc31c7aece53e3b02c2"
+      "sha256": "2049d9650644ed0e5912950af5ef3fa4d37eb0ee10eea0c119d318f41de046d2"
     },
     {
       "file": "src/Bridge/InstanceCoordinator.cs",
@@ -557,7 +557,7 @@
     },
     {
       "file": "src/Bridge/Jobs.cs",
-      "sha256": "e139876a0d2ecc16f6fb1a3be3891b6f475df14d5e445af33e49c6187b331981"
+      "sha256": "24a01e66a3c17b1fb97e5692a95198a989fa33f4ff28ab868220186a7d97e9e2"
     },
     {
       "file": "src/Bridge/LlmKeepAlive.cs",
@@ -621,7 +621,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "30de323e6ab975211fa9e1456ad94b86f103d23baff17e5d7adc2ce8dc8d04d5"
+      "sha256": "385207ee82d24f4c2827b0c4c9244d6227ccba32131119e34035709a40ba496e"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -661,11 +661,11 @@
     },
     {
       "file": "src/Bridge/Terms.cs",
-      "sha256": "a4d87cfe45c71b13ab3953929866d8b66b19ae4d35a0c5f056692dcc1d4d08bc"
+      "sha256": "f814524262b47e1d4d155177404864c1badfdeb0e2684843f15342973e316d0c"
     },
     {
       "file": "src/Bridge/TranslationLanguages.cs",
-      "sha256": "8d89c03e4738e136b4bdf4a775eed0c340627f0543c92d53db62ccc0f6554c64"
+      "sha256": "1d2e16d242a1a7657b70213d0b81c890bf39d1d260a3be237baa8c464a78cd1c"
     },
     {
       "file": "src/Bridge/TranslationMemo.cs",
@@ -673,7 +673,7 @@
     },
     {
       "file": "src/Bridge/TranslationOutputException.cs",
-      "sha256": "c7234dbe70a50e7dc6a80d0be0b9fdcd40c908fca4c7832e604373bc66ad8356"
+      "sha256": "c06bd367ccfff040c145891b183172d67d789f43ea315a2077eaef065785b592"
     },
     {
       "file": "src/Bridge/TranslationPrompt.cs",
@@ -701,7 +701,7 @@
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "1cd481af1df56b347a9b45afcdbb627b87a84f0e50a55fb578c388fc42746410"
+      "sha256": "81ea972a342fa13b279555d68f4d6043c5a86ee242884d781c711e72dc859ba5"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -797,7 +797,7 @@
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "beee79f7286873b7a1364a3c8d4b3d240ef7c01b940fb8581dc1b60c9c40daa5"
+      "sha256": "16a025a31b9aba95f153114b8e8060b7e905568714ef2d0c1f2a2e9c59b3843d"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -1085,7 +1085,7 @@
     },
     {
       "file": "tests/incoming-style-ui.test.cjs",
-      "sha256": "0264d1bd41cb2a6e2d8a1696c5a7388f7b61795e4d168cb728d90d616f0e0b61"
+      "sha256": "63bf746a451454aa949d9176307abc830ad2ffbe71fc98c508bed1bd46926eb5"
     },
     {
       "file": "tests/IncomingStyleTests/IncomingStyleTests.csproj",
@@ -1341,7 +1341,7 @@
     },
     {
       "file": "tests/receive-burst-ui.test.cjs",
-      "sha256": "783944bf0ce9327364998b8e6a084da6272d5d6d61e228515ab9170a3f47db74"
+      "sha256": "1b192e8de7e9ed8fdc5fbfc53d907d3072e2b5acfc5900f3860a01cee4ff046a"
     },
     {
       "file": "tests/ReceiveBurstTests/Program.cs",

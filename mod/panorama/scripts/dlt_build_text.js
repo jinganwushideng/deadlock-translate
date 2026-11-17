@@ -287,7 +287,7 @@ function DLTChineseBuildTitle(title) {
                         '接收译文 ' + job.cursor + (job.fieldCount ? '/' + job.fieldCount : '') : job.downloadComplete && !job.finishedAt ?
                         '正在显示译文' : job.bg && job.bg.accepted && !job.total ? '等待后台任务' : !job.total ?
                         (sourceErrors[job.sourceStatus] || (job.failed ? '读取整套出装失败，请重试' : '正在读取本地整套出装')) : running ?
-                        (looking || job.bg && !job.working ? '读取本地译文 ' : job.refining ? '精翻 ' : '后台翻译 ') + job.done + '/' + job.total :
+                        (looking || job.bg && !job.working ? '读取本地译文 ' : job.refining ? '大模型翻译 ' : '后台翻译 ') + job.done + '/' + job.total :
                         job.failed ? '完成 ' + job.done + '/' + job.total + ' · ' + job.failed + ' 段失败' :
                         (job.translated ? '已翻译 ' : '已读取本地译文 ') + job.done + '/' + job.total;
                     if (job && job.total) caption += ' · 缓存 ' + job.cacheHits + (job.localHits ? ' · 本地直译 ' + job.localHits : '') + ' · 新译 ' + job.translated;

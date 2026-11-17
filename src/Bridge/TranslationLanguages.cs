@@ -20,8 +20,8 @@ public static class TranslationLanguages {
         if(id!="custom")throw new ArgumentException("无效的目标语言");
         if(string.IsNullOrWhiteSpace(customName)||customName.Length>80||customName.Any(char.IsControl))throw new ArgumentException("自定义语言名称不能为空、含控制字符或超过80字符");
         if(customCode.Length>32||customCode.Any(char.IsControl)||(customCode.Length>0&&!Regex.IsMatch(customCode,@"\A[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50))))
-            throw new ArgumentException("自定义快译语言代码格式无效，例如 nl、pt-pt、zh-Hant；仅使用大模型时可以留空");
+            throw new ArgumentException("自定义免费翻译语言代码格式无效，例如 nl、pt-pt、zh-Hant；仅使用大模型时可以留空");
         return new("custom",customName.Trim(),customCode.Length==0?null:customCode);
     }
-    public static string RequireServiceCode(TranslationLanguage language)=>language.ServiceCode??throw new InvalidOperationException("自定义语言尚未填写快译语言代码，请填写服务支持的代码或选择仅高质量精翻");
+    public static string RequireServiceCode(TranslationLanguage language)=>language.ServiceCode??throw new InvalidOperationException("自定义语言尚未填写免费翻译语言代码，请填写服务支持的代码或选择仅大模型翻译");
 }

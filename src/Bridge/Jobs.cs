@@ -82,8 +82,8 @@ public sealed class JobEngine : IAsyncDisposable {
                 var wantFast = job.Config.Mode != "quality"; var wantQuality = job.Config.Mode != "fast";
                 job.Remaining=(wantFast?1:0)+(wantQuality?1:0);
                 unfinishedReceive++;
-                if(wantFast && !fast.Writer.TryWrite(job)) Complete(job,false,null,"快译队列已满");
-                if(wantQuality && !quality.Writer.TryWrite(job)) Complete(job,true,null,"精翻队列已满");
+                if(wantFast && !fast.Writer.TryWrite(job)) Complete(job,false,null,"免费翻译队列已满");
+                if(wantQuality && !quality.Writer.TryWrite(job)) Complete(job,true,null,"大模型翻译队列已满");
             }
             foreach(var old in jobs.Where(x=>x.Value.View.Done && Environment.TickCount64-x.Value.Created>120000).Select(x=>x.Key).ToArray()) jobs.Remove(old);
             while(jobs.Count>500) { var old=jobs.FirstOrDefault(x=>x.Value.View.Done); if(old.Key==null) break; jobs.Remove(old.Key); }

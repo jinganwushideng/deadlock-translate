@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-b85396ff013e';
+var BUILD_ID = '0.7.5-540522399a24';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -1338,7 +1338,7 @@ var DLTChatInputChanged = function () {};
         var channel = record.displayChannel || record.channel;
         var channelName = channel === 'team' ? '友军' : channel === 'all' ? '全体' : channel === 'party' ? '小队' : '聊天';
         var identity = identityText(record, options, true);
-        return (identity ? identity.slice(0, 100) + ' · ' : '') + channelName + (record.stage === 'local' ? ' · 原文回显' : record.stage === 'quality' ? ' · 精翻' : ' · 快译');
+        return (identity ? identity.slice(0, 100) + ' · ' : '') + channelName + (record.stage === 'local' ? ' · 原文回显' : record.stage === 'quality' ? ' · 大模型翻译' : ' · 免费翻译');
     }
     function layoutFeed(panel, options) {
         var o = options || appearance(), signature = JSON.stringify(o);
@@ -2010,7 +2010,7 @@ var DLTChatInputChanged = function () {};
         if (progress.thinking) working += ' · 思考 ' + progress.thinking;
         if (progress.generating) working += ' · 生成 ' + progress.generating;
         if (progress.waiting) working += ' · 等待 ' + progress.waiting;
-        status(state.config.enabled ? (payload.configuredLlm ? '翻译已连接' + working : '快译已连接 · 精翻未配置') : '翻译已暂停');
+        status(state.config.enabled ? (payload.configuredLlm ? '翻译已连接' + working : '免费翻译已连接 · 大模型翻译未配置') : '翻译已暂停');
         return true;
     }
     function resetTransport() {

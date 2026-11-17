@@ -34,7 +34,7 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  check(await page.locator('#incomingCustomTone').inputValue()===custom&&await page.locator('#incomingTone').inputValue()==='custom','receive style restored after reload');
  await page.locator('[data-page="appearance"]').click();check(!await page.locator('#incomingShowOwnTranslations').isChecked(),'own display filter restored after reload');
  await page.locator('[data-page="incoming"]').click();await page.locator('#mode').selectOption('fast');
- check((await page.locator('article').filter({has:page.locator('#incomingTone')}).innerText()).includes('快译不使用风格提示'),'fast-only behavior is explained without losing stored choice');
+ check((await page.locator('article').filter({has:page.locator('#incomingTone')}).innerText()).includes('免费翻译不使用风格提示'),'fast-only behavior is explained without losing stored choice');
  await page.locator('#incomingTone').selectOption('none');check(!await page.locator('#incomingCustomToneFields').isVisible(),'none hides inactive custom preference');
  await page.locator('#incomingTone').selectOption('concise');await page.evaluate(()=>document.activeElement?.blur());await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
  check(saved.incomingTone==='concise'&&saved.incomingCustomTone===custom,'preset selection preserves inactive custom draft locally');

@@ -211,14 +211,14 @@ public sealed class Terms {
             if(split<0 && !value.Any(IsHan)) {
                 // International names are whole tokens; normalize harmless casing without
                 // accepting an unrelated longer word as proof that a required name survived.
-                if(!Regex.IsMatch(text,Pattern(value),RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50)))throw new InvalidDataException("精翻未保留明确的游戏专名");
+                if(!Regex.IsMatch(text,Pattern(value),RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50)))throw new InvalidDataException("大模型翻译未保留明确的游戏专名");
                 text=Regex.Replace(text,Pattern(value),_=>marker,RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50));
             }
             else if(text.Contains(value,StringComparison.Ordinal)) { text=text.Replace(value,marker,StringComparison.Ordinal); }
             else if(text.Contains(chinese,StringComparison.Ordinal)) { text=text.Replace(chinese,marker,StringComparison.Ordinal); }
             else if(english.Length>0 && Regex.IsMatch(text,@"(?<![（(])"+Pattern(english),RegexOptions.IgnoreCase,TimeSpan.FromMilliseconds(50))) {
                 text=Regex.Replace(text,@"(?<![（(])"+Pattern(english),_=>marker,RegexOptions.IgnoreCase,TimeSpan.FromMilliseconds(50));
-            } else throw new InvalidDataException("精翻未保留明确的游戏专名");
+            } else throw new InvalidDataException("大模型翻译未保留明确的游戏专名");
             text=text.Replace(marker,value,StringComparison.Ordinal);
         }
         return text;

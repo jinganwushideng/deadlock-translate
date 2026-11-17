@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','applica
  check(hint.includes('链路保持独立')&&hint.includes('不会被打断'),'service page explains independent pipelines and in-flight requests');
  check(await page.locator('#fastConcurrency').inputValue()==='4'&&await page.locator('#llmConcurrency').inputValue()==='4','threshold does not overwrite configured service caps');
  scheduling=undefined;await page.reload();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));
- check((await page.locator('#queueStatus').textContent()).includes('快译并发'),'older backend without scheduling metadata remains usable');
+ check((await page.locator('#queueStatus').textContent()).includes('免费翻译并发'),'older backend without scheduling metadata remains usable');
  check(errors.length===0,'threshold status UI has no browser script errors');
  fs.writeFileSync(path.join(root,'artifacts/receive-burst-ui-tests.json'),JSON.stringify({passed,realBackend:false,gameTested:false},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

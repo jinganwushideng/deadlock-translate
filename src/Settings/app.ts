@@ -208,7 +208,7 @@ bind('saveTerms',async()=>{
    await api('terms','PUT',snapshot);
    savedTerms=snapshot;termsDirty=JSON.stringify(terms)!==JSON.stringify(snapshot);
    $('termConflicts').hidden=true;updateTermsHint();
-   notice(termsDirty?'词库已保存，后续修改仍待保存。':'词库已保存，快译缓存已清除。');
+   notice(termsDirty?'词库已保存，后续修改仍待保存。':'词库已保存，免费翻译缓存已清除。');
    return;
   }catch(e){
    if(!(e instanceof ApiError)||e.status!==409||attempt!==0){
@@ -231,7 +231,7 @@ bind('importTerms',()=>$<HTMLInputElement>('termFile').click());
 $('termFile').addEventListener('change',async()=>{try{const file=$<HTMLInputElement>('termFile').files?.[0];if(!file)return;if(file.size>2*1024*1024)throw new Error('词库文件过大');const values=JSON.parse(await fileText(file));if(!Array.isArray(values)||values.length>5000||values.some(t=>!t||typeof t.source!=='string'||typeof t.target!=='string'||typeof t.english!=='string'||!['name','phrase'].includes(t.kind)||typeof t.ambiguous!=='boolean'||(t.legacyTarget!==undefined&&(typeof t.legacyTarget!=='string'||t.legacyTarget.length>150))))throw new Error('词库格式不正确');terms=values;drawTerms();markTermsDraft();notice('已载入词库，点击“保存词库”后生效。');}catch(e){notice((e as Error).message,true);}});
 bind('stop',async()=>{await api('stop','POST',{});notice('后台已停止。再次使用时请运行启动器。');});
 let statusRefreshing=false,outgoingRefreshing=false;
-async function refresh(){if(statusRefreshing||settingsClosing)return;statusRefreshing=true;try{const status=await api('status');drawLlmRequests(status.requests?.recent||status.diagnostics?.llmRequests||[]);$('messages').textContent=status.engine.messages;$('pending').textContent=status.engine.pending;if(status.requests){const r=status.requests;$('queueStatus').textContent='快译并发 '+r.fast.active+'/'+r.fast.limit+' · 精翻并发 '+r.llm.active+'/'+r.llm.limit+' · 服务排队 '+(r.fast.waiting+r.llm.waiting)+' · 待发送 '+(status.sending?.pending||0);const receive=status.engine.scheduling;if(receive)$('queueStatus').textContent+=' · 接收'+(receive.burst?'并发':'逐条')+'（未完成 '+receive.unfinished+' / 触发 '+receive.threshold+'）';}$('termCount').textContent=status.terms;$('connection').textContent='后台已连接';renderDiagnostics(status.diagnostics);drawKeepAlive(status.diagnostics?.keepAlive);if(settingsInitialized)publishSettingsState('ready');$('gameStatus').textContent=status.engine.connected?'游戏已连接 · 译文仅对自己显示':'等待游戏连接 · 后台可以先进行试译';const m=status.gameEvidence?.metrics;$('displayStatus').textContent=m?'显示诊断：暂缓 '+(m.hudWaits||0)+' · 重试恢复 '+(m.hudRetryRecovered||0)+' · 原生过期 '+(m.hudNativeExpired||0)+' · 面板销毁 '+(m.hudPanelGone||0)+' · 重试结束 '+(m.hudRetryDropped||0)+' · 独立区写入 '+(m.feedRendered||0)+'（写入不等同于屏幕可见）':'';$('readerStatus').textContent=m?'读取计数：聊天栏 '+(m.regularRows||0)+' / HUD '+(m.hudRows||0)+' / 大厅 '+(m.lobbyRows||0)+(m.hotkeyDrops?'。有 '+(m.hotkeyDrops)+' 次快捷键未能取到聊天输入，可再按一次当前发送快捷键。':m.channelWaits?'。有 '+(m.channelWaits)+' 条消息等待频道确认，原文已保留。':m.channelFaults?'。检测到发送频道可能不一致，已暂停继续发送。':''):'';}catch(e){$('connection').textContent='后台未连接';renderRuntimeIssues(null,e);publishSettingsState('offline');}finally{statusRefreshing=false;}}
+async function refresh(){if(statusRefreshing||settingsClosing)return;statusRefreshing=true;try{const status=await api('status');drawLlmRequests(status.requests?.recent||status.diagnostics?.llmRequests||[]);$('messages').textContent=status.engine.messages;$('pending').textContent=status.engine.pending;if(status.requests){const r=status.requests;$('queueStatus').textContent='免费翻译并发 '+r.fast.active+'/'+r.fast.limit+' · 大模型翻译并发 '+r.llm.active+'/'+r.llm.limit+' · 服务排队 '+(r.fast.waiting+r.llm.waiting)+' · 待发送 '+(status.sending?.pending||0);const receive=status.engine.scheduling;if(receive)$('queueStatus').textContent+=' · 接收'+(receive.burst?'并发':'逐条')+'（未完成 '+receive.unfinished+' / 触发 '+receive.threshold+'）';}$('termCount').textContent=status.terms;$('connection').textContent='后台已连接';renderDiagnostics(status.diagnostics);drawKeepAlive(status.diagnostics?.keepAlive);if(settingsInitialized)publishSettingsState('ready');$('gameStatus').textContent=status.engine.connected?'游戏已连接 · 译文仅对自己显示':'等待游戏连接 · 后台可以先进行试译';const m=status.gameEvidence?.metrics;$('displayStatus').textContent=m?'显示诊断：暂缓 '+(m.hudWaits||0)+' · 重试恢复 '+(m.hudRetryRecovered||0)+' · 原生过期 '+(m.hudNativeExpired||0)+' · 面板销毁 '+(m.hudPanelGone||0)+' · 重试结束 '+(m.hudRetryDropped||0)+' · 独立区写入 '+(m.feedRendered||0)+'（写入不等同于屏幕可见）':'';$('readerStatus').textContent=m?'读取计数：聊天栏 '+(m.regularRows||0)+' / HUD '+(m.hudRows||0)+' / 大厅 '+(m.lobbyRows||0)+(m.hotkeyDrops?'。有 '+(m.hotkeyDrops)+' 次快捷键未能取到聊天输入，可再按一次当前发送快捷键。':m.channelWaits?'。有 '+(m.channelWaits)+' 条消息等待频道确认，原文已保留。':m.channelFaults?'。检测到发送频道可能不一致，已暂停继续发送。':''):'';}catch(e){$('connection').textContent='后台未连接';renderRuntimeIssues(null,e);publishSettingsState('offline');}finally{statusRefreshing=false;}}
 Promise.all([api('config'),api('terms')]).then(([c,t])=>{loadFields(c);terms=t.items;savedTerms=clone(terms);termsTag=t.tag;drawTerms();settingsInitialized=true;setSaveStatus('所有更改已保存');window.DltSettingsNavigation?.activate('overview');publishSettingsState('ready');refresh();}).catch(e=>{notice(e.message,true);renderRuntimeIssues(null,e);publishSettingsState('error');});
 
 function drawKeepAlive(status:any){const node=document.getElementById('llmKeepAliveStatus');if(!node)return;if(!status){node.textContent='保活状态暂不可用，请确认后台版本。';return;}const labels:Record<string,string>={disabled:'自动保活已关闭',waiting:'等待下次保活',warming:'预热中，真实翻译会优先执行','waiting-for-game':'等待游戏连接',unconfigured:'未配置大模型密钥',unused:'当前未启用大模型翻译',busy:'翻译繁忙，本次保活跳过',cooldown:'翻译服务正在冷却，保活暂缓',succeeded:'预热成功',failed:'保活失败，稍后按退避间隔重试','rate-limited':'服务限流，已延后保活',unauthorized:'密钥或权限错误，保存修正后的设置再试',interrupted:'已给真实翻译让路',cancelled:'保活已取消','configuration-changed':'配置已变更，等待新设置'};node.textContent=(labels[status.state]||'等待保活')+' · 请求 '+(status.requests||0)+' / 成功 '+(status.successes||0)+(status.lastAttemptUtc?' · 最近 '+new Date(status.lastAttemptUtc).toLocaleTimeString()+' / '+status.lastElapsedMs+' ms':'')+(status.httpStatus&&status.httpStatus!==200?' · HTTP '+status.httpStatus:'');}
@@ -692,7 +692,7 @@ function fileText(file:File):Promise<string>{
     return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('无法读取词库文件'));reader.readAsText(file);});
 }
 
-bind('burstPreset',()=>{for(const [id,value] of [['fastConcurrency','4'],['llmConcurrency','4'],['outgoingConcurrency','3'],['outgoingQueueLimit','12']])$<HTMLInputElement>(id).value=value;markSettingsDraft();notice('已填入高频配置：快译 4、精翻 4、发送 3、队列 12。将自动保存。');});
+bind('burstPreset',()=>{for(const [id,value] of [['fastConcurrency','4'],['llmConcurrency','4'],['outgoingConcurrency','3'],['outgoingQueueLimit','12']])$<HTMLInputElement>(id).value=value;markSettingsDraft();notice('已填入高频配置：免费翻译 4、大模型翻译 4、发送 3、队列 12。将自动保存。');});
 
 function languageName(id:string){const option=document.querySelector<HTMLOptionElement>('#outgoingTargetLanguage option[value="'+id+'"]');return option?.textContent||id;}
 function refreshBuildTextProfile(){
@@ -842,7 +842,7 @@ function collectRuntimeIssues(d:any,error?:unknown):RuntimeIssue[]{
   else if(s.refusalCode==='native-close'){title='游戏聊天框没有正常收起';detail='关框确认和重试均未完成，这条消息没有提交；原文已保留。';steps=['按 Esc 关闭聊天框，再打开原频道重新发送。','若仍出现，请导出诊断日志；不需要靠输入第二条来触发旧任务。'];}
   else if(s.refusalCode==='submit-unconfirmed'){title='无法确认游戏是否读取了待发送文字';detail='调用提交后文字没有被游戏读取清空，不能把这次事件算作成功发送。';steps=['先检查游戏聊天记录，避免重复发送。','确认未发出后，在“最近发送任务”复制原文重试；程序不会自动补发这次任务。'];}
   else if(s.failureCode==='Unauthorized'){title='翻译服务拒绝了发送请求';detail='服务返回权限/鉴权错误；这与 Windows 管理员权限是不同的问题。';steps=['在“翻译服务”检查 API 密钥、套餐接口、模型完整名称和账号额度。','用“试译一句”测试服务，修复后再发送。'];actions=['providers','outgoing','logs'];}
-  else if(s.failureCode==='ReasoningBudget'){title='模型思考耗尽输出额度，最近一次发送失败';steps=['在翻译服务适当提高模型输出上限（含思考），默认 4096 token。','模型仍保留思考；同时检查精翻和发送超时，保存后重试保留的原文。'];actions=['providers','outgoing','logs'];}
+  else if(s.failureCode==='ReasoningBudget'){title='模型思考耗尽输出额度，最近一次发送失败';steps=['在翻译服务适当提高模型输出上限（含思考），默认 4096 token。','模型仍保留思考；同时检查大模型翻译和发送超时，保存后重试保留的原文。'];actions=['providers','outgoing','logs'];}
   else if(s.refusalCode==='input-truncated'||s.failureCode==='NativeInputTruncated'){title='游戏输入框截短了文本，已停止发送';detail='写入游戏后读回的内容与完整文本不一致，程序没有提交残缺内容。';steps=['在“发送翻译”开启超长内容自动分条；当前游戏单条最多 80 个 Unicode 字符，空格、标点也计入。','成套更新后台和 VPK 后重试保留的原文；若仍出现，导出诊断日志核对当前游戏输入框限制。'];}
   else if(s.failureCode==='OutputTruncated'){title='模型译文被截断，最近一次发送失败';steps=['在翻译服务适当提高模型输出上限，给思考和最终译文留出空间。','确认原文后重试；程序不会发送截断内容。'];actions=['providers','outgoing','logs'];}
   else if(s.failureCode==='NameMismatch'){title='模型未保留游戏专名，最近一次发送失败';steps=['已先尝试本地名称纠正，必要时最多重新翻译一次；仍未通过则保留原文。','核对词库规范名与外号映射，或调整模型后重试；思考设置不变。'];actions=['providers','outgoing','logs'];}
@@ -856,7 +856,7 @@ function collectRuntimeIssues(d:any,error?:unknown):RuntimeIssue[]{
   add('sending',title,detail,steps,actions);
  }
  for(const issue of Array.isArray(d.providers)?d.providers:[]){
-  const name=issue.provider==='bing'?'Bing 免密钥快译':issue.provider==='azure'?'Azure 翻译':issue.provider==='llm'?'大模型精翻':'';
+  const name=issue.provider==='bing'?'Bing 免密钥免费翻译':issue.provider==='azure'?'Azure 翻译':issue.provider==='llm'?'大模型翻译':'';
   if(!name)continue;
   const code=Number(issue.httpStatus),redirect=issue.code==='ServiceRedirect';
   let title=name+'返回 HTTP '+code,detail='该翻译服务最近一次请求失败，游戏权限和本地连接需要分别判断。';
@@ -966,7 +966,7 @@ function drawLlmRequests(items:LlmRequest[]){
  const host=$('llmRequests');if(!host)return;
  const phases:Record<string,string>={queued:'等待名额',waiting:'等待服务响应',thinking:'正在思考',generating:'生成译文',validating:'校验译文',done:'已完成',failed:'失败',cancelled:'已取消'};
  const ids=new Set(items.slice(0,12).map(i=>i.id));for(const [id,row] of llmRows)if(!ids.has(id)){row.remove();llmRows.delete(id);}
- if(!items.length){if(!host.querySelector('.llm-empty')){const empty=document.createElement('p');empty.className='llm-empty hint';empty.textContent='还没有精翻请求。词库直接返回或缓存命中不会新增云端请求。';host.append(empty);}return;}
+ if(!items.length){if(!host.querySelector('.llm-empty')){const empty=document.createElement('p');empty.className='llm-empty hint';empty.textContent='还没有大模型翻译请求。词库直接返回或缓存命中不会新增云端请求。';host.append(empty);}return;}
  host.querySelector('.llm-empty')?.remove();const tokens=(n:number|null|undefined)=>n==null?'未提供':String(n);const time=(n:number|null|undefined)=>n==null?'未提供':(n/1000).toFixed(2)+' 秒';
  items.slice(0,12).forEach((item,index)=>{let row=llmRows.get(item.id);if(!row){row=document.createElement('div');row.className='llm-request';row.dataset.requestId=item.id;for(let i=0;i<3;i++)row.append(document.createElement(i===0?'strong':'p'));llmRows.set(item.id,row);}
  const direction=item.direction==='outgoing'?'发送':item.direction==='probe'?'连接测试':'接收';
@@ -1082,7 +1082,7 @@ function drawLanguageBindings(){
    const field=document.createElement('input');field.setAttribute('aria-label',label);field.placeholder=label;field.maxLength=maximum;field.value=item[key];
    field.oninput=()=>{item[key]=field.value;};row.append(field);
   }
-  if(item.language==='custom'){input('name','自定义语言名称',80);input('code','快译语言代码（可选）',32);}
+  if(item.language==='custom'){input('name','自定义语言名称',80);input('code','免费翻译语言代码（可选）',32);}
   input('hotkey','语言切换快捷键',64);
   const record=document.createElement('button');record.textContent='录制';record.onclick=()=>void startRecording('language:'+item.id);row.append(record);
   const label=document.createElement('label'),enabled=document.createElement('input');enabled.type='checkbox';enabled.checked=item.enabled;
