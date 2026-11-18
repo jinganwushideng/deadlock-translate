@@ -29,7 +29,7 @@
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "034c700d60711d2c8982c6adeaec3939630cca7ccca97ccf9d3835762ca85f7f"
+      "sha256": "9e5543ee8134f94bf017e9739459e9453a6a05e168116fe5f71b20ded76d6565"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -145,11 +145,11 @@
     },
     {
       "file": "docs/UPDATE-0.7.5.md",
-      "sha256": "274e971665b648461210e8ca8bbc8aa8511de2513166f8ebf98bff5b0f17fb8a"
+      "sha256": "db4a36df517062086355ed022f520b8d4245cd6d66f132de2bdf74ffbaae9cda"
     },
     {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "d814e9cbc5bcd144f534d4dc0bc17f69294177ad14cd48f03d86aaeffa0da4ab"
+      "sha256": "9fdf8500414ab0378da767c72da2ebf841690ef05ca2f030066badf1ca652034"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -277,7 +277,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "8f853551ff2d8a335c904f5122959477d810cb508e1a311bf8f28e2f5250154f"
+      "sha256": "cbbffcdb503efa60e13322d0d8c5e79a8d8e5c6fd87e2db74f5e51b77be979b9"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
