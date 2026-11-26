@@ -10,6 +10,23 @@ function test(name,run){try{run();checks.push({name,ok:true});}catch(error){chec
 function setup(opts={}){const w=world({nativeClasses:true,diagnostics:true,statusCapability:true,keepSubmittedText:true,undefinedDispatch:true,...opts});w.step(60);return w;}
 const events=w=>w.packets.flatMap(p=>p.logs||[]),statuses=w=>w.packets.flatMap(p=>p.outgoingStatus||[]);
 const part=(w,index,text,total=2,id='out-1')=>({...w.resultFor(w.jobs[id].item),partIndex:index,partCount:total,sendText:text,state:'ready'});
+test('voice HUD follows the selected channel and raw dispatch preserves the native input',()=>{
+ const w=setup({deferResult:false});
+ w.matchId=12345;
+ w.dictation={enabled:true,canSend:true,id:'recording',state:'recording',text:'回防',channel:'team',originalKey:'F6',translateKey:'F8',elapsed:1};
+ w.step(30);
+ const hud=w.context.parent.FindChildTraverse('DltVoiceInput');
+ assert(hud.text.includes('录音中 · 队伍')&&hud.text.includes('回防'));
+ w.dictation.channel='all';w.step(6);
+ assert(hud.text.includes('录音中 · 全体')&&hud.text.includes('回防'));
+ w.openChat('all');w.typeDraft('手打内容');
+ w.dictation={enabled:true,canSend:true,state:'idle'};
+ w.synthetic.push({id:'voice-1',isVoice:true,channel:'all',state:'ready',original:'回防',sendText:'回防',english:'',displayMode:'translation'});
+ w.step(10);assert.equal(w.submitted.length,0);assert.equal(w.input.text,'手打内容');
+ w.closeChat();w.step(12);
+ assert.equal(w.submitted.length,1);assert.equal(w.submitted[0].channel,'ChatTarget_GameAll');
+ assert.equal(w.submitted[0].text,'回防');assert.equal(w.input.text,'手打内容');
+});
 for(const channel of ['team','all','party'])test(channel+': first shortcut closes across callbacks then sends without further input',()=>{
  const w=setup({deferResult:false});w.openChat(channel);w.shortcut('原生第一条');w.step(2);assert.equal(w.submitted.length,0);assert(w.jobs['out-1'].holding);assert.equal(w.jobs['out-1'].item.text,'原生第一条');assert(!statuses(w).some(s=>s.state==='capture_ready'));
  w.step(18);assert.equal(w.submitted.length,1);assert.equal(w.submitted[0].channel,{team:'ChatTarget_GameAllies',all:'ChatTarget_GameAll',party:'ChatTarget_Party'}[channel]);

@@ -142,17 +142,20 @@ public sealed partial class Translators : ITranslator, IDisposable {
     private string MemoKey(string direction,string text,string[] context,Settings config,int? termRevision=null) =>
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             JsonSerializer.Serialize(new{direction,text,context,outgoingTone=direction=="en"?config.OutgoingTone:"none",customTone=direction=="en"&&config.OutgoingTone=="custom"?config.OutgoingCustomTone:"",incomingTone=direction=="zh"?config.IncomingTone:"none",incomingCustomTone=direction=="zh"&&config.IncomingTone=="custom"?config.IncomingCustomTone:"",config.LlmBaseUrl,effectiveModel=LlmProfiles.Effective(config,direction=="en").Model,effectiveThinking=LlmProfiles.Effective(config,direction=="en").LlmThinkingEnabled,config.Model,config.LlmMaxTokens,config.LlmThinkingEnabled,config.LlmThinkingApi,config.LlmStreaming,config.BilingualNames,config.ChineseNameStyle,config.LlmTimeoutSeconds,incoming=TranslationLanguages.Incoming(config),outgoing=TranslationLanguages.Outgoing(config),Revision=termRevision??terms.Revision,epoch=Interlocked.Read(ref qualityEpoch)}))));
-    public async Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct) {
-        using var receipt=Spend.Begin("incoming");
+    public Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct) =>
+        Quality(text,context,config,ct,"incoming");
+    internal async Task<string> Quality(string text,string[] context,Settings config,CancellationToken ct,string category,Action<string>? onPartial=null) {
+        using var receipt=Spend.Begin(category);
         var language=TranslationLanguages.Incoming(config);
         var exact=terms.Exact(text,config.BilingualNames,language.ChineseGlossary);
         if(exact!=null){receipt.CompletedWithoutCharge();return terms.RenderChineseStyle(exact,text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");}
         if(store.LlmSecretFor(config).Length==0)throw new InvalidOperationException("未配置大模型密钥");
-        var result=await qualityMemo.Get(MemoKey("zh",text,context,config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),token=>QualityUncached(text,context,config,token),ct);
+        var result=await qualityMemo.Get(MemoKey("zh",text,context,config),TimeSpan.FromSeconds(config.LlmTimeoutSeconds),
+            (token,publish)=>QualityUncached(text,context,config,token,config.LlmStreaming?publish:null),ct,onPartial);
         receipt.CompletedWithoutCharge();
         return result;
     }
-    private async Task<string> QualityUncached(string text, string[] context, Settings config, CancellationToken ct) {
+    private async Task<string> QualityUncached(string text, string[] context, Settings config, CancellationToken ct,Action<string>? onPartial) {
         var epoch=Interlocked.Read(ref qualityEpoch);var previous=providerIssues.GetValueOrDefault("llm");
         var language=TranslationLanguages.Incoming(config);
         var exact=terms.Exact(text,config.BilingualNames,language.ChineseGlossary);
@@ -173,7 +176,7 @@ public sealed partial class Translators : ITranslator, IDisposable {
         var trace=Telemetry.Begin(effective,false,context.Length);Timing("term-prepare",prepareStarted,modelInput.Length,false,trace.Id);
         try{using var admission=await EnterQualityTimed(ct,modelInput.Length,false,trace.Id,effective.Model);
             req.Content=LlmRequestOptions.Create(effective,IncomingStyle.SystemPrompt(config,language.ChineseGlossary),modelInput);
-            var textResult=await ReadCompletion(req,epoch,trace,ct,modelInput.Length);
+            var textResult=await ReadCompletion(req,epoch,trace,ct,modelInput.Length,onPartial:onPartial);
             var result=terms.RenderChineseStyle(NormalizeNames(textResult,protectedText.Map),text,language.ChineseGlossary&&config.ChineseNameStyle=="legacy");trace.Finish("done");ClearIssue("llm",previous,epoch);return result;
         }catch(OperationCanceledException){trace.Finish("cancelled");throw;}catch{trace.Finish("failed");throw;}
     }

@@ -3,15 +3,21 @@ using System.Text.Json;
 
 namespace DeadlockTranslate;
 public static class ChatCompletionReader {
-    private sealed class Answer(int maximumCharacters) {
+    private sealed class Answer(int maximumCharacters,Action<string>? onPartial) {
         public readonly StringBuilder Text=new();public string? Finish;public bool Reasoning,Done,Finished;
-        public void Add(string? content,LlmTelemetry.Trace trace){if(string.IsNullOrEmpty(content))return;if(Finished||Text.Length+content.Length>maximumCharacters)throw new InvalidDataException("API text exceeds the bounded response");Text.Append(content);trace.Content();}
+        public void Add(string? content,LlmTelemetry.Trace trace){
+            if(string.IsNullOrEmpty(content))return;
+            if(Finished||Text.Length+content.Length>maximumCharacters)throw new InvalidDataException("API text exceeds the bounded response");
+            Text.Append(content);
+            trace.Content();
+            onPartial?.Invoke(Text.ToString());
+        }
     }
-    public static async Task<string> Read(HttpResponseMessage response,LlmTelemetry.Trace trace,CancellationToken ct,int maximumCharacters=2500){
+    public static async Task<string> Read(HttpResponseMessage response,LlmTelemetry.Trace trace,CancellationToken ct,int maximumCharacters=2500,Action<string>? onPartial=null){
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumCharacters,1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumCharacters,1000000);
         var stream=response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream",StringComparison.OrdinalIgnoreCase)==true;
-        trace.Response(stream?"stream":"json");var answer=new Answer(maximumCharacters);
+        trace.Response(stream?"stream":"json");var answer=new Answer(maximumCharacters,stream?onPartial:null);
         var maximumEvent=Math.Max(65536,Math.Min(2*1024*1024,maximumCharacters*6+1024));
         await using var raw=await response.Content.ReadAsStreamAsync(ct);await using var limited=new LimitedReadStream(raw,2*1024*1024);
         if(stream){

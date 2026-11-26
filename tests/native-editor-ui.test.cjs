@@ -19,9 +19,10 @@ const server=http.createServer(async(req,res)=>{
   }
   if(url.pathname==='/api/status')return res.end(JSON.stringify({engine:{messages:0,pending:0,connected:true},terms:1,sending:{pending:0},diagnostics:{phase:'connected',version:'0.6.24',certificate:{state:'ready'},hotkey:{available:true},sending:{state:'idle'}}}));
   if(url.pathname==='/api/outgoing')return res.end('{"items":[],"hotkeyAvailable":true}');
+  if(url.pathname==='/api/voice')return res.end('{"models":[],"settings":{"enabled":false,"model":"small-q5_1","backend":"cpu","language":"auto","translation":"none","customPath":""}}');
   return res.end('{}');
  }
- const asset=url.pathname.slice(1),name=['style.css','app.js','settings-background.css','settings-background.js','settings-background-v3-flat.png','settings-navigation.js'].includes(asset)?asset:'index.html';res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',name)));
+ const asset=url.pathname.slice(1),name=['style.css','app.js','settings-background.css','settings-background.js','settings-background-v3-flat.png','settings-navigation.js','voice-settings.js'].includes(asset)?asset:'index.html';res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',name)));
 });
 function check(ok,name){if(!ok&&errors.length)console.error(errors);assert(ok,name);passed++;console.log('PASS '+name);}
 const latest=()=>[...jobs.values()].at(-1);
@@ -48,8 +49,8 @@ const latest=()=>[...jobs.values()].at(-1);
   check(await page.locator('#incomingCustomTone').isDisabled(),'hiding a custom field requests a final native flush with clipped geometry');
   latest().state='applied';latest().value='切换风格前输入的草稿';await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:ready:'));check(await page.locator('#incomingCustomTone').inputValue()==='切换风格前输入的草稿','disabling a former custom field retains its final draft');
   await page.locator('#incomingTone').selectOption('custom');
-  await page.locator('[data-page="glossary"]').click();const source=page.getByRole('textbox',{name:'原词',exact:true}).first();await source.click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));
-  check(requests.at(-1).label==='原词'&&requests.at(-1).maxLength===100,'dynamic glossary rows use the same editor and their actual bounds');
+  await page.locator('[data-page="glossary"]').click();const source=page.getByRole('textbox',{name:'匹配词',exact:true}).first();await source.click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));
+  check(requests.at(-1).label==='匹配词'&&requests.at(-1).maxLength===100,'dynamic glossary rows use the same editor and their actual bounds');
   await page.evaluate(()=>{document.querySelector('.table-wrap').style.width='260px';});
   await page.waitForFunction(()=>{const g=document.title.split(':').at(-1).split(',').map(Number);return g[8]-g[6]<=260;});
   check(await page.evaluate(()=>{const g=document.title.split(':').at(-1).split(',').map(Number),r=document.querySelector('.table-wrap').getBoundingClientRect();return g[6]>=Math.round(r.left)&&g[8]<=Math.round(r.right); }),'native geometry clips to the nested glossary table rather than the whole webpage');
@@ -57,8 +58,23 @@ const latest=()=>[...jobs.values()].at(-1);
   await page.waitForFunction(x=>Number(document.title.split(':').at(-1).split(',')[2])<x,tableX);check(Number((await page.title()).split(':').at(-1).split(',')[2])===tableX-30,'nested horizontal scrolling updates the native field anchor');
   await page.setViewportSize({width:1250,height:850});await page.waitForFunction(()=>Number(document.title.split(':').at(-1).split(',')[0])===1250);check(latest().value==='Silver','viewport resize updates geometry without replacing the pending text');
   await page.setViewportSize({width:1100,height:850});await page.evaluate(()=>{const wrap=document.querySelector('.table-wrap');wrap.style.width='';wrap.scrollLeft=0;});
-  latest().state='applied';latest().value='狼女';await page.waitForFunction(()=>document.querySelector('#termRows input').value==='狼女');check(termSaves===0,'native term editing does not auto-save the glossary');
-  await page.locator('#saveTerms').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('词库已保存'));check(savedTerms[0].source==='狼女'&&termSaves===1,'normal glossary input handler retains the returned value');
+  latest().state='editing';
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>/^DLTSETTINGS:edit:[a-f0-9]{48}:\d+:1:/.test(document.title));
+  check(termSaves===0,'clicking Save waits for the final native term input');
+  latest().state='applied';latest().value='狼女';
+  await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('词库已保存'));
+  check(savedTerms[0].source==='狼女'&&termSaves===1,'the final Chinese term is persisted by the same click');
+  await source.click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));
+  const pendingTerm=latest();
+  await page.locator('#addTerm').click();
+  check(await source.inputValue()==='狼女','adding a row keeps the active native editor attached until its text returns');
+  pendingTerm.state='applied';pendingTerm.value='队友说的狼女';
+  await page.waitForFunction(()=>[...document.querySelectorAll('#termRows tr input[aria-label="匹配词"]')].map(input=>input.value).join('|')==='|队友说的狼女');
+  await page.locator('#termRows tr').first().getByRole('button').click();
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('词库已保存'));
+  check(savedTerms[0].source==='队友说的狼女'&&termSaves===2,'adding and removing another row preserves the earlier edit');
   await source.click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));await page.evaluate(()=>{const q=document.querySelector('#termSearch');q.value='no-match';q.dispatchEvent(new Event('input'));});latest().state='applied';latest().value='不该覆盖';
   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('原输入框已变化'));check(await page.locator('#termRows tr').count()===0,'detached native result cannot be written into a replacement field');
   await page.locator('[data-page="incoming"]').click();await page.locator('#incomingCustomTone').click();await page.waitForFunction(()=>document.title.startsWith('DLTSETTINGS:edit:'));

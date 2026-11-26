@@ -118,6 +118,7 @@ if(!noShell)app.Lifetime.ApplicationStarted.Register(()=>_ = releaseUpdates.RunD
 await using var llmKeepAlive=new LlmKeepAlive(config,translators,()=>engine.Connected,audit,app.Lifetime.ApplicationStopping);
 if(gameExecutable.Length==0)gameExecutable=SafeGamePath();
 await using var gameLifecycle=new GameLifecycle(gameExecutable,()=>app.Lifetime.StopApplication());
+await using var voice=new VoiceService(dataDir,AppContext.BaseDirectory,gameExecutable,config,translators,audit,hotkey);
 string SafeGamePath(){try{return GameProcess.ResolveGame(dataDir);}catch{return "";}}
 var gameLogs=new GameLogCollector(audit);
 var gameMetrics=new GameMetricCollector(audit);
@@ -188,6 +189,8 @@ app.MapGet("/in-game/{key}",(string key,HttpContext ctx)=>{
 });
 app.MapGet("/",(HttpContext ctx)=> Same(ctx.Request.Cookies[SessionCookie(ctx)],settingsToken) ? Results.File(Path.Combine(staticRoot,"index.html"),"text/html; charset=utf-8") : Results.Content("请通过游戏内“翻译设置”按钮或 Settings.cmd 打开此页面。","text/plain; charset=utf-8"));
 app.MapGet("/app.js",()=>Results.File(Path.Combine(staticRoot,"app.js"),"text/javascript; charset=utf-8"));
+app.MapGet("/voice-settings.js",()=>Results.File(Path.Combine(staticRoot,"voice-settings.js"),"text/javascript; charset=utf-8"));
+app.MapGet("/voice-benchmark.json",()=>Results.File(Path.Combine(staticRoot,"voice-benchmark.json"),"application/json; charset=utf-8"));
 app.MapGet("/style.css",()=>Results.File(Path.Combine(staticRoot,"style.css"),"text/css; charset=utf-8"));
 app.MapGet("/settings-navigation.js",()=>Results.File(Path.Combine(staticRoot,"settings-navigation.js"),"text/javascript; charset=utf-8"));
 app.MapGet("/settings-background.css",()=>Results.File(Path.Combine(staticRoot,"settings-background.css"),"text/css; charset=utf-8"));
@@ -217,6 +220,17 @@ app.MapPost("/api/community/bilibili",()=>OpenCommunityLink("https://space.bilib
 app.MapPost("/api/community/github",()=>OpenCommunityLink(CommunityLinks.GitHubProject, "项目地址"));
 app.MapPost("/api/providers/deepseek/key",()=>OpenCommunityLink("https://platform.deepseek.com/usage","DeepSeek 密钥平台链接",true));
 app.MapGet("/api/config",()=>config.Public());
+app.MapGet("/api/voice",(bool? checkCuda)=>voice.Status(checkCuda==true));
+app.MapGet("/api/voice/microphones",async (HttpContext context)=>{
+    try { return Results.Ok(await voice.Microphones(context.RequestAborted)); }
+    catch (Exception) { return Results.Json(new { error = "无法读取麦克风列表，请检查 Windows 音频设备。" }, statusCode: 503); }
+});
+app.MapPut("/api/voice",(VoiceOptions options)=>{voice.Save(options);return Results.Ok(voice.Status());});
+app.MapPatch("/api/voice",(VoiceOptionsUpdate update)=>Results.Ok(voice.Update(update)));
+app.MapPost("/api/voice/download",(VoiceModelRequest request)=>{voice.Models.Start(request.Model,request.Mirror);return Results.Accepted();});
+app.MapPost("/api/voice/cancel-download",()=>{voice.Models.Cancel();return Results.Ok();});
+app.MapPost("/api/voice/cuda/download",()=>{voice.Cuda.Start();return Results.Accepted();});
+app.MapPost("/api/voice/cuda/cancel",()=>{voice.Cuda.Cancel();return Results.NoContent();});
 async Task<IResult> MaintenanceResult(Func<Task<object?>> work){
     try{return Results.Ok(await work());}
     catch(Exception e) when(e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception){
@@ -282,7 +296,8 @@ app.MapPost("/api/terms/preview",(TermPreviewInput input)=>Results.Json(terms.Pr
 app.MapPost("/api/outgoing/language/reset",()=>Results.Ok(hotkey?.Languages.Reset()));
 app.MapPost("/api/outgoing/retry",(OutgoingPartAck part)=>{
     if(!engine.Connected)return Results.Conflict(new{error="游戏聊天尚未连接"});
-    try{return Results.Ok(new{id=outgoing.RetryUnobserved(part.Id,part.Part)});}
+    if(part.Part == -1 && hotkey?.Dictation.CanSend != true)return Results.Conflict(new{error="请在游戏对局中打开设置后重试。"});
+    try{return Results.Ok(new{id=part.Part == -1 ? outgoing.RetryVoice(part.Id) : outgoing.RetryUnobserved(part.Id,part.Part)});}
     catch(InvalidOperationException ex){return Results.Conflict(new{error=ex.Message});}
 });
 app.MapGet("/api/outgoing",()=>new{language=hotkey?.Languages.Current,hotkeyAvailable=hotkey?.Available??false,hotkey=hotkey?.Status,items=outgoing.Recent,stats=outgoing.Stats});
@@ -293,7 +308,13 @@ app.MapPost("/api/llm/keep-alive",async(HttpContext ctx)=>Results.Ok(await llmKe
 app.MapPut("/api/terms",(Term[] value,HttpContext ctx)=>{
     var tag=ctx.Request.Headers.IfMatch.ToString();
     if(tag.Length==0)return Results.Json(new{error="此设置页版本过旧，请重新打开后保存词库"},statusCode:428);
-    if(!terms.TrySave(value,tag,out var savedTag))return Results.Conflict(new{error="另一窗口已保存词库，请合并后重试"});
+    string savedTag;
+    try {
+        if(!terms.TrySave(value,tag,out savedTag))return Results.Conflict(new{error="另一窗口已保存词库，请合并后重试"});
+    } catch(Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+        audit.Record("backend",LogKind.RequestRejected,new(FailureType:ex.GetType().Name,HttpStatus:500));
+        return Results.Json(new{error="无法写入本机词库。请检查数据目录的写入权限、文件占用及磁盘空间后重试。"},statusCode:500);
+    }
     ctx.Response.Headers.ETag=savedTag;engine.ClearCache();
     return Results.Ok(new{count=value.Length});
 });
@@ -387,10 +408,12 @@ app.MapPost("/game/{key}",(string key,GameRequest req,HttpContext ctx)=>{
     var staleServer=!string.IsNullOrEmpty(req.ServerId)&&req.ServerId!=audit.RunId;
     if(staleServer&&req.Outgoing is {Length:>0})audit.Record("sending",LogKind.SendFailed,new(Reason:LogReason.ServerChanged,Stage:"rejected",Count:req.Outgoing.Length));
     var nativeEditorResult=req.NativeEditor==null?null:nativeEditor.Dispatch(req.NativeEditor,!staleServer&&req.ClientBuildId==BuildInfo.Id&&req.SettingsOpen==true);
-    var outgoingResults=outgoing.Exchange(req.Session,staleServer?[]:req.Outgoing??[],staleServer?[]:req.OutgoingSent??[],staleServer?[]:req.OutgoingWaiting??[],staleServer?[]:req.OutgoingRefused??[],staleServer?[]:req.OutgoingPartAcks??[],staleServer?[]:hotkey?.TakeQuickMessages(req.Session)??[],req.MultipartSupported,staleServer?[]:req.OutgoingStatus??[]);
+    var voiceState=voice.Exchange(req.Session,req.ClientBuildId==BuildInfo.Id&&!staleServer,req.TeammateSpeaking,req.VoiceInputMatch,req.VoiceShown);
+    var dictation=hotkey?.Dictation;
+    var outgoingResults=outgoing.Exchange(req.Session,staleServer?[]:req.Outgoing??[],staleServer?[]:req.OutgoingSent??[],staleServer?[]:req.OutgoingWaiting??[],staleServer?[]:req.OutgoingRefused??[],staleServer?[]:req.OutgoingPartAcks??[],staleServer?[]:hotkey?.TakeQuickMessages(req.Session)??[],req.MultipartSupported,staleServer?[]:req.OutgoingStatus??[],dictation?.Take(req.Session),dictation?.CanSend==true);
     var (buildSettings,buildRevision)=config.Snapshot();
     var buildTextConfig=new{revision=buildRevision+":"+terms.Revision,enabled=buildSettings.Enabled,autoEnabled=buildSettings.BuildTextAutoEnabled,fastTimeout=buildSettings.FastTimeoutSeconds,qualityTimeout=buildSettings.LlmTimeoutSeconds,contextChars=buildSettings.BuildTextContextChars,backgroundJobs=true,sourceExports=true};
-    return Results.Json(new{seq=req.Seq,session=req.Session,serverId=audit.RunId,buildTextConfig,logAck,nativeEditor=nativeEditorResult,displayPreview=displayPreview.Snapshot(),results=result,outgoing=outgoingResults,translationProgress=translators.Telemetry.Summary,sendHotkeys=req.ClientBuildId==BuildInfo.Id?(req.ServerId==audit.RunId?hotkey?.Languages.Pending(req.Session,req.HotkeySeen,DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())??[]:[]):null,sendLanguage=hotkey?.Languages.Current,deepSeekNotice=req.ServerId==audit.RunId&&req.ClientBuildId==BuildInfo.Id?translators.Spend.GameNotice(req.DeepSeekNoticeSeen):null,hotkey=hotkey?.PendingSequence(req.ServerId==audit.RunId?req.HotkeySeen:0)??0,hotkeyAvailable=hotkey?.Available??false,capabilities=new[]{"outgoing-status-v1","native-settings-editor","multipart-send","preset-messages","outgoing-display-mode","incoming-scope-all-players","outgoing-party-channel","multilingual-targets","diagnostic-logs","custom-hotkey"},config=new{quickMessagesEnabled=config.Current.OutgoingEnabled&&config.Current.QuickMessages.Any(q=>q.Enabled)&&req.ClientBuildId==BuildInfo.Id,config.Current.Enabled,config.Current.TranslateOwn,config.Current.IncomingScope,config.Current.IncomingShowOwnTranslations,config.Current.IncomingDisplayMode,config.Current.IncomingFeedSeconds,config.Current.IncomingFeedLines,config.Current.IncomingShowHeroName,config.Current.IncomingShowAccountName,config.Current.IncomingHeroNamePosition,config.Current.IncomingOpacity,config.Current.IncomingFeedWidth,config.Current.IncomingFeedPosition,config.Current.IncomingFeedOffsetX,config.Current.IncomingFeedOffsetY,config.Current.FontSize,config.Current.SettingsBackgroundMode,config.Current.Transport,config.Current.ScanIntervalMs,config.Current.OutgoingEnabled,config.Current.OutgoingHotkey,outgoingHotkeyLabel=HotkeyChord.Parse(config.Current.OutgoingHotkey).Label,config.Current.OutgoingTimeoutSeconds,config.Current.OutgoingDisplayMode,config.Current.OutgoingSeparateBilingual,config.Current.OutgoingSplitLong,config.Current.OutgoingQueueLimit,config.Current.OutgoingUseContext,config.Current.IncomingTargetLanguage,config.Current.IncomingCustomLanguage,config.Current.IncomingCustomLanguageCode,config.Current.OutgoingTargetLanguage,config.Current.OutgoingCustomLanguage,config.Current.OutgoingCustomLanguageCode},configuredLlm=config.Secret("llm").Length>0});
+    return Results.Json(new{seq=req.Seq,session=req.Session,serverId=audit.RunId,buildTextConfig,voice=voiceState,dictation=dictation?.View(req.Session),logAck,nativeEditor=nativeEditorResult,displayPreview=displayPreview.Snapshot(),results=result,outgoing=outgoingResults,translationProgress=translators.Telemetry.Summary,sendHotkeys=req.ClientBuildId==BuildInfo.Id?(req.ServerId==audit.RunId?hotkey?.Languages.Pending(req.Session,req.HotkeySeen,DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())??[]:[]):null,sendLanguage=hotkey?.Languages.Current,deepSeekNotice=req.ServerId==audit.RunId&&req.ClientBuildId==BuildInfo.Id?translators.Spend.GameNotice(req.DeepSeekNoticeSeen):null,hotkey=hotkey?.PendingSequence(req.ServerId==audit.RunId?req.HotkeySeen:0)??0,hotkeyAvailable=hotkey?.Available??false,capabilities=new[]{"outgoing-status-v1","native-settings-editor","multipart-send","preset-messages","outgoing-display-mode","incoming-scope-all-players","outgoing-party-channel","multilingual-targets","diagnostic-logs","custom-hotkey"},config=new{quickMessagesEnabled=config.Current.OutgoingEnabled&&config.Current.QuickMessages.Any(q=>q.Enabled)&&req.ClientBuildId==BuildInfo.Id,config.Current.Enabled,config.Current.TranslateOwn,config.Current.IncomingScope,config.Current.IncomingShowOwnTranslations,config.Current.IncomingDisplayMode,config.Current.IncomingFeedSeconds,config.Current.IncomingFeedLines,config.Current.IncomingShowHeroName,config.Current.IncomingShowAccountName,config.Current.IncomingHeroNamePosition,config.Current.IncomingOpacity,config.Current.IncomingFeedWidth,config.Current.IncomingFeedPosition,config.Current.IncomingFeedOffsetX,config.Current.IncomingFeedOffsetY,config.Current.FontSize,config.Current.SettingsBackgroundMode,config.Current.Transport,config.Current.ScanIntervalMs,config.Current.OutgoingEnabled,config.Current.OutgoingHotkey,outgoingHotkeyLabel=HotkeyChord.Parse(config.Current.OutgoingHotkey).Label,config.Current.OutgoingTimeoutSeconds,config.Current.OutgoingDisplayMode,config.Current.OutgoingSeparateBilingual,config.Current.OutgoingSplitLong,config.Current.OutgoingQueueLimit,config.Current.OutgoingUseContext,config.Current.IncomingTargetLanguage,config.Current.IncomingCustomLanguage,config.Current.IncomingCustomLanguageCode,config.Current.OutgoingTargetLanguage,config.Current.OutgoingCustomLanguage,config.Current.OutgoingCustomLanguageCode},configuredLlm=config.Secret("llm").Length>0});
     }
 });
 // Separate from the chat queue so a build description cannot delay chat polling.
@@ -760,6 +783,6 @@ public record BuildTextRequest(int Id,string[] Texts,string? Context,string? Rev
 public record TestRequest(string Provider,string Text,string Direction="incoming");
 public record RecordingRequest(bool InGame=false);
 public record Metrics(int Scans,int Rows,int Submitted,int Rendered,int Bridges,int Errors,double MaxScanMs,int RegularRows=0,int HudRows=0,int LobbyRows=0,int SkippedSelf=0,int SkippedUnknown=0,int SendAttempts=0,int SendErrors=0,int ChannelWaits=0,int ChannelRetargets=0,int ChannelFaults=0,int HotkeyDrops=0,int ClassChannelReads=0,int LocalEchoReused=0,int HudContainers=0,int HudRebinds=0,int HudRendered=0,int HudRecovered=0,int HudHostRepairs=0,int HudHiddenRepairs=0,int HudBindings=0,int HudExpiredResults=0,int HudDeferredScans=0,int GameLogDrops=0,int HudWaits=0,int HudRetryRecovered=0,int HudNativeExpired=0,int HudPanelGone=0,int HudRetryDropped=0,int FeedRendered=0,int FeedExpired=0,int FeedDropped=0,PerformanceSample? Performance=null);
-public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null,string? ClientVersion=null,GameLogEvent[]? Logs=null,string? ServerId=null,bool? SettingsOpen=null,bool DisplayPreviewSupported=false,string? ClientBuildId=null,bool MultipartSupported=false,OutgoingPartAck[]? OutgoingPartAcks=null,string? ChatChannel=null,NativeEditorCommand? NativeEditor=null,OutgoingStatus[]? OutgoingStatus=null,bool SettingsBackgroundSupported=false,BuildTextEvidence? BuildText=null,long DeepSeekNoticeSeen=0);
+public record GameRequest(string Session,int Seq,Incoming[]? Messages,string[]? Poll,bool OpenSettings=false,Metrics? Metrics=null,bool ChatOpen=false,long HotkeySeen=0,OutgoingInput[]? Outgoing=null,string[]? OutgoingSent=null,string[]? OutgoingWaiting=null,OutgoingRefusal[]? OutgoingRefused=null,string? ClientVersion=null,GameLogEvent[]? Logs=null,string? ServerId=null,bool? SettingsOpen=null,bool DisplayPreviewSupported=false,string? ClientBuildId=null,bool MultipartSupported=false,OutgoingPartAck[]? OutgoingPartAcks=null,string? ChatChannel=null,NativeEditorCommand? NativeEditor=null,OutgoingStatus[]? OutgoingStatus=null,bool SettingsBackgroundSupported=false,BuildTextEvidence? BuildText=null,long DeepSeekNoticeSeen=0,bool? TeammateSpeaking=null,bool VoiceInputMatch=false,VoiceShown[]? VoiceShown=null);
 
 public record EvidenceSnapshot(DateTime At,Metrics Metrics);

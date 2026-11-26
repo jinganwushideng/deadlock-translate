@@ -151,7 +151,7 @@ function world(opts = {}) {
         panel.title = 'DLT:' + JSON.stringify({
             seq: data.seq, serverId: w.serverId, results: [], hotkey: w.trigger > data.hotkeySeen ? w.trigger : 0,
             ...(opts.versionedHotkeys ? {sendHotkeys:w.releaseHotkeys?w.hotkeyEvents.filter(event=>event.seq>data.hotkeySeen):[]} : {}),logAck:data.logs?.at(-1)?.seq||0,
-            outgoing, config: w.config, configuredLlm: false
+            outgoing, dictation: w.dictation, config: w.config, configuredLlm: false
             ,capabilities: [...(opts.noPartyCapability ? ['outgoing-display-mode'] : opts.noLanguageCapability ? ['outgoing-display-mode','outgoing-party-channel'] : ['outgoing-display-mode','outgoing-party-channel','multilingual-targets']),...(opts.diagnostics?['diagnostic-logs']:[]),...(opts.statusCapability?['outgoing-status-v1']:[])]
         });
     };

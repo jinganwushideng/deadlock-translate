@@ -15,6 +15,100 @@ async Task Ready(string id){for(var i=0;i<200;i++){if(View(id).State=="ready")re
 OutgoingStatus Status(long seq,string id,int part,string state,string? reason=null,string channel="team")=>new(seq,id,part,state,channel,now,reason);
 void Exchange(OutgoingStatus[] status,OutgoingPartAck[]? ack=null,string[]? sent=null)=>sender.Exchange("session",[],sent??[],partAcks:ack,statuses:status);
 
+foreach (var mic in new DictationSignal?[] { null, new("voice-test", "record", "测试麦克风", "zh") })
+{
+    var frame = VoiceService.FormatWorkerPulse(true, false, 2, mic, trace: true);
+    Check(!frame.Contains('\r') && !frame.Contains('\n'), "voice worker control messages fit on one pipe line");
+    using var message = JsonDocument.Parse(frame);
+    var pulse = message.RootElement;
+    Check(pulse.GetProperty("available").GetBoolean() && !pulse.GetProperty("speaking").GetBoolean() && pulse.GetProperty("trace").GetBoolean() &&
+        pulse.GetProperty("epoch").GetInt64() == 2 && (mic is null ? pulse.GetProperty("mic").ValueKind == JsonValueKind.Null :
+            pulse.GetProperty("mic").GetProperty("action").GetString() == "record" &&
+            pulse.GetProperty("mic").GetProperty("device").GetString() == mic.Device), "line framing preserves teammate and microphone controls");
+}
+Check(JsonSerializer.Deserialize<VoiceOptions>("""{"enabled":true,"backend":"vulkan"}""", ConfigStore.Json)?.TestMode == false,
+    "existing voice settings default to test mode off");
+var measured = DiagnosticLog.Clean(new(Stage: "voice-asr-empty", ElapsedMs: 215, Voice: new("vulkan", "small-q5_1", 4, 780, 360, -22.45, 1, "en")));
+Check(measured.Stage == "voice-asr-empty" && measured.ElapsedMs == 215 && measured.Voice?.AudioMs == 780 && measured.Voice.Language == "en",
+    "voice diagnostics preserve numeric measurements and supported device metadata");
+var filteredVoice = DiagnosticLog.Clean(new(Stage: "private text", Voice: new("private device", "local path", 0, -1, null, double.NaN, -3, "private language")));
+Check(filteredVoice.Stage is null && filteredVoice.Voice == new VoiceTrace(), "voice diagnostics discard unexpected fields and invalid measurements");
+
+var unboundVoice = config.Current with { VoiceInputEnabled = true, VoiceInputDevice = "test-microphone", VoiceInputLanguage = "ja" };
+config.Save(unboundVoice);
+var savedVoice = new ConfigStore(config.DirectoryPath).Current;
+Check(savedVoice.VoiceInputEnabled && savedVoice.VoiceInputDevice == "test-microphone" && savedVoice.VoiceInputLanguage == "ja" &&
+    !VoiceDictation.CanUse(savedVoice), "voice preferences persist before an opening key is chosen, with capture inactive");
+var voiceSettings=config.Current with{VoiceInputEnabled=true,VoiceInputTeamKey="F6",VoiceInputAllKey="F7",VoiceInputTranslateKey="F8",VoiceInputChannelKey="F9"};
+var voiceClock=1000L;
+var voiceSelection=new OutgoingLanguageSelection("en","","","英语",1);
+var voiceInput=new VoiceDictation(()=>voiceSelection,()=>voiceClock);
+voiceInput.Configure(voiceSettings);
+voiceInput.Observe("voice-test",true,true);
+voiceInput.Poll(true,true);
+bool VoiceDown(int key)=>voiceInput.Process(key,0,true,false,0,true);
+void VoiceUp(int key)=>voiceInput.Process(key,0,false,true,0,true);
+void VoiceTap(int key){VoiceDown(key);VoiceUp(key);}
+string StartVoice(int key){VoiceTap(key);var mic=voiceInput.Poll(true,true)!;voiceInput.Receive(mic.Id,"recording",null);return mic.Id;}
+Check(!VoiceDown(0x77)&&!VoiceDown(0x78),"translation and channel swap keys pass through when idle");
+Check(VoiceDown(0x75)&&VoiceDown(0x75)&&voiceInput.Poll(true,true)?.Action=="record","held opening key cannot turn into a send");
+VoiceUp(0x75);
+var voiceId=voiceInput.Poll(true,true)!.Id;
+voiceInput.Receive(voiceId,"recording",null);
+voiceInput.Receive(voiceId,"preview","撤走");
+Check(JsonSerializer.SerializeToElement(voiceInput.View("voice-test")).GetProperty("text").GetString()=="撤走","a tentative transcript displays while microphone recording");
+voiceInput.Receive(voiceId,"partial","先撤");
+Check(JsonSerializer.SerializeToElement(voiceInput.View("voice-test")).GetProperty("text").GetString()=="先撤","confirmed audio replaces the preview instead of appending it");
+VoiceTap(0x78);
+VoiceTap(0x75);
+Check(voiceInput.Poll(true,true)?.Action=="finish","releasing the original opening key selects raw send after changing channel");
+voiceInput.Receive(voiceId,"preview","过时的预览");
+Check(voiceInput.Take("voice-test") is null,"ending audio waits for the final transcript");
+voiceInput.Receive(voiceId,"final","先撤回基地");
+var rawVoice=voiceInput.Take("voice-test")!;
+Check(!rawVoice.Translate&&rawVoice.Input.Channel=="all"&&rawVoice.Input.Text=="先撤回基地"&&voiceInput.Take("voice-test")==null,"final voice text is single-use and goes to the selected channel");
+config.Save(voiceSettings);
+var beforeVoice=calls;
+sender.Exchange("voice-test",[],[],dictation:rawVoice,voiceScope:true);
+sender.Exchange("voice-test",[],[],dictation:rawVoice,voiceScope:true);
+Check(View(voiceId).State=="ready"&&View(voiceId).SendText==rawVoice.Input.Text&&calls==beforeVoice,"raw dictation enters the native queue once and makes zero translation requests");
+sender.Exchange("voice-test",[],[voiceId],voiceScope:true);
+voiceId=StartVoice(0x76);
+VoiceTap(0x75);
+VoiceTap(0x77);
+voiceSelection=voiceSelection with{Language="ja"};
+voiceInput.Receive(voiceId,"final","回防");
+var translatedVoice=voiceInput.Take("voice-test")!;
+Check(translatedVoice.Translate&&translatedVoice.Input.Channel=="team"&&translatedVoice.Settings.OutgoingTargetLanguage=="en","other opener changes the target and translation snapshots the active language");
+sender.Exchange("voice-test",[],[],dictation:translatedVoice,voiceScope:true);
+await Ready(voiceId);
+Check(calls==beforeVoice+1&&View(voiceId).IsVoice,"translated dictation uses the existing provider once");
+sender.Exchange("voice-test",[],[],voiceScope:false);
+Check(View(voiceId).State=="failed","focus loss stops dispatch and retains dictated text");
+voiceId=StartVoice(0x75);
+VoiceTap(0x1b);
+voiceInput.Receive(voiceId,"final","cancelled");
+Check(voiceInput.Poll(true,true)==null&&voiceInput.Take("voice-test")==null,"Escape cancels pending microphone results");
+voiceId=StartVoice(0x75);
+voiceClock+=30001;
+voiceInput.Observe("voice-test",true,true);
+Check(voiceInput.Poll(true,true)?.Action=="finish","thirty seconds closes capture");
+voiceInput.Receive(voiceId,"final","保留到手动结束");
+Check(voiceInput.Take("voice-test")==null,"the recording limit never sends automatically");
+VoiceTap(0x75);
+Check(voiceInput.Take("voice-test")?.Input.Text=="保留到手动结束","the recording limit retains a sendable draft");
+voiceId=StartVoice(0x75);
+voiceInput.Receive(voiceId,"preview","只有临时草稿");
+VoiceTap(0x75);
+voiceInput.Receive(voiceId,"final","");
+Check(voiceInput.Take("voice-test")==null,"an empty final transcript cannot accidentally send a provisional guess");
+voiceId=StartVoice(0x75);
+VoiceTap(0x75);
+voiceInput.Observe("different-match",true,true);
+voiceInput.Receive(voiceId,"final","old match");
+Check(voiceInput.Take("different-match")==null,"late recognition after changing matches is discarded");
+config.Save(voiceSettings with{VoiceInputEnabled=false});
+
 var beforeHeld=calls;sender.Exchange("session",[new("held-native","可找回的首条原文","team","bilingual",HoldForInput:true)],[]);await Task.Delay(40);
 Check(View("held-native").State=="waiting_input"&&View("held-native").Original=="可找回的首条原文"&&calls==beforeHeld,"registered native source is visible and retained without translation before close confirmation");visibility.Add(View("held-native"));
 sender.Exchange("session",[],["held-native"],partAcks:[new("held-native",0)]);Check(View("held-native").State=="waiting_input"&&calls==beforeHeld,"premature dispatch ACK cannot bypass the native-close registration gate");

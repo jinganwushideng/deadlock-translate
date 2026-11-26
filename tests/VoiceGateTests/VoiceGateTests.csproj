@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/VoiceWorker/Audio/AudioDspPipeline.cs" Link="AudioDspPipeline.cs" />
+    <Compile Include="../../src/VoiceWorker/Audio/VoiceSegmenter.cs" Link="VoiceSegmenter.cs" />
+    <Compile Include="../../src/VoiceWorker/Audio/WavCodec.cs" Link="WavCodec.cs" />
+    <Compile Include="../../src/VoiceWorker/Audio/VoiceAudioEvidence.cs" Link="VoiceAudioEvidence.cs" />
+    <Compile Include="../../src/VoiceWorker/HallucinationFilter.cs" Link="HallucinationFilter.cs" />
+    <Compile Include="../../src/VoiceWorker/CaptionQueue.cs" Link="CaptionQueue.cs" />
+    <Compile Include="../../src/VoiceWorker/CaptionRecovery.cs" Link="CaptionRecovery.cs" />
+    <Compile Include="../../src/VoiceWorker/CaptionConfidence.cs" Link="CaptionConfidence.cs" />
+    <Compile Include="../../src/Shared/VoiceCaptionTiming.cs" Link="VoiceCaptionTiming.cs" />
+    <Compile Include="../../src/VoiceWorker/DraftSchedule.cs" Link="DraftSchedule.cs" />
+  </ItemGroup>
+</Project>

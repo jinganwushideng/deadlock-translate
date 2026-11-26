@@ -164,6 +164,15 @@ class UpdateTests(unittest.TestCase):
         self.assert_rejected()
 
     def test_three_way_glossary_merge(self):
+        old_haze_alias = dict(source='黑子', target='岚梦', english='Haze', kind='name', ambiguous=True, outgoingStandalone=True)
+        self.old_terms.append(old_haze_alias)
+        self.user_terms.append({**old_haze_alias, 'target': '我自己的岚梦昵称'})
+        self.new_terms.append(dict(source='女巫', target='薇妲', english='Vindicta', kind='name', ambiguous=True, outgoingStandalone=True))
+        self.user_terms.append(dict(source='女巫', target='个人译名', english='Vindicta', kind='name', ambiguous=False))
+        write_json(self.runtime/'data/terms.json',self.old_terms)
+        write_json(self.package/'data/terms.json',self.new_terms)
+        write_json(self.state/'terms.json',self.user_terms)
+        self.metadata()
         self.assertEqual(self.run_update(), 0, self.output)
         terms = {t['source']: t for t in json.loads((self.state / 'terms.json').read_text(encoding='utf-8-sig'))}
         self.assertEqual(terms['edited']['target'], 'my translation')
@@ -172,6 +181,17 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(terms['custom']['target'], 'my term')
         self.assertNotIn('deleted', terms)
         self.assertNotIn('retired', terms)
+        self.assertEqual(terms['女巫']['target'],'个人译名')
+        self.assertNotIn('outgoingStandalone',terms['女巫'])
+        self.assertEqual(terms['黑子']['target'],'我自己的岚梦昵称')
+
+    def test_removed_default_nickname_is_dropped_when_unedited(self):
+        old_haze_alias = dict(source='黑子', target='岚梦', english='Haze', kind='name', ambiguous=True, outgoingStandalone=True)
+        write_json(self.runtime/'data/terms.json',[*self.old_terms,old_haze_alias])
+        write_json(self.state/'terms.json',[*self.user_terms,old_haze_alias])
+        self.assertEqual(self.run_update(),0,self.output)
+        terms=json.loads((self.state/'terms.json').read_text(encoding='utf-8-sig'))
+        self.assertNotIn('黑子',{t['source'] for t in terms})
 
     def test_legacy_name_edits_and_empty_schema_fields_preserved(self):
         self.old_terms[0]['legacyTarget']='default old name'

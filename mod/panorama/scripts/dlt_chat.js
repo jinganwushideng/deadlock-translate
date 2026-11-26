@@ -3,7 +3,7 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.5-8dd088402371';
+var BUILD_ID = '0.7.6-0a675703de0b';
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -158,6 +158,9 @@ var DLTChatInputChanged = function () {};
         try { if (valid(ROOT) && ROOT.__dltAdapterControl === control) ROOT.__dltAdapterControl = null; } catch (_) {}
         // The engine owns native chat/HTML destruction. Never navigate or delete it during teardown.
         if (valid(state.localToastLayer)) { state.localToastLayer.visible = false; state.localToastLayer.DeleteAsync(0); }
+        if (valid(state.voiceLabel)) { state.voiceLabel.visible = false; state.voiceLabel.DeleteAsync(0); }
+        if (valid(state.voiceDebugLabel)) state.voiceDebugLabel.DeleteAsync(0);
+        if (valid(state.dictationLabel)) state.dictationLabel.DeleteAsync(0);
         state.localToast = state.localToastLayer = null;
         closeDisplayPreview(); clearFeed(true); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = {}; state.render = []; state.outbox = []; state.hud = []; state.hudRoots = []; state.extraHudRoots = []; state.hudSearch = null;
         state.chats = []; state.outgoingQueue = []; state.outgoingKnown = {}; state.pending = null; state.pendingHotkey = null; state.drafts = []; state.liveDraft = null;
@@ -420,8 +423,8 @@ var DLTChatInputChanged = function () {};
     function showExpense(data) {
         if (!data || !Array.isArray(data.items)) return;
         var now = Date.now(), group = state.expenseToast;
-        group = !group || now >= group.until ? {tasks:0, builds:0, incoming:0, outgoing:0, minimum:0, maximum:0, priced:0, missing:0} :
-            {tasks:group.tasks, builds:group.builds, incoming:group.incoming, outgoing:group.outgoing, minimum:group.minimum, maximum:group.maximum, priced:group.priced, missing:group.missing};
+        group = !group || now >= group.until ? {tasks:0, builds:0, voice:0, incoming:0, outgoing:0, minimum:0, maximum:0, priced:0, missing:0} :
+            {tasks:group.tasks, builds:group.builds, voice:group.voice, incoming:group.incoming, outgoing:group.outgoing, minimum:group.minimum, maximum:group.maximum, priced:group.priced, missing:group.missing};
         var added = false, sequence = state.deepSeekSeen || 0;
         for (var i = 0; i < data.items.length; i++) {
             var item = data.items[i];
@@ -429,6 +432,7 @@ var DLTChatInputChanged = function () {};
             sequence = item.id; added = true;
             group.tasks++;
             if (item.category === 'build') group.builds++;
+            else if (item.category === 'voice') group.voice++;
             else if (item.category === 'incoming') group.incoming++;
             else if (item.category === 'outgoing') group.outgoing++;
             group.missing += item.missingUsage || 0;
@@ -449,6 +453,8 @@ var DLTChatInputChanged = function () {};
         var seen = balance && data.checkedAt ? new Date(data.checkedAt) : null;
         var time = seen && !isNaN(seen.getTime()) ? ('0' + seen.getHours()).slice(-2) + ':' + ('0' + seen.getMinutes()).slice(-2) : '';
         var heading = group.builds === group.tasks ? group.tasks === 1 ? '出装翻译完成' : '已翻译 ' + group.tasks + ' 套出装' :
+            group.voice === group.tasks ? '语音翻译 ' + group.voice + ' 条' :
+            group.voice ? '已完成 ' + group.tasks + ' 个翻译' :
             group.builds ? '已完成 ' + group.tasks + ' 个翻译' :
             group.incoming && group.outgoing ? '发送 ' + group.outgoing + ' · 接收 ' + group.incoming :
             group.outgoing ? '发送翻译 ' + group.outgoing + ' 条' : '接收翻译 ' + group.incoming + ' 条';
@@ -634,10 +640,10 @@ var DLTChatInputChanged = function () {};
         for (var i = 0; i < results.length; i++) {
             var result = results[i], job = state.outgoingKnown[result.id];
             if (!job && ['ready','waiting_channel','waiting_input'].indexOf(result.state) < 0) continue;
-            if (!job && (result.isPreset === true || result.isRetry === true)) {
+            if (!job && (result.isPreset === true || result.isRetry === true || result.isVoice === true)) {
                 var knownKeys = Object.keys(state.outgoingKnown);
                 for (var x = 0; knownKeys.length > 48 && x < knownKeys.length; x++) if (state.outgoingKnown[knownKeys[x]].done) { delete state.outgoingKnown[knownKeys[x]]; knownKeys.pop(); }
-                job = state.outgoingKnown[result.id] = { id: result.id, channel: result.channel, ordinal: ++state.outgoingOrdinal, created: Date.now(), original: result.original, displayMode: 'translation', done: false, nextPart: 0, retargets: 0, retryAt: 0, before: '', restored: false };
+                job = state.outgoingKnown[result.id] = { id: result.id, channel: result.channel, ordinal: ++state.outgoingOrdinal, created: Date.now(), original: result.original, displayMode: result.displayMode, done: false, nextPart: 0, retargets: 0, retryAt: 0, before: '', restored: false };
             }
             if (job && !job.done) job.result = result;
         }
@@ -667,6 +673,7 @@ var DLTChatInputChanged = function () {};
             if (job.capture && idle && now >= state.nativeSettleUntil && now - state.nativeClosedAt >= 250 && (!state.closeWatch || state.closeWatch.confirmed && state.closeWatch.confirmedTurn < state.turn)) { queueCaptured(job); continue; }
             if (job.capture) { outgoingStatus(job, 0, 'waiting_input', settingsVisible() ? 'settings' : 'input'); continue; }
             if (!result) continue;
+            if (result.isVoice && (!state.dictationCanSend || !state.matchIdentity || state.matchIdentity === '0' || now - state.dictationReplyAt > 1000)) continue;
             if (result.state === 'waiting_input' && !result.sendText) continue; // retained registration, not a translated payload
             var part = Number(result.partIndex || 0), parts = Number(result.partCount || 1);
             if (parts < 1 || parts > 8 || part < 0 || part >= parts || part % 1 || parts % 1) continue;
@@ -737,7 +744,7 @@ var DLTChatInputChanged = function () {};
                     state.echoes.push({ id: result.id, part: part, text: normalized(payload.value), channel: result.channel, at: Date.now(), checked: false });
                     while (state.echoes.length > 32) finishEcho(state.echoes.shift(), 'echo_unobserved', 'capacity');
                     state.recentOwn.push({ text: payload.value, original: job.original || result.original || '', channel: result.channel,
-                        displayMode: job.displayMode || result.displayMode, at: Date.now(), views: {} });
+                        displayMode: job.displayMode || result.displayMode, voiceOriginal: result.isVoice && !result.english, at: Date.now(), views: {} });
                     while (state.recentOwn.length > 32) state.recentOwn.shift();
                     noteChannel('submit', { channel: result.channel, result: 'dispatched' });
                 } else { state.metrics.sendErrors++; noteChannel('submit', { channel: result.channel, result: 'rejected' }); refuseOutgoing(result.id, job, 'submit-rejected'); }
@@ -887,10 +894,11 @@ var DLTChatInputChanged = function () {};
         if (!translateWanted && !contextWanted) return;
         var own = null, now = Date.now();
         while (state.recentOwn.length && now - state.recentOwn[0].at > 8000) state.recentOwn.shift();
-        if (role === 'self' && targetKey === 'zh-Hans') for (var e = state.recentOwn.length - 1; e >= 0; e--) {
+        if (role === 'self') for (var e = state.recentOwn.length - 1; e >= 0; e--) {
             var sent = state.recentOwn[e];
-            if (!sent.views[kind] && sent.text === value && (channel === sent.channel || kind === 'hud')) { own = sent; sent.views[kind] = true; break; }
+            if ((targetKey === 'zh-Hans' || sent.voiceOriginal) && !sent.views[kind] && sent.text === value && (channel === sent.channel || kind === 'hud')) { own = sent; sent.views[kind] = true; break; }
         }
+        if (own && own.voiceOriginal) { if (!contextWanted) return; translateWanted = false; }
         if (translateWanted && own && own.original && /[\u3400-\u9fff]/.test(own.original)) {
             state.metrics.localEchoReused++;
             if (contextWanted && state.outbox.length < 64) state.outbox.push({ id: 'ctx-' + String(++state.serial), text: value, sender: '', channel: channel, contextOnly: true });
@@ -1324,6 +1332,178 @@ var DLTChatInputChanged = function () {};
         var resolved = next.filter(function (entry) { return !!entry.name; }).length;
         if (state.heroRosterCount !== resolved) { state.heroRosterCount = resolved; audit('hero-roster', null, null, null, resolved); }
         return next;
+    }
+    function teammateSpeaking() {
+        refreshHeroRoster(); // Reuse the existing bounded lookup for the top-bar panels.
+        var localTeam = null, players = [];
+        for (var t = 0; t < state.heroTeams.length; t++) {
+            var team = state.heroTeams[t];
+            if (!inside(team, ROOT) || team.paneltype !== 'CitadelHudTopBarTeam') continue;
+            var container = find(team, 'PlayersContainer');
+            var entries = [];
+            for (var i = 0, n = Math.min(12, count(container)); i < n; i++) {
+                var player = child(container, i);
+                if (!valid(player) || player.paneltype !== 'CitadelHudTopBarPlayer') continue;
+                entries.push(player);
+                if (has(player, 'LocalPlayer')) {
+                    if (localTeam !== null) return null;
+                    localTeam = t;
+                }
+            }
+            players[t] = entries;
+        }
+        if (localTeam === null) return null;
+        return players[localTeam].some(function (p) {
+            return !has(p, 'LocalPlayer') && (has(p, 'VoiceActive') || has(p, 'PartyVoiceActive'));
+        });
+    }
+    function updateVoiceCaption(current, previous) {
+        state.voiceCaptionDeadline = Date.now() + 1500;
+        if ((current || previous) && !valid(state.voiceCaptionPanel)) {
+            state.voiceCaptionPanel = $.CreatePanel('Panel', ROOT, 'DltVoiceCaptions');
+            state.voiceCaptionPanel.hittest = false;
+            state.voiceCaptionPanel.hittestchildren = false;
+            feedStyle(state.voiceCaptionPanel, {
+                horizontalAlign: 'center', verticalAlign: 'bottom', marginBottom: '195px',
+                width: 'fit-children', flowChildren: 'down', zIndex: '180'
+            });
+            state.voicePreviousLabel = makeVoiceLabel('DltVoicePreviousCaption', 17);
+            state.voiceLabel = makeVoiceLabel('DltVoiceCaption', 19);
+        }
+        renderVoiceCaption(state.voicePreviousLabel, previous);
+        renderVoiceCaption(state.voiceLabel, current);
+    }
+
+    function makeVoiceLabel(id, size) {
+        var label = $.CreatePanel('Label', state.voiceCaptionPanel, id);
+        label.AddClass('DltVoiceCaption');
+        label.hittest = false;
+        label.html = false;
+        feedStyle(label, {
+            horizontalAlign: 'center', maxWidth: '680px', width: 'fit-children', padding: '7px 16px',
+            fontSize: size + 'px', color: '#f8efe0', backgroundColor: '#182820ee',
+            border: '1px solid #527361', borderRadius: '4px', textAlign: 'center'
+        });
+        return label;
+    }
+
+    function renderVoiceCaption(label, value) {
+        if (!valid(label)) return;
+        if (!value || !value.text || value.remainingMs === 0) {
+            label.visible = false;
+            return;
+        }
+        var heading = typeof value.ageSeconds === 'number' ? value.ageSeconds + ' 秒前  ' : '队友语音  ';
+        var translation = value.translation && value.translation !== value.text ? '\n' + value.translation : '';
+        var contents = heading + value.text + translation;
+        if (label.__dltCaptionText !== contents || !label.visible) {
+            label.__dltCaptionText = contents;
+            updateLabel(label, contents);
+            label.visible = true;
+        }
+        label.__dltCaptionExpires = typeof value.remainingMs === 'number' ? Date.now() + value.remainingMs : null;
+        if (!state.measureVoiceHud || !label.visible || !(value.utterance > 0)) return;
+        var shown = state.voiceShown || (state.voiceShown = []);
+        var receipt = shown.filter(function (item) { return item.utterance === value.utterance; })[0];
+        var previous = typeof value.ageSeconds === 'number';
+        var translated = value.translation && value.translation !== value.text;
+        var stages = 1 | (translated ? (previous ? 2 : 18) : 0) | (value.final ? 4 : 0) | (previous ? 8 : 0);
+        if (!receipt) {
+            receipt = { utterance: value.utterance, stages: 0 };
+            shown.push(receipt);
+            if (shown.length > 8) shown.shift();
+        }
+        if ((receipt.stages | stages) !== receipt.stages) {
+            receipt.stages |= stages;
+            state.forcePoll = true;
+        }
+    }
+    var voiceDebugStages = {
+        'voice-incompatible': '后台与游戏插件的构建不匹配', 'voice-disabled': '队友语音尚未启用或设备不可用',
+        'voice-hud-wait': '等待游戏发言信号', 'voice-hud-idle': '等待队友发言',
+        'voice-detected': '检测到队友发言', 'voice-stopped': '发言结束 · 等待切段', 'voice-loading': '正在加载识别模型',
+        'voice-ready': '识别引擎已就绪', 'voice-capture-start': '正在采集队友音频', 'voice-audio': '已收到游戏音频',
+        'voice-preview-start': '正在转写发言', 'voice-preview-ok': '已显示实时转写',
+        'voice-queue-merged': '已合并连续音频', 'voice-queue-dropped': '队列已满 · 跳过旧片段',
+        'voice-no-audio': '发言结束 · 音频为空或音量过低', 'voice-no-segment': '发言结束 · 未切出可识别的片段',
+        'voice-segment': '音频已切段 · 等待识别', 'voice-asr-start': '正在识别队友语音', 'voice-asr-empty': '没有识别出文字',
+        'voice-asr-discarded': '片段已跳过 · 麦克风任务优先', 'voice-asr-ok': '转写已完成',
+        'voice-asr-expired': '片段已过期 · 识别或排队超时',
+        'voice-transcript-only': '转写已完成 · 当前为仅转写', 'voice-same-language': '语种相同 · 显示原文',
+        'voice-translate-start': '正在翻译', 'voice-translate-ok': '翻译已完成', 'voice-translate-empty': '翻译服务返回空结果',
+        'voice-translate-error': '翻译失败 · 原文可见', 'voice-translate-canceled': '翻译已取消或超时',
+        'voice-worker-error': '语音进程已退出 · 查看诊断日志', 'voice-control-error': '语音进程通信异常 · 查看诊断日志',
+        'voice-engine-error': '语音模型加载失败', 'voice-capture-error': '游戏音频采集失败', 'voice-asr-error': '本地识别失败'
+    };
+    function updateVoiceDebug(value) {
+        if (!value) {
+            if (valid(state.voiceDebugLabel)) state.voiceDebugLabel.visible = false;
+            return;
+        }
+        if (!valid(state.voiceDebugLabel)) {
+            var panel = state.voiceDebugLabel = $.CreatePanel('Label', ROOT, 'DltVoiceDebug');
+            panel.hittest = false;
+            panel.html = false;
+            feedStyle(panel, {horizontalAlign: 'left', verticalAlign: 'top', marginTop: '175px', marginLeft: '24px',
+                maxWidth: '390px', width: 'fit-children', padding: '8px 13px', fontSize: '17px', color: '#f8efe0',
+                border: '1px solid #527361', borderRadius: '4px', zIndex: '175'});
+        }
+        var label = state.voiceDebugLabel;
+        var devices = { cuda: 'CUDA', vulkan: 'Vulkan', cpu: 'CPU' };
+        var device = devices[value.device];
+        if (device && value.executionBackend && value.executionBackend !== value.device && devices[value.executionBackend])
+            device += ' → 实际 ' + devices[value.executionBackend];
+        var details = [device, value.model];
+        if (typeof value.audioMs === 'number') details.push((value.audioMs / 1000).toFixed(2) + ' 秒音频');
+        if (typeof value.elapsedMs === 'number') details.push(Math.round(value.elapsedMs) + ' ms');
+        if (typeof value.levelDb === 'number') details.push(Math.round(value.levelDb) + ' dBFS');
+        var speaking = value.speaking && value.stage !== 'voice-detected' ? ' · 队友正在发言' : '';
+        updateLabel(label, '语音测试' + speaking + '\n' + (voiceDebugStages[value.stage] || '等待语音状态') +
+            '\n' + details.filter(function (item) { return !!item; }).join(' · '));
+        label.style.backgroundColor = /(?:error|incompatible)$/.test(value.stage) ? '#552c26f5' : value.speaking ? '#1d472df5' : '#192822e8';
+        label.visible = true;
+        state.voiceDebugDeadline = Date.now() + 2800;
+    }
+    function showDictation(value, results) {
+        var wasEnabled = state.dictationEnabled;
+        state.dictationEnabled = !!(value && value.enabled);
+        state.dictationCanSend = !!(value && value.canSend);
+        state.dictationReplyAt = Date.now();
+        if (state.dictationEnabled && !wasEnabled) state.nextHeartbeat = 0;
+        var failed = (results || []).filter(function (job) { return job.isVoice && job.state === 'failed'; }).pop();
+        if (failed && failed.id !== state.dictationFailureId) {
+            state.dictationFailureId = failed.id;
+            state.dictationFailure = failed.error || '语音消息未发送，原文已保留';
+            state.dictationFailureUntil = Date.now() + 4000;
+        }
+        var content = '';
+        if (value && value.id) {
+            var states = { starting: '正在开启麦克风', recording: '录音中', finishing: '正在识别尾音', review: '录音已结束' };
+            content = (states[value.state] || '语音输入') + ' · ' + (value.channel === 'all' ? '全体' : '队伍');
+            if (value.error) content += '\n' + value.error;
+            if (value.state === 'recording') content += ' · ' + value.elapsed + ' 秒';
+            if (value.text) content += '\n' + value.text;
+            if (value.state === 'recording' || value.state === 'review') {
+                content += '\n' + value.originalKey + ' 发原文';
+                if (value.translateKey) content += '  ·  ' + value.translateKey + ' 翻译发送';
+                content += '  ·  Esc 取消';
+            }
+        } else if (value) content = value.error || (Date.now() < state.dictationFailureUntil ? state.dictationFailure : '');
+        if (!content) {
+            if (valid(state.dictationLabel)) state.dictationLabel.visible = false;
+            return;
+        }
+        if (!valid(state.dictationLabel)) {
+            state.dictationLabel = $.CreatePanel('Label', ROOT, 'DltVoiceInput');
+            state.dictationLabel.hittest = false;
+            state.dictationLabel.html = false;
+            feedStyle(state.dictationLabel, {horizontalAlign: 'center', verticalAlign: 'bottom', marginBottom: '250px',
+                maxWidth: '680px', padding: '9px 17px', fontSize: '19px', color: '#f8efe0', textAlign: 'center',
+                borderRadius: '4px', zIndex: '180'});
+        }
+        state.dictationLabel.style.backgroundColor = value.channel === 'all' ? '#713721f5' : '#183448f5';
+        updateLabel(state.dictationLabel, content);
+        state.dictationLabel.visible = true;
     }
     function rosterHero(row, kind, team, sender) {
         if (kind === 'lobby') return null;
@@ -2014,6 +2194,7 @@ var DLTChatInputChanged = function () {};
         // A newly created chat adapter cannot inherit a keypress from the previous scene.
         if (payload.serverId && !state.serverId) state.hotkeySeen = payload.hotkey || 0;
         if (payload.serverId && state.serverId && payload.serverId !== state.serverId) {
+            state.voiceShown = [];
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingPartAcks = []; state.outgoingKnown = {}; state.nextSendAt = 0;
             state.pendingHotkey = null; state.closeWatch = null; state.outgoingRefused = [];
             state.deepSeekSeen = 0; state.expenseToast = null; state.sendLanguageRevision = null;
@@ -2043,6 +2224,16 @@ var DLTChatInputChanged = function () {};
             syncOwnDisplay(); maintainFeed();
         }
         if (payload.displayPreview) acceptDisplayPreview(payload.displayPreview);
+        var voice = payload.voice;
+        if (state.voiceEnabled !== !!(voice && voice.enabled)) {
+            state.voiceEnabled = !!(voice && voice.enabled);
+            if (state.voiceEnabled) state.nextHeartbeat = 0;
+        }
+        state.measureVoiceHud = !!(voice && voice.measureHud);
+        if (!state.measureVoiceHud) state.voiceShown = [];
+        updateVoiceCaption(state.voiceEnabled ? voice.caption : null, state.voiceEnabled ? voice.previous : null);
+        updateVoiceDebug(voice && voice.debug);
+        showDictation(payload.dictation, payload.outgoing);
         if (!state.config.incomingScope) state.config.incomingScope = 'all_players';
         if (!state.config.incomingTargetLanguage) state.config.incomingTargetLanguage = 'zh-Hans';
         if (!state.config.outgoingTargetLanguage) state.config.outgoingTargetLanguage = 'en';
@@ -2180,7 +2371,9 @@ var DLTChatInputChanged = function () {};
             var id = pendingRecords[(state.pollCursor + p) % pendingRecords.length].id;
             if (ids.indexOf(id) < 0) ids.push(id);
         }
-        var wantMetrics = now >= state.nextMetrics, wantHeartbeat = now >= state.nextHeartbeat;
+        var speaking = state.voiceEnabled ? teammateSpeaking() : undefined;
+        var voiceChanged = speaking !== state.lastReportedSpeaking;
+        var wantMetrics = now >= state.nextMetrics, wantHeartbeat = now >= state.nextHeartbeat || voiceChanged;
         var chatOpen = inputOpen();
         var outgoingPending = Object.keys(state.outgoingKnown).some(function (id) { return !state.outgoingKnown[id].done; });
         var waiting = [];
@@ -2216,6 +2409,9 @@ var DLTChatInputChanged = function () {};
             chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, deepSeekNoticeSeen: state.deepSeekSeen || 0, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingPartAcks: state.outgoingPartAcks.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),
             outgoingStatus: state.statusSupported ? state.outgoingStatus.slice(0, 24) : undefined, outgoingRefused: state.outgoingRefused.slice(0, 12), serverId: state.serverId || '', logs: state.diagSupported || !state.serverId ? state.logs.slice(0, 8) : [] };
+        if (state.voiceEnabled) payload.teammateSpeaking = speaking;
+        if (state.measureVoiceHud && state.voiceShown && state.voiceShown.length) payload.voiceShown = state.voiceShown;
+        payload.voiceInputMatch = !!state.matchIdentity && state.matchIdentity !== '0';
         var buildText = ROOT.__dltBuildText;
         if (buildText && Array.isArray(buildText.controls) && Array.isArray(buildText.readers)) payload.buildText = {
             controls: buildText.controls.length, readers: buildText.readers.length,
@@ -2256,9 +2452,10 @@ var DLTChatInputChanged = function () {};
         if (pendingRecords.length) state.pollCursor = (state.pollCursor + 24) % pendingRecords.length;
         state.pending = { seq: payload.seq, at: now, messages: payload.messages, outgoing: payload.outgoing, outgoingSent: payload.outgoingSent, outgoingPartAcks: payload.outgoingPartAcks, outgoingStatus: payload.outgoingStatus, refused: payload.outgoingRefused, nativeEditor: editorCommand ? { id: editorCommand.id, request: editorCommand.request } : null };
         state.openSettings = false; state.nextPoll = now + (chatOpen ? 80 : state.config.transport === 'navigation' ? 800 : 250);
-        state.nextHeartbeat = now + (state.config.quickMessagesEnabled ? 500 : 2000);
+        state.nextHeartbeat = now + (state.dictationEnabled ? 150 : state.voiceEnabled ? 220 : state.config.quickMessagesEnabled ? 500 : 2000);
         if (wantMetrics) state.nextMetrics = now + 10000;
         state.bridge.SetURL(base + (state.config.transport === 'navigation' ? '?d=' : '#') + encoded);
+        state.lastReportedSpeaking = speaking;
         if (state.config.transport === 'navigation') state.nextNavigation = now + 800;
         state.metrics.bridges++;
     }
@@ -2281,7 +2478,9 @@ var DLTChatInputChanged = function () {};
             }
             state.session = String(Date.now()) + '-' + String(Math.random()).slice(2);
             state.logs = []; state.logSeq = 0; audit('session-reset');
-            closeDisplayPreview(); clearFeed(false); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = Object.create(null); state.outbox = []; state.render = []; state.pending = null; state.recentOwn = [];
+            state.voiceShown = []; updateVoiceCaption(null); closeDisplayPreview(); clearFeed(false); clearNativeHudBindings(); state.hudRetries = []; state.records = []; state.recordsById = Object.create(null); state.outbox = []; state.render = []; state.pending = null; state.recentOwn = [];
+            updateVoiceDebug(null);
+            showDictation(null); state.nextHeartbeat = 0;
             state.outgoingQueue = []; state.outgoingSent = []; state.outgoingPartAcks = []; state.outgoingKnown = {}; state.nextSendAt = 0;
             state.hotkeySeen = Math.max(state.hotkeySeen, state.pendingHotkey ? state.pendingHotkey.seq : 0);
             state.echoes = []; state.outgoingStatus = []; state.channelFault = ''; state.outgoingRefused = [];
@@ -2316,6 +2515,13 @@ var DLTChatInputChanged = function () {};
             }
             // A chord whose chat box was not open yet is retried here until its window expires.
             maintainLocalToast();
+            if (state.voiceCaptionDeadline && started > state.voiceCaptionDeadline) updateVoiceCaption(null);
+            [state.voicePreviousLabel, state.voiceLabel].forEach(function (label) {
+                if (valid(label) && label.visible && label.__dltCaptionExpires && started >= label.__dltCaptionExpires)
+                    label.visible = false;
+            });
+            if (state.voiceDebugDeadline && started > state.voiceDebugDeadline) updateVoiceDebug(null);
+            if (valid(state.dictationLabel) && started - state.dictationReplyAt > 1000) state.dictationLabel.visible = false;
             if (inputOpen()) rememberDraft();
             else if (state.liveDraft && state.liveDraft.value) rememberDraft('closed');
             if (state.pendingHotkey) captureOutgoing();
@@ -2336,7 +2542,7 @@ var DLTChatInputChanged = function () {};
         } catch (error) { state.metrics.errors++; if (!state.lastErrorAt || started - state.lastErrorAt > 10000) { state.lastErrorAt = started; try { $.Msg('[DLT] adapter callback failed; see diagnostic counters'); } catch (_) {} } }
         finishPerformance(Date.now() - started);
         state.metrics.scans++; state.metrics.maxScanMs = Math.max(state.metrics.maxScanMs, Date.now() - started);
-        if (!stopped) armTick(inputOpen() ? 0.05 : state.closeWatch || hasPendingOutgoing() ? 0.1 : Math.max(0.1, Math.min(1, state.config.scanIntervalMs / 1000)));
+        if (!stopped) armTick(inputOpen() ? 0.05 : state.dictationEnabled || state.voiceEnabled || state.closeWatch || hasPendingOutgoing() ? 0.1 : Math.max(0.1, Math.min(1, state.config.scanIntervalMs / 1000)));
     }
     function performanceBucket() {
         var now = Date.now(), slot = Math.floor(now / 5000), buckets = state.performanceBuckets;

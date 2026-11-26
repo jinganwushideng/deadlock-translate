@@ -92,3 +92,30 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
 #deepSeekUsageCard .table-scroll{overflow-x:auto}
 #deepSeekUsageCard th,#deepSeekUsageCard td{white-space:nowrap}
 #languageBindingRows input{min-width:0;max-width:15em}
+.card .voice-switch {
+    display: grid;
+    grid-template-columns: minmax(140px, 25%) auto;
+    justify-items: start;
+    justify-content: stretch;
+    align-items: center;
+    gap: 18px;
+    width: 100%;
+    min-height: 63px;
+    padding: 14px 0;
+    background: transparent;
+    box-shadow: none;
+    border: 0;
+    border-bottom: 1px solid #201e1960;
+    border-radius: 0;
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+    font-weight: 700;
+}
+.card .voice-switch:hover:not(:disabled) { background: #ffffff0d; }
+.voice-switch-track { width: 47px; height: 25px; background: var(--toggle-off) center / 100% 100% no-repeat; }
+.voice-switch[aria-checked="true"] .voice-switch-track { background-image: var(--toggle-on); }
+@media (min-width: 2200px) {
+    .card .voice-switch { min-height: 78px; }
+    .voice-switch-track { width: 56px; height: 30px; }
+}

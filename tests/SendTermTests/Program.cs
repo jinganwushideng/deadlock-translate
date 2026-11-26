@@ -39,7 +39,7 @@ foreach(var limit in new[]{512,2048,4096,6144,16384}){
     using var content=LlmRequestOptions.Create("fixture","system","input",limit);using var body=JsonDocument.Parse(await content.ReadAsStringAsync());
     Check(body.RootElement.GetProperty("max_tokens").GetInt32()==limit&&!body.RootElement.TryGetProperty("thinking",out _)&&!body.RootElement.TryGetProperty("reasoning_effort",out _),"selected budget preserves provider thinking without overrides: "+limit);
 }
-var cfg=new ConfigStore(Path.Combine(isolated,"provider"));cfg.Save(cfg.Current with{LlmKey="fake-local-key",LlmBaseUrl="https://api.deepseek.com/v1",Model="deepseek-flash",OutgoingMode="quality"});
+var cfg=new ConfigStore(Path.Combine(isolated,"provider"));cfg.Save(cfg.Current with{LlmKey="fake-local-key",AzureKey="fake-local-azure-key",LlmBaseUrl="https://api.deepseek.com/v1",Model="deepseek-flash",OutgoingMode="quality"});
 using var mock=new Mock();using var mockHttp=new HttpClient(mock);using var service=new Translators(cfg,terms,mockHttp);
 var result=await service.TranslateOutgoing(source,cfg.Current,false,CancellationToken.None);
 Check(result=="Apollo, buy Stamina Mastery to counter Slowing Hex.","reported sentence passes quality normalization");
@@ -79,6 +79,46 @@ mock.Truncated=false;mock.MissingName=true;
 var beforeMissing=mock.Calls;
 try{await service.TranslateOutgoing(source+"。",cfg.Current,false,CancellationToken.None);throw new Exception("expected name failure");}catch(TranslationOutputException ex){Check(ex.Reason==LogReason.NameMismatch,"required-name rejection stays distinct from output exhaustion");}
 Check(mock.Calls==beforeMissing+2,"persistent missing names stop after one repair attempt");
+
+var aliasCases=new[]{(Nickname:"女巫",English:"Vindicta")};
+mock.MissingName=false;
+foreach(var (nickname,english) in aliasCases){
+    var beforeAlias=mock.Calls;
+    foreach(var forceFast in new[]{true,false}){
+        var standalone=await service.TranslateOutgoing(nickname,cfg.Current,forceFast,CancellationToken.None);
+        Check(standalone==english&&mock.Calls==beforeAlias,"standalone nickname is translated locally: "+nickname);
+    }
+    mock.AliasReply=english+" has no ult.";
+    var fastCfg=cfg.Current with{FastProvider="azure"};
+    foreach(var forceFast in new[]{true,false}){
+        var callout=await service.TranslateOutgoing(nickname+"没大",fastCfg,forceFast,CancellationToken.None);
+        Check(callout==mock.AliasReply&&(forceFast?mock.ProviderInput=="DLTERM0X没大":mock.ProviderInput==english+"没大"),
+            "nickname and negation survive the outgoing provider path: "+nickname+" fast="+forceFast);
+    }
+}
+Check(!terms.All.Any(t=>t.Source=="黑子"),"the optional Haze nickname is absent from defaults");
+foreach(var ordinary in new[]{"这个故事里有个女巫","他是个黑子","女巫没大变化","黑子没大"}){
+    Check(terms.PrepareOutgoingNames(ordinary).Map.Count==0,"ordinary words aren't protected as heroes: "+ordinary);
+}
+Check(terms.PrepareOutgoingNames("女巫没大，狙娘残血").Map.Values.SequenceEqual(new[]{"Vindicta","Vindicta"}),
+    "different nicknames can both resolve to the same hero in a single message");
+var personalAlias=new Term("我方狙姐","薇妲","Vindicta");
+var personalCallout=personalAlias.Source+"没大";
+mock.AliasReply="That sniper has no ult.";
+await service.TranslateOutgoing(personalCallout,cfg.Current,false,CancellationToken.None);
+Check(mock.ProviderInput==personalCallout,"before saving, the same callout has no personal substitution");
+var beforeSave=terms.ReadVersioned();
+Check(terms.TrySave([personalAlias,..beforeSave.Items],beforeSave.Tag,out var savedTag)&&savedTag!=beforeSave.Tag,
+    "personal alias with an existing English name saves and advances the revision");
+var callsAfterSave=mock.Calls;
+mock.AliasReply="Vindicta has no ult.";
+Check(await service.TranslateOutgoing(personalCallout,cfg.Current,false,CancellationToken.None)==mock.AliasReply&&mock.Calls==callsAfterSave+1,
+    "resending a cached callout immediately uses the new glossary revision");
+var reopened=new Terms(isolated,defaults);
+Check(reopened.All.Contains(personalAlias)&&reopened.PrepareOutgoingNames("我方狙姐和狙娘").Map.Values.SequenceEqual(new[]{"Vindicta","Vindicta"}),
+    "reopening the persisted glossary keeps both aliases");
+Check(reopened.All.Single(t=>t.Source=="女巫").OutgoingStandalone,"standalone nickname behavior survives a personal save");
+
 File.WriteAllText(Path.Combine(root,"artifacts/send-term-tests.json"),JsonSerializer.Serialize(new{passed,realApi=false,at=DateTime.UtcNow},ConfigStore.Json));Console.WriteLine("TOTAL "+passed+" passed");
 
 sealed class Capture:DelegatingHandler{
@@ -95,12 +135,22 @@ sealed class Capture:DelegatingHandler{
 
 sealed class Mock:HttpMessageHandler{
     public int Calls,LastTokens;public bool ThinkingOverride,ReasoningOnly,Truncated,MissingName,MissingOnce,RepairPromptSeen;
+    public string? AliasReply,ProviderInput;
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){
-        Calls++;using var json=JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));LastTokens=json.RootElement.GetProperty("max_tokens").GetInt32();ThinkingOverride=json.RootElement.TryGetProperty("thinking",out _)||json.RootElement.TryGetProperty("reasoning_effort",out _);
+        Calls++;using var json=JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+        if(request.RequestUri!.Host=="api.cognitive.microsofttranslator.com"){
+            ProviderInput=json.RootElement[0].GetProperty("text").GetString();
+            return new(HttpStatusCode.OK){Content=JsonContent.Create(new[]{new{translations=new[]{new{text="DLTERM0X has no ult."}}}})};
+        }
+        LastTokens=json.RootElement.GetProperty("max_tokens").GetInt32();ThinkingOverride=json.RootElement.TryGetProperty("thinking",out _)||json.RootElement.TryGetProperty("reasoning_effort",out _);
         var system=json.RootElement.GetProperty("messages")[0].GetProperty("content").GetString();
+        if(!system!.Contains("connection diagnostic")){
+            using var input=JsonDocument.Parse(json.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!);
+            ProviderInput=input.RootElement.GetProperty("current").GetString();
+        }
         RepairPromptSeen|=system!.Contains("A prior attempt omitted a required name");
         var missing=MissingName||MissingOnce;MissingOnce=false;
-        var reply=system.Contains("connection diagnostic")?"OK":missing?"buy an item": "Apollo, buy Stamina Mastery to counter Slowing Hex.";
+        var reply=system.Contains("connection diagnostic")?"OK":missing?"buy an item":AliasReply??"Apollo, buy Stamina Mastery to counter Slowing Hex.";
         return new(HttpStatusCode.OK){Content=JsonContent.Create(new{choices=new[]{new{finish_reason=ReasoningOnly||Truncated?"length":"stop",message=new{content=ReasoningOnly?"":reply,reasoning_content=ReasoningOnly?"PRIVATE_REASONING":""}}},usage=new{completion_tokens=ReasoningOnly?2048:13,completion_tokens_details=new{reasoning_tokens=ReasoningOnly?2048:0}}})};
     }
 }

@@ -27,9 +27,12 @@ public sealed partial class Wizard
         DrawHealthReport(card);
     }
 
+    private IEnumerable<JsonElement> VisibleHealthChecks() =>
+        Items(Field(health,"checks")).Where(item => step != 4 || Str(item,"status") != "verify");
+
     private void DrawHealthReport(FlowLayoutPanel card)
     {
-        var checks = Items(Field(health,"checks")).ToArray();
+        var checks = VisibleHealthChecks().ToArray();
         foreach(var item in checks) {
             var status = Str(item,"status") switch { "ok"=>"正常", "repair"=>"需要修复", "verify"=>"待游戏验证", _=>"需要处理" };
             Note(card,status+" · "+Str(item,"message"));

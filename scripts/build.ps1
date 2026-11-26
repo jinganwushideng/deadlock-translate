@@ -6,6 +6,15 @@ param(
     [switch]$ModOnly
 )
 $ErrorActionPreference = 'Stop'
+function Get-BuildFileSha256([string]$Path) {
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        try { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash }
+        catch {
+            if ($attempt -eq 6) { throw }
+            Start-Sleep -Milliseconds 700
+        }
+    }
+}
 $taskRoot = Split-Path $PSScriptRoot -Parent
 $taskVersionInfo=Get-Content -LiteralPath (Join-Path $taskRoot 'version.json') -Raw|ConvertFrom-Json
 $taskVersion=$taskVersionInfo.version
@@ -54,6 +63,9 @@ try {
     if($LASTEXITCODE){throw 'Backend publish failed'}
     python scripts\collect_licenses.py --output $taskDist
     if($LASTEXITCODE){throw 'Runtime license collection failed'}
+    dotnet publish src\VoiceWorker -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:VoiceIncludeCuda=true -o (Join-Path $taskDist 'voice')
+    if($LASTEXITCODE){throw 'Voice engine publish failed'}
+    Copy-Item -LiteralPath LICENSES\voice-whispernet-MIT.txt,LICENSES\voice-whispercpp-MIT.txt -Destination (Join-Path $taskDist 'LICENSES')
     }
     Copy-Item -LiteralPath artifacts\pairing.key -Destination (Join-Path $taskDist 'pairing.key') -Force
     $taskPackRoot=Join-Path $taskRoot ('artifacts\pack-'+$taskVersion)
@@ -80,7 +92,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $taskRoot 'build-info.json') -Destination (Join-Path $taskDist 'build-info.json') -Force
     $taskManifest = [ordered]@{buildId=$taskBuildInfo.buildId;version=$taskVersion;featureRevision=$taskVersionInfo.featureRevision;chatPipelineFix=$taskVersionInfo.chatPipelineFix;builtUtc=[DateTime]::UtcNow.ToString('o');gamePath=$GamePath;compilerPath=$Compiler;compilerSha256=(Get-FileHash -LiteralPath $Compiler).Hash;viewerVersion=(Get-Item -LiteralPath $taskViewer).VersionInfo.ProductVersion;vpkeditRelease='v5.0.0.4';artifacts=@()}
     $taskManifest.nativeBubbleTemplate=Get-Content -LiteralPath (Join-Path $taskRoot 'artifacts/native-bubble-provenance.json') -Raw -Encoding UTF8|ConvertFrom-Json
-    $taskManifest.artifacts=@(Get-ChildItem -LiteralPath $taskDist -Recurse -File | Where-Object Name -ne 'build-manifest.json' | ForEach-Object {[ordered]@{file=$_.FullName.Substring($taskDist.Length+1).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})
+    $taskManifest.artifacts=@(Get-ChildItem -LiteralPath $taskDist -Recurse -File | Where-Object Name -ne 'build-manifest.json' | ForEach-Object {[ordered]@{file=$_.FullName.Substring($taskDist.Length+1).Replace('\','/');bytes=$_.Length;sha256=(Get-BuildFileSha256 $_.FullName)}})
     $taskManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskDist 'build-manifest.json') -Encoding utf8
     Write-Output "PACKAGE: $taskDist"
 } finally { Pop-Location }

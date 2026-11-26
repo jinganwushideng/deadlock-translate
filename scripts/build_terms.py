@@ -1,6 +1,6 @@
 """Generate bilingual names from the user's installed Valve localization resources."""
 import json, pathlib, re, hashlib, os
-from term_extensions import ALIASES, AMBIGUOUS_ALIASES, PHRASES, AMBIGUOUS_PHRASES, AMBIGUOUS_HINTS, LEGACY_NAMES, AMBIGUOUS_LEGACY_NAMES, LEGACY_ENGLISH_NAMES
+from term_extensions import ALIASES, AMBIGUOUS_ALIASES, PHRASES, AMBIGUOUS_PHRASES, AMBIGUOUS_HINTS, LEGACY_NAMES, AMBIGUOUS_LEGACY_NAMES, LEGACY_ENGLISH_NAMES, STANDALONE_HERO_ALIASES
 root=pathlib.Path(__file__).resolve().parents[1]
 localization=pathlib.Path(os.environ['DEADLOCK_TRANSLATE_GAME'])/'game/citadel/resource/localization'
 (root/'artifacts').mkdir(parents=True,exist_ok=True)
@@ -69,6 +69,8 @@ for canonical,sources in ALIASES.items():
     if not original:skipped_aliases.append(canonical);continue
     for source in sources:
         add(source,original['target'],original['english'],'name',source in AMBIGUOUS_ALIASES,'chat_aliases')
+        if source in STANDALONE_HERO_ALIASES and categories.get(source.casefold()) == 'chat_aliases':
+            terms[source.casefold()]['outgoingStandalone']=True
 for source,target in PHRASES.items():add(source,target,ambiguous=source in AMBIGUOUS_PHRASES,category='chat_phrases',replace=True)
 for source,target in AMBIGUOUS_HINTS.items():add(source,target,ambiguous=True,category='ambiguous_hints',replace=True)
 # Bring objective vocabulary into line with this installed localization; retain ambiguity for ordinary nouns.

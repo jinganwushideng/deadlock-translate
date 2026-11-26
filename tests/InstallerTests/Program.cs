@@ -95,6 +95,22 @@ var uiThread=new Thread(()=>{
   Check(layout.RootElement.GetProperty("mode").GetProperty("Height").GetInt32()<=layout.RootElement.GetProperty("row").GetProperty("Height").GetInt32(),"dropdown fits its input row");
   Check(layout.RootElement.GetProperty("updateHistoryAvailable").GetBoolean(),"release notes entry is visible without a settings or browser dependency");
   Check(new[]{"busy","error","locations","review","readonly","recovery","reinstall","migration","orphan-uninstall","complete","manual-steam","small"}.All(n=>File.Exists(Path.Combine(temp,"installer-ui-"+n+".png"))),"disabled, recovery, migration, orphan uninstall, manual Steam and small-window preview states render");
+  using var completion = new Wizard(preview:true);
+  const System.Reflection.BindingFlags members = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+  typeof(Wizard).GetField("health",members)!.SetValue(completion,JsonSerializer.SerializeToElement(new { checks = new[] {
+      new { status = "verify", message = "游戏还未启动" },
+      new { status = "attention", message = "Steam 启动项需处理" },
+      new { status = "ok", message = "安装文件校验通过" }
+  } }));
+  string ControlText(Control control) => control.Text + "\n" + string.Join("\n", control.Controls.Cast<Control>().Select(ControlText));
+  string PageText(int page) {
+      typeof(Wizard).GetField("step",members)!.SetValue(completion,page);
+      typeof(Wizard).GetMethod("Draw",members)!.Invoke(completion,null);
+      return ControlText(completion);
+  }
+  var finished=PageText(4);
+  Check(!finished.Contains("待游戏验证")&&!finished.Contains("游戏还未启动")&&finished.Contains("Steam 启动项需处理")&&finished.Contains("安装文件校验通过"),"completion page hides passive checks and retains actual check results");
+  Check(PageText(0).Contains("待游戏验证 · 游戏还未启动"),"maintenance still shows the passive connection diagnosis");
   using var notes=new ReleaseNotesWindow();
   var project = notes.Controls.Find("openGitHubProject", true).Single();
   Check(project.AccessibleDescription=="https://github.com/jinganwushideng/deadlock-translate","installer release notes expose the public project address");

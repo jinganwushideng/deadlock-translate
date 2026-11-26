@@ -131,6 +131,30 @@ if($RemoveTrust){[IO.File]::Delete($marker)}else{[IO.File]::WriteAllText($marker
   self.assertEqual((self.runtime/'DeadlockTranslate.exe').read_bytes(),b'never executed')
  def test_full_update_with_simulated_certificate_gate(self):
   self.installed();self.simulate_certificate_gate();(self.state/'settings.json').write_text('KEEP');r=self.call('apply');self.assertTrue(r['ok'],r);self.assertEqual((self.runtime/'DeadlockTranslate.exe').read_bytes(),b'never executed');self.assertEqual((self.state/'settings.json').read_text(),'KEEP')
+ def test_update_waits_for_consent_and_stops_only_the_confirmed_backend(self):
+  self.installed();self.simulate_certificate_gate()
+  old=self.runtime/'DeadlockTranslate.exe';other=self.root/'other'/'DeadlockTranslate.exe';other.parent.mkdir()
+  for path in (old,other):shutil.copyfile(Path(os.environ['SystemRoot'])/'System32/ping.exe',path)
+  processes=[]
+  def launch(exe):
+   p=subprocess.Popen([str(exe),'-t','127.0.0.1'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW)
+   processes.append(p);return p
+  try:
+   running=launch(old);unrelated=launch(other);before=self.target.read_bytes()
+   result=self.call('apply')
+   self.assertFalse(result['ok'],result);self.assertEqual(result['failure']['code'],'backend-stop-confirmation')
+   consent=result['failure']['backendConsent']
+   self.assertIsNone(running.poll());self.assertIsNone(unrelated.poll());self.assertEqual(self.target.read_bytes(),before)
+   running.terminate();running.wait(timeout=5);replacement=launch(old)
+   again=self.call('apply',backendConsent=consent)
+   self.assertEqual(again['failure']['code'],'backend-stop-confirmation',again)
+   self.assertIsNone(replacement.poll());self.assertNotEqual(again['failure']['backendConsent'],consent)
+   accepted=self.call('apply',backendConsent=again['failure']['backendConsent'])
+   self.assertTrue(accepted['ok'],accepted);self.assertTrue(accepted['data']['coreDone']);self.assertIsNotNone(replacement.poll())
+   self.assertIsNone(unrelated.poll());self.assertEqual(old.read_bytes(),b'never executed')
+  finally:
+   for p in processes:
+    if p.poll() is None:p.terminate();p.wait(timeout=5)
  def test_failed_install_restores_selected_conflict(self):
   self.simulate_certificate_gate();conflict=self.target.parent/'pak21_dir.vpk';conflict.write_bytes(self.vpk);(self.game/'game/citadel/gameinfo.gi').write_text('broken gameinfo')
   r=self.call('apply',disable=[dict(file=conflict.name,hash=hashlib.sha256(self.vpk).hexdigest())]);self.assertFalse(r['ok']);self.assertEqual(conflict.read_bytes(),self.vpk);self.assertFalse(self.target.exists());self.assertFalse((self.state/'install-manifest.json').exists());self.assertEqual(list(self.runtime.iterdir()),[])

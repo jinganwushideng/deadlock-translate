@@ -16,6 +16,8 @@ public record OutgoingView(string Id,string Original,string English,string Chann
     public int SendCharacterLimit=>OutgoingParts.Limit;
     public int OmittedCharacters {get;init;}
     public bool Truncated=>OmittedCharacters>0;
+    public bool IsVoice { get; init; }
+    public bool CanRetryVoice { get; init; }
     public string? WaitReason {get;init;}
     public OutgoingPartStatus[]? PartStatuses {get;init;}
 }
@@ -32,6 +34,7 @@ public sealed class OutgoingJob(OutgoingInput input,CancellationToken token,Sett
     public HashSet<int> RetriedParts=[];
     public LogReason FailureReason;
     public string? RefusalCode;
+    public bool TranslateVoice, VoiceRetried;
     public string? NetworkError;public int? SocketError;
     public OutgoingView View=new(input.Id,input.Text,"",input.Channel,"queued",null,input.DisplayMode,"",config.OutgoingTargetLanguage,TranslationLanguages.Outgoing(config).Name);
 }
@@ -103,6 +106,58 @@ public sealed class OutgoingService : IAsyncDisposable {
             return request.Id;
         }
     }
+
+    public string RetryVoice(string id)
+    {
+        lock (gate)
+        {
+            if (!config.Current.OutgoingEnabled || !config.Current.VoiceInputEnabled || !jobs.TryGetValue(id, out var previous) ||
+                !previous.TranslateVoice || previous.VoiceRetried || previous.View.State != "failed" || previous.Parts.Length != 0)
+                throw new InvalidOperationException("这条语音消息暂不能重试翻译。");
+            if (jobs.Values.Count(job => job.View.State is not ("failed" or "submitted")) >= config.Current.OutgoingQueueLimit)
+                throw new InvalidOperationException("发送队列已满。");
+            var input = previous.Input with { Id = "voice-" + Guid.NewGuid().ToString("N") };
+            previous.VoiceRetried = true;
+            AdmitVoice(new(input, previous.Config, true), previous.SupportsMultipart);
+            return input.Id;
+        }
+    }
+
+    private void AdmitVoice(DictatedMessage voice, bool multipartSupported)
+    {
+        if (jobs.ContainsKey(voice.Input.Id)) return;
+        var job = new OutgoingJob(voice.Input, session.Token, voice.Settings)
+        {
+            Created = clock(), Sequence = ++sequence, SupportsMultipart = multipartSupported, TranslateVoice = voice.Translate,
+            Context = voice.Translate && voice.Settings.OutgoingUseContext ? context?.Invoke(sessionId, voice.Input.Channel, voice.Settings) ?? [] : []
+        };
+        job.View = job.View with { IsVoice = true };
+        jobs.Add(voice.Input.Id, job);
+        try
+        {
+            if (!config.Current.OutgoingEnabled || !config.Current.VoiceInputEnabled) throw new InvalidDataException("语音发送已关闭。");
+            if (jobs.Values.Count(other => other.View.State is not ("failed" or "submitted")) > config.Current.OutgoingQueueLimit)
+                throw new InvalidDataException("发送队列已满，原文已保留。");
+            if (voice.Translate)
+            {
+                if (!queue.Writer.TryWrite(job)) throw new InvalidDataException("发送队列已满，原文已保留。");
+            }
+            else
+            {
+                var plan = OutgoingParts.Plan("", voice.Input.Text, "translation", false, voice.Settings.OutgoingSplitLong);
+                if (plan.OmittedCharacters > 0 || plan.Parts.Length > 1 && !multipartSupported)
+                    throw new InvalidDataException("语音原文超过单条上限，请开启长消息分条，或缩短内容后重试。");
+                job.Parts = plan.Parts;
+                job.View = job.View with { State = "ready", SendText = plan.Parts[0], PartCount = plan.Parts.Length };
+            }
+            Audit(job, LogKind.SendQueued);
+        }
+        catch (InvalidDataException ex)
+        {
+            job.View = job.View with { State = "failed", Error = ex.Message };
+            Audit(job, LogKind.SendFailed, LogReason.InvalidData);
+        }
+    }
     private IEnumerable<OutgoingView> OrderedViews(){
         var channels=new HashSet<string>();
         foreach(var job in jobs.Values.OrderBy(j=>j.Sequence)){
@@ -111,7 +166,7 @@ public sealed class OutgoingService : IAsyncDisposable {
                 var first=channels.Add(view.Channel);
                 if(!first && view.State=="ready")view=view with{State="waiting_order",Error="译文已完成，等待同一频道前一条消息提交"};
             }
-            yield return view;
+            yield return view with { CanRetryVoice = job.TranslateVoice && !job.VoiceRetried && view.State == "failed" && job.Parts.Length == 0 };
         }
     }
     private void ExpireLocked(){
@@ -121,7 +176,7 @@ public sealed class OutgoingService : IAsyncDisposable {
             else if(job.View.State=="waiting_channel"){job.View=job.View with{State="failed",Error="未能确认发送频道，未发送；原文已保留"};Audit(job,LogKind.SendFailed,LogReason.UnknownChannel);}
         }
     }
-    public OutgoingView[] Exchange(string id,OutgoingInput[] input,string[] sent,string[]? waiting=null,OutgoingRefusal[]? refused=null,OutgoingPartAck[]? partAcks=null,QuickMessage[]? presets=null,bool multipartSupported=true,OutgoingStatus[]? statuses=null){
+    public OutgoingView[] Exchange(string id,OutgoingInput[] input,string[] sent,string[]? waiting=null,OutgoingRefusal[]? refused=null,OutgoingPartAck[]? partAcks=null,QuickMessage[]? presets=null,bool multipartSupported=true,OutgoingStatus[]? statuses=null,DictatedMessage? dictation=null,bool voiceScope=false){
         if(input.Length>3 || sent.Length>12 || (waiting?.Length??0)>12 || (refused?.Length??0)>12 || input.Any(x=>x.Id.Length is <1 or >100 || x.Text.Length is <1 or >1024 || (x.Channel!="team" && x.Channel!="all" && x.Channel!="party") || (x.DisplayMode!="translation" && x.DisplayMode!="bilingual")))throw new ArgumentException("发送任务无效");
         var current=config.Current;
         if ((partAcks?.Length??0)>12 || (presets?.Length??0)>3) throw new ArgumentException("发送确认或快捷短语数量超限");
@@ -204,6 +259,10 @@ public sealed class OutgoingService : IAsyncDisposable {
             // The game reports a channel it could not confirm. Keep the text and wait for the rest
             // of the deadline instead of downgrading the message to another channel.
             foreach(var pendingId in waiting??[])if(jobs.TryGetValue(pendingId,out var held) && held.View.State=="ready")held.View=held.View with{State="waiting_channel",Error=held.View.IsPreset?"快捷短语指定频道与当前游戏频道不一致；请在游戏聊天框选择该频道后关闭输入框，或把短语设为当前频道。超时后不会补发。":"未能确认发送频道，正在等待；不会改发全体"};
+            if (!voiceScope)
+                foreach (var job in jobs.Values.Where(item => item.View.IsVoice && item.View.State is not ("failed" or "submitted")))
+                    job.View = job.View with { State = "failed", Error = "已离开游戏或对局，语音消息已停止发送。原文已保留。" };
+            else if (dictation is not null) AdmitVoice(dictation, multipartSupported);
             while(jobs.Count>48){var key=jobs.FirstOrDefault(x=>x.Value.View.State is "failed" or "submitted").Key;if(key==null)break;jobs.Remove(key);}
             return OrderedViews().Where(j=>j.State!="submitted").ToArray();
         }

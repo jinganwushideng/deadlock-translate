@@ -76,6 +76,13 @@ public record Settings {
     public int ScanIntervalMs { get; init; } = 200;
     public bool OutgoingEnabled { get; init; } = true;
     public string OutgoingHotkey { get; init; } = HotkeyChord.Default;
+    public bool VoiceInputEnabled { get; init; }
+    public string VoiceInputTeamKey { get; init; } = "";
+    public string VoiceInputAllKey { get; init; } = "";
+    public string VoiceInputTranslateKey { get; init; } = "";
+    public string VoiceInputChannelKey { get; init; } = "";
+    public string VoiceInputDevice { get; init; } = "";
+    public string VoiceInputLanguage { get; init; } = "zh";
     public bool ReserveSendSlot { get; init; } = true;
     public string OutgoingMode { get; init; } = "auto";
     public int OutgoingTimeoutSeconds { get; init; } = 30;
@@ -186,6 +193,7 @@ public sealed class ConfigStore {
         LlmProfiles.Validate(s);
         QuickMessages.Validate(s);
         OutgoingLanguageHotkeys.Validate(s);
+        VoiceDictation.Validate(s);
         DisplayPreviewOptions.From(s).Validate();
         if(!LlmRequestOptions.ValidBudget(s.LlmMaxTokens))throw new ArgumentException("模型输出上限须在 512 到 16384 token 之间");
         if(!LlmRequestOptions.ValidThinkingApi(s.LlmThinkingApi))throw new ArgumentException("无效的思考接口格式");

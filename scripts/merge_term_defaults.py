@@ -13,7 +13,9 @@ def merge(old,new,user):
         return result
     previous,updated,saved=index(old),index(new),index(user)
     def same(left,right):
-        return {**left,'legacyTarget':left.get('legacyTarget','')}=={**right,'legacyTarget':right.get('legacyTarget','')}
+        def normalized(item):
+            return {**item,'legacyTarget':item.get('legacyTarget',''),'outgoingStandalone':item.get('outgoingStandalone',False)}
+        return normalized(left)==normalized(right)
     output=[];seen=set()
     for key,item in saved.items():
         if key in previous and same(item,previous[key]):

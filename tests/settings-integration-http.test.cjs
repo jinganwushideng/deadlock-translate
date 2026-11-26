@@ -10,6 +10,62 @@ async function api(name,method='GET',value,revision){const r=await fetch(base+'/
  const login=await fetch(base+'/in-game/'+key),cookie=login.headers.getSetCookie().map(v=>v.split(';')[0]).join(';');headers={Cookie:cookie,Origin:base,'Content-Type':'application/json','X-DLT-Request':'1'};
  browser=await chromium.launch({channel:'msedge',headless:true});const context=await browser.newContext({viewport:{width:1920,height:1200}});await context.addCookies([{name:cookie.split('=')[0],value:cookie.split('=')[1],url:base}]);
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base+'/');await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+ if(process.argv.includes('--glossary')){
+  await page.locator('nav [data-page="glossary"]').click();
+  const aliases=['词库测试黑子','词库测试岚梦'];
+  for(const alias of aliases){
+   await page.locator('#addTerm').click();
+   const row=page.locator('#termRows tr').first();
+   await row.getByRole('textbox',{name:'匹配词',exact:true}).fill(alias);
+   await row.getByRole('textbox',{name:'中文译名',exact:true}).fill('岚梦');
+   await row.getByRole('textbox',{name:'标准英文名',exact:true}).fill('Haze');
+  }
+  const termFile=path.join(state,'terms.json');
+  // A directory at the write target exercises the actual backend failure path.
+  fs.mkdirSync(termFile);
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#termSaveStatus').textContent.includes('无法写入本机词库'));
+  check(await page.locator('#termRows input').first().inputValue()===aliases[1]&&!(await api('terms')).data.some(t=>aliases.includes(t.source)),'write failure retains the editable draft and active terms');
+  fs.rmdirSync(termFile);
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#termSaveStatus').textContent.includes('词库已保存'));
+  const diskTerms=JSON.parse(fs.readFileSync(termFile,'utf8'));
+  check(aliases.every(alias=>diskTerms.some(t=>t.source===alias&&t.english==='Haze')),'two source aliases save against the real API with the same English name');
+  const nicknameTest=await api('test','POST',{direction:'outgoing',provider:'fast',text:aliases.join('、')});
+  check(nicknameTest.status===200&&nicknameTest.data.translation==='Haze, Haze','outgoing translation uses both aliases immediately without reloading');
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('#autoSaveStatus').textContent==='所有更改已保存');
+  await page.locator('nav [data-page="glossary"]').click();
+  check(await page.locator('#termRows input').first().inputValue()===aliases[1],'reopening settings reads the saved aliases');
+  const originalYamato=(await api('terms')).data.find(t=>t.source==='Yamato');
+  await page.locator('#addTerm').click();
+  const draft=page.locator('#termRows tr').first();
+  await draft.getByRole('textbox',{name:'匹配词',exact:true}).fill('Yamato');
+  await draft.getByRole('textbox',{name:'中文译名',exact:true}).fill(originalYamato.target);
+  await draft.getByRole('textbox',{name:'标准英文名',exact:true}).fill('Yamato');
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#termSaveStatus').textContent.includes('已存在'));
+  check(await draft.getByRole('textbox',{name:'匹配词',exact:true}).inputValue()==='Yamato','an identical duplicate is still flagged in the new row');
+  await draft.getByRole('textbox',{name:'中文译名',exact:true}).fill('尖尖头');
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#termSaveStatus').textContent.includes('尖尖头 → Yamato'));
+  let saved=(await api('terms')).data;
+  assert.deepEqual(saved.find(t=>t.source==='Yamato'),originalYamato);
+  check(saved.some(t=>t.source==='尖尖头'&&t.english==='Yamato'),'the reported three fields save as a new alias and preserve the canonical row');
+  const outgoing={direction:'outgoing',provider:'quality'};
+  const solo=await api('test','POST',{...outgoing,text:'尖尖头'});
+  const callout=await api('terms/preview','POST',{...outgoing,text:'集火尖尖头'});
+  check(solo.status===200&&solo.data.translation==='Yamato'&&callout.data.prepared==='集火Yamato','the saved nickname is used for direct sending and inside a callout');
+  await page.locator('#addTerm').click();
+  await draft.getByRole('textbox',{name:'匹配词',exact:true}).fill('尖头哥');
+  await draft.getByRole('textbox',{name:'标准英文名',exact:true}).fill('Yamato');
+  await page.locator('#saveTerms').click();
+  await page.waitForFunction(()=>document.querySelector('#termSaveStatus').textContent.includes('尖头哥 → Yamato'));
+  saved=(await api('terms')).data;
+  check(saved.some(t=>t.source==='尖头哥'&&t.target===originalYamato.target),'a new nickname can take its Chinese translation from a known English name');
+  check(errors.length===0,'glossary settings has no browser errors');
+  console.log(JSON.stringify({passed:checks.length,cloudCalls:0}));return;
+ }
  check(await page.locator('nav [data-page]').count()===9,'nine real navigation categories');check(await page.locator('.subnav [data-section]').count()===await page.locator('section.page>article.card').count(),'every subsection points to a real card');
  for(const id of ['overview','incoming','outgoing','shortcuts','providers','glossary','appearance','performance','diagnostics']){await page.locator('nav [data-page="'+id+'"]').click();await page.waitForFunction(p=>document.getElementById(p).hidden===false,id);check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal root overflow: '+id);}
  await page.locator('nav [data-page="outgoing"]').click();await page.locator('#subnav-outgoing [data-section]').last().click();await page.waitForFunction(()=>!window.DltSettingsNavigation.moving);const top=await page.locator('#contentScroll').evaluate(e=>e.scrollTop);await page.locator('#subnav-outgoing [data-section]').last().click();check(await page.locator('#contentScroll').evaluate(e=>e.scrollTop)===top,'same-subsection locate does not reset to top');check(await page.locator('#outgoing>.is-current-group').count()===1,'only selected subsection has a backing');

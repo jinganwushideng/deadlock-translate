@@ -2,7 +2,7 @@
 ALIASES = {
     'Seven': ['7', 'sev', '老七', '电男', '七爷', '赛文', '賽文', 'севеном', 'севену'],
     'Infernus': ['inferno', 'infer', '火男', 'инферно', 'инфернусу'],
-    'Vindicta': ['vindi', 'vind', '狙娘', '飞天狙', '飛天狙', 'винда', 'виндиктой'],
+    'Vindicta': ['vindi', 'vind', '狙娘', '飞天狙', '飛天狙', '女巫', 'винда', 'виндиктой'],
     'Grey Talon': ['gray talon', 'talon', 'gt', '弓男', '弓箭手', 'талон', 'серый коготь'],
     'Lady Geist': ['lady', 'lg', '鬼夫人', 'гейст', 'гейста'],
     'Abrams': ['abe', 'abram', '蓝胖', '蓝牛', '藍牛', 'blue cow', 'bluecow', 'blue bull', 'cow', 'bull', 'абрам', 'абрамсом', 'абрамсу', 'абрамсе'],
@@ -52,6 +52,10 @@ ALIASES = {
 
 # Short forms with several plausible meanings remain glossary hints, not forced replacements.
 AMBIGUOUS_ALIASES = {'跑酷','跑酷装','7','sev','infer','vin','vind','gt','talon','lady','lg','abe','goo','dyn','para','机器人','弓箭手','黏液','门卫','铁皮','金身','ethereal','bkb','cow','bull','wolf','werewolf','волчица','волчицы','волчицу','волчице','волчицей','оборотень','оборотня','警长','警長','刀姐'}
+
+# Confirmed by players. In outgoing chat a message containing only the nickname is a callout.
+STANDALONE_HERO_ALIASES = {'女巫'}
+AMBIGUOUS_ALIASES.update(STANDALONE_HERO_ALIASES)
 
 # Preferred historical Chinese name first, then alternate spellings. These are
 # recognition/display aliases, never replacements for the game's resource names.

@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace DeadlockTranslate;
-public record Term(string Source, string Target, string English, string Kind = "name", bool Ambiguous = false, string LegacyTarget = "");
+public record Term(string Source, string Target, string English, string Kind = "name", bool Ambiguous = false, string LegacyTarget = "",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool OutgoingStandalone = false);
 public record OutgoingTerm(string Chinese,string English,bool Ambiguous);
 public record TermMatchPreview(string Source,string Target,string Display,string Action,int Start,int Length);
 public record TermPreviewInput(string Text,string Direction="incoming",string Provider="quality",bool Bilingual=true,string NameStyle="current");
@@ -144,7 +146,7 @@ public sealed class Terms {
         var after=text[(index+length)..];var before=text[..index];
         return Regex.IsMatch(after,@"^\s+(?:(?:has|have)\s+(?:no\s+)?(?:ult|ultimate|cd|cooldown|stamina|hp|ammo)|used\s+(?:ult|ultimate|hook|bomb)|hooked|ult|ultimate|hook|bomb|clone|кд|(?:нет|без)\s+(?:ульты|ульта)|на\s+кд|сзади|лоу|пропал|low|dead|missing|no\s+(?:ult|ultimate)|is\s+(?:missing|behind|low|dead|one|vulnerable))\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50))
             || Regex.IsMatch(before,@"\b(?:focus|kill|against|stun|silence|save|protect|фокус|бей|бейте|убей|убейте|спаси|прикрой)\s+$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50))
-            || Regex.IsMatch(after,@"^\s*(?:没大招|有大招|大招|残血|丝血|消失|在后|换血|没技能|技能|开了|在(?:中路|左路|右路|蓝路|黄路|紫路|绿路))",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50))
+            || Regex.IsMatch(after,@"^\s*(?:[没沒有]大招|[没沒有]大(?![小事碍礙问問变化變化用关系關係])|大招|残血|丝血|消失|在后|换血|没技能|技能|开了|在(?:中路|左路|右路|蓝路|黄路|紫路|绿路))",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50))
             || Regex.IsMatch(before,@"(?:集火|攻击|小心|救(?:一下)?|抓|击杀|买|购买|买个|买一个|买一件|出个|出一个|出一件|出了|补个|补一个|装备|拆|守|推|护送|拿|运)\s*$",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50));
     }
     public (string Text, Dictionary<string,string> Map) Protect(string text, bool bilingual, bool resolveContext = false, bool namesOnly = false,bool chinese=true) {
@@ -163,16 +165,20 @@ public sealed class Terms {
         var matched=Match(text,snapshot)
             .Concat(MatchOutgoing(text,snapshot).Select(t=>new Term(t.Chinese,t.Chinese,t.English,"name",t.Ambiguous)))
             .DistinctBy(t=>t.Source,StringComparer.OrdinalIgnoreCase).OrderByDescending(t=>t.Source.Length).ToArray();
-        return ProtectMatches(text,matched,snapshot,false,true,true,false,preview);
+        return ProtectMatches(text,matched,snapshot,false,true,true,false,preview,outgoing:true);
     }
-    private PreparedTermText ProtectMatches(string text,Term[] matched,Snapshot snapshot,bool bilingual,bool resolveContext,bool namesOnly,bool chinese,bool collectPreview=false) {
+    private PreparedTermText ProtectMatches(string text,Term[] matched,Snapshot snapshot,bool bilingual,bool resolveContext,bool namesOnly,bool chinese,bool collectPreview=false,bool outgoing=false) {
         var map = new Dictionary<string,string>();
         var preview=new List<TermMatchPreview>();
         var spans=new List<(int Start,int Length,Term Term)>();
         foreach(var t in matched){
             foreach(Match match in snapshot.Matcher(t.Source).Matches(text)){
+                var standalone=outgoing&&t.OutgoingStandalone&&t.English.Length>0
+                    &&text[..match.Index].Trim().Length==0
+                    &&text[(match.Index+match.Length)..].Trim().TrimEnd('!','?','.','！','？','。').Trim().Length==0;
+                var hintOnly=namesOnly&&(t.Kind!="name"||outgoing&&string.IsNullOrWhiteSpace(t.English));
                 var action=spans.Any(s=>match.Index<s.Start+s.Length&&match.Index+match.Length>s.Start)?"overlap":
-                    namesOnly&&t.Kind!="name"?"hint":t.Ambiguous&&(!resolveContext||t.Kind!="name"||!HasGameContextAt(text,match.Index,match.Length))?"ambiguous":"protected";
+                    hintOnly?"hint":t.Ambiguous&&(!resolveContext||t.Kind!="name"||!standalone&&!HasGameContextAt(text,match.Index,match.Length))?"ambiguous":"protected";
                 if(collectPreview&&preview.Count<120)preview.Add(new(t.Source,t.Target,Display(t,bilingual,chinese),action,match.Index,match.Length));
                 if(action!="protected")continue;
                 spans.Add((match.Index,match.Length,t));

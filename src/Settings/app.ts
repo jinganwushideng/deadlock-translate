@@ -10,11 +10,11 @@ let gameRecoveryUntil=0,surfaceProbeUntil=0,surfaceProbeSequence=0;
 type NativeEditSession={id:string,field:HTMLInputElement|HTMLTextAreaElement,before:string,timer:ReturnType<typeof setTimeout>|null,watchdog:ReturnType<typeof setTimeout>|null,commitRequested:boolean,geometry:string,completion:Promise<boolean>,complete:(applied:boolean)=>void,resize:ResizeObserver|null};
 let nativeEditorSession:NativeEditSession|null=null,nativeEditorOwner='',nativeEditIntent=0;
 function publishSettingsState(state:'ready'|'offline'|'error'|'reconnect'){if(settingsReloadRequested)return;if(state==='ready'&&Date.now()<gameRecoveryUntil)return;if(state==='reconnect')gameRecoveryUntil=Date.now()+1200;if(inGame&&!settingsClosing){if(nativeEditorSession?.id)publishNativeGeometry(true);else document.title='DLTSETTINGS:'+(surfaceProbeUntil>Date.now()&&state==='ready'?'surfaceprobe:'+surfaceProbeSequence:state+':'+(++settingsSignal))+backgroundSuffix()+saveSuffix()+windowLoadSuffix();}}
-type Term={source:string,target:string,english:string,kind:string,ambiguous:boolean,legacyTarget?:string};
+type Term={source:string,target:string,english:string,kind:string,ambiguous:boolean,legacyTarget?:string,outgoingStandalone?:boolean};
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
 type ModelProfile='common'|'incoming'|'outgoing';
 let activeModelProfile:ModelProfile='common';
-const fields=['deepSeekCostPopup','buildTextAutoEnabled','buildTextContextChars','buildTextMaxTokens','buildTextMode','buildTextTargetLanguage','buildTextCustomLanguage','buildTextCustomLanguageCode','buildTextFastProvider','buildTextModel','buildTextThinking','settingsBackgroundMode','llmKeepAliveEnabled','llmKeepAliveSeconds','llmIndependentProfiles','incomingModel','outgoingModel','incomingThinking','outgoingThinking','outgoingSeparateBilingual','outgoingSplitLong','incomingTone','incomingCustomTone','incomingShowOwnTranslations','incomingShowHeroName','incomingShowAccountName','incomingHeroNamePosition','incomingOpacity','incomingFeedWidth','incomingFeedPosition','incomingFeedOffsetX','incomingFeedOffsetY','incomingDisplayMode','incomingFeedSeconds','incomingFeedLines','incomingTargetLanguage','incomingCustomLanguage','incomingCustomLanguageCode','outgoingTargetLanguage','outgoingCustomLanguage','outgoingCustomLanguageCode','enabled','incomingScope','mode','fastProvider','azureRegion','llmPreset','llmCustomBaseUrl','llmCustomModel','llmCustomIncomingModel','llmCustomOutgoingModel','llmCustomBuildTextModel','llmBaseUrl','model','llmMaxTokens','llmThinkingEnabled','llmThinkingApi','llmStreaming','outgoingUseContext','outgoingContextCount','outgoingContextSeconds','fontSize','bilingualNames','chineseNameStyle','scanIntervalMs','llmConcurrency','fastConcurrency','outgoingConcurrency','outgoingQueueLimit','fastTimeoutSeconds','llmTimeoutSeconds','transport','outgoingEnabled','outgoingHotkey','reserveSendSlot','outgoingMode','outgoingDisplayMode','outgoingTone','outgoingCustomTone','outgoingEnglishCase','outgoingTimeoutSeconds','outgoingFallbackFast'];
+const fields=['voiceInputEnabled','voiceInputTeamKey','voiceInputAllKey','voiceInputTranslateKey','voiceInputChannelKey','voiceInputDevice','voiceInputLanguage','deepSeekCostPopup','buildTextAutoEnabled','buildTextContextChars','buildTextMaxTokens','buildTextMode','buildTextTargetLanguage','buildTextCustomLanguage','buildTextCustomLanguageCode','buildTextFastProvider','buildTextModel','buildTextThinking','settingsBackgroundMode','llmKeepAliveEnabled','llmKeepAliveSeconds','llmIndependentProfiles','incomingModel','outgoingModel','incomingThinking','outgoingThinking','outgoingSeparateBilingual','outgoingSplitLong','incomingTone','incomingCustomTone','incomingShowOwnTranslations','incomingShowHeroName','incomingShowAccountName','incomingHeroNamePosition','incomingOpacity','incomingFeedWidth','incomingFeedPosition','incomingFeedOffsetX','incomingFeedOffsetY','incomingDisplayMode','incomingFeedSeconds','incomingFeedLines','incomingTargetLanguage','incomingCustomLanguage','incomingCustomLanguageCode','outgoingTargetLanguage','outgoingCustomLanguage','outgoingCustomLanguageCode','enabled','incomingScope','mode','fastProvider','azureRegion','llmPreset','llmCustomBaseUrl','llmCustomModel','llmCustomIncomingModel','llmCustomOutgoingModel','llmCustomBuildTextModel','llmBaseUrl','model','llmMaxTokens','llmThinkingEnabled','llmThinkingApi','llmStreaming','outgoingUseContext','outgoingContextCount','outgoingContextSeconds','fontSize','bilingualNames','chineseNameStyle','scanIntervalMs','llmConcurrency','fastConcurrency','outgoingConcurrency','outgoingQueueLimit','fastTimeoutSeconds','llmTimeoutSeconds','transport','outgoingEnabled','outgoingHotkey','reserveSendSlot','outgoingMode','outgoingDisplayMode','outgoingTone','outgoingCustomTone','outgoingEnglishCase','outgoingTimeoutSeconds','outgoingFallbackFast'];
 type QuickMessage={id:string,text:string,hotkey:string,channel:string,enabled:boolean};
 let quickMessages:QuickMessage[]=[];
 type LanguageBinding={id:string,language:string,name:string,code:string,hotkey:string,enabled:boolean};
@@ -93,7 +93,7 @@ $('llmBaseUrl').addEventListener('input',()=>{
 bind('deepseekGetKey',async()=>{
  await api('providers/deepseek/key','POST',{});notice('已在系统默认浏览器打开 DeepSeek 平台。');
 });
-function loadFields(data:any){resetPresetModels();current={deepSeekCostPopup:true,llmPreset:'auto',llmCustomBaseUrl:'',llmCustomModel:'',llmCustomIncomingModel:'',llmCustomOutgoingModel:'',llmCustomBuildTextModel:'',llmBaseUrl:DEEPSEEK_URL,model:'deepseek-flash',buildTextAutoEnabled:false,buildTextContextChars:6000,buildTextMaxTokens:8192,buildTextMode:'fast',buildTextTargetLanguage:'zh-Hans',buildTextCustomLanguage:'',buildTextCustomLanguageCode:'',buildTextFastProvider:'common',buildTextModel:'',buildTextThinking:null,settingsBackgroundMode:'static',llmKeepAliveEnabled:false,llmKeepAliveSeconds:120,llmIndependentProfiles:!!(data.settings.incomingModel||data.settings.outgoingModel||data.settings.incomingThinking!=null||data.settings.outgoingThinking!=null),incomingModel:'',outgoingModel:'',incomingThinking:null,outgoingThinking:null,outgoingSeparateBilingual:false,outgoingSplitLong:false,incomingTone:'none',incomingCustomTone:'',incomingShowOwnTranslations:true,incomingShowHeroName:true,incomingShowAccountName:true,incomingHeroNamePosition:'before',incomingOpacity:90,incomingFeedWidth:340,incomingFeedPosition:'center-left',incomingFeedOffsetX:28,incomingFeedOffsetY:0,incomingDisplayMode:'native',incomingFeedSeconds:8,incomingFeedLines:3,outgoingTone:'none',outgoingCustomTone:'',outgoingEnglishCase:'normal',llmMaxTokens:4096,llmThinkingEnabled:true,llmThinkingApi:'auto',llmStreaming:true,outgoingUseContext:false,outgoingContextCount:3,outgoingContextSeconds:30,chineseNameStyle:'current',outgoingHotkey:'LAlt+Space',incomingTargetLanguage:'zh-Hans',incomingCustomLanguage:'',incomingCustomLanguageCode:'',outgoingTargetLanguage:'en',outgoingCustomLanguage:'',outgoingCustomLanguageCode:'',...data.settings};current.llmPreset=resolveLlmPreset(current.llmPreset,String(current.llmBaseUrl));for(const key of fields){const input=$<HTMLInputElement>(key);if(input.type==='checkbox')input.checked=!!current[key];else input.value=current[key]==null?'':String(current[key]);}$<HTMLInputElement>('azureKey').placeholder=data.hasAzureKey?'已保存 · 留空保持不变':'尚未配置';$<HTMLInputElement>('llmKey').placeholder=data.hasLlmKey?'已保存 · 留空保持不变':'尚未配置';quickMessages=Array.isArray(data.settings.quickMessages)?data.settings.quickMessages.map((q:QuickMessage)=>({...q})):[];drawQuickMessages();outgoingLanguageBindings=clone(data.settings.outgoingLanguageBindings||[]);drawLanguageBindings();refreshSettingsBackground();refreshPreview();refreshIncomingDisplay();refreshLanguageFields();refreshBuildTextProfile();syncChordOptions();refreshContextFields();refreshToneFields();refreshIncomingToneFields();refreshModelTabs();refreshLlmPreset();refreshDeepSeekVisibility();rememberLoadedConfig(data);}
+function loadFields(data:any){resetPresetModels();current={voiceInputEnabled:false,voiceInputTeamKey:'',voiceInputAllKey:'',voiceInputTranslateKey:'',voiceInputChannelKey:'',voiceInputDevice:'',voiceInputLanguage:'zh',deepSeekCostPopup:true,llmPreset:'auto',llmCustomBaseUrl:'',llmCustomModel:'',llmCustomIncomingModel:'',llmCustomOutgoingModel:'',llmCustomBuildTextModel:'',llmBaseUrl:DEEPSEEK_URL,model:'deepseek-flash',buildTextAutoEnabled:false,buildTextContextChars:6000,buildTextMaxTokens:8192,buildTextMode:'fast',buildTextTargetLanguage:'zh-Hans',buildTextCustomLanguage:'',buildTextCustomLanguageCode:'',buildTextFastProvider:'common',buildTextModel:'',buildTextThinking:null,settingsBackgroundMode:'static',llmKeepAliveEnabled:false,llmKeepAliveSeconds:120,llmIndependentProfiles:!!(data.settings.incomingModel||data.settings.outgoingModel||data.settings.incomingThinking!=null||data.settings.outgoingThinking!=null),incomingModel:'',outgoingModel:'',incomingThinking:null,outgoingThinking:null,outgoingSeparateBilingual:false,outgoingSplitLong:false,incomingTone:'none',incomingCustomTone:'',incomingShowOwnTranslations:true,incomingShowHeroName:true,incomingShowAccountName:true,incomingHeroNamePosition:'before',incomingOpacity:90,incomingFeedWidth:340,incomingFeedPosition:'center-left',incomingFeedOffsetX:28,incomingFeedOffsetY:0,incomingDisplayMode:'native',incomingFeedSeconds:8,incomingFeedLines:3,outgoingTone:'none',outgoingCustomTone:'',outgoingEnglishCase:'normal',llmMaxTokens:4096,llmThinkingEnabled:true,llmThinkingApi:'auto',llmStreaming:true,outgoingUseContext:false,outgoingContextCount:3,outgoingContextSeconds:30,chineseNameStyle:'current',outgoingHotkey:'LAlt+Space',incomingTargetLanguage:'zh-Hans',incomingCustomLanguage:'',incomingCustomLanguageCode:'',outgoingTargetLanguage:'en',outgoingCustomLanguage:'',outgoingCustomLanguageCode:'',...data.settings};current.llmPreset=resolveLlmPreset(current.llmPreset,String(current.llmBaseUrl));keepVoiceDevice(String(current.voiceInputDevice||''));for(const key of fields){const input=$<HTMLInputElement>(key);if(input.type==='checkbox')input.checked=!!current[key];else input.value=current[key]==null?'':String(current[key]);}$<HTMLInputElement>('azureKey').placeholder=data.hasAzureKey?'已保存 · 留空保持不变':'尚未配置';$<HTMLInputElement>('llmKey').placeholder=data.hasLlmKey?'已保存 · 留空保持不变':'尚未配置';quickMessages=Array.isArray(data.settings.quickMessages)?data.settings.quickMessages.map((q:QuickMessage)=>({...q})):[];drawQuickMessages();outgoingLanguageBindings=clone(data.settings.outgoingLanguageBindings||[]);drawLanguageBindings();refreshSettingsBackground();refreshPreview();refreshIncomingDisplay();refreshLanguageFields();refreshBuildTextProfile();syncChordOptions();refreshContextFields();refreshToneFields();refreshIncomingToneFields();refreshModelTabs();refreshLlmPreset();refreshDeepSeekVisibility();refreshVoiceInputSetup();rememberLoadedConfig(data);}
 const titles:Record<string,string>={overview:'概览',incoming:'接收翻译',outgoing:'发送翻译',buildText:'出装翻译',shortcuts:'快捷键与短语',providers:'翻译服务',glossary:'游戏词库',appearance:'显示样式',performance:'性能与队列',diagnostics:'诊断与日志'};
 let navigationIntent=0;
 async function selectPage(page:string,section?:string){
@@ -129,23 +129,42 @@ function updateTermsHint(matches?:number){
  const count=matches??(!search?terms.length:terms.filter(t=>[t.source,t.target,t.legacyTarget||'',t.english].some(value=>value.toLowerCase().includes(search))).length);
  $('termHint').textContent='共 '+terms.length+' 条；匹配 '+count+' 条，最多显示 120 条。搜索可定位其余词条。'+(termsDirty?' · 词库修改尚未保存':'');
 }
+function setTermSaveStatus(message:string,error=false){
+ const status=$('termSaveStatus');status.textContent=message;status.classList.toggle('error',error);
+}
+const newTermRows=new WeakSet<Term>();
 function drawTerms(focusIndex?:number){
  const search=$<HTMLInputElement>('termSearch').value.toLowerCase();const body=$('termRows');clearChildren(body);
  const matches=terms.map((t,index)=>({t,index})).filter(({t})=>[t.source,t.target,t.legacyTarget||'',t.english].some(s=>s.toLowerCase().includes(search)));
- const labels={source:'原词',target:'当前中文',legacyTarget:'旧中文（可选）',english:'英文全称'};
+ const labels={source:'匹配词',target:'中文译名',legacyTarget:'旧中文（可选）',english:'标准英文名'};
  for(const {t,index} of focusIndex===undefined?matches.slice(0,120):[{t:terms[focusIndex],index:focusIndex},...matches.filter(row=>row.index!==focusIndex).slice(0,119)]){
   const tr=document.createElement('tr');tr.dataset.termIndex=String(index);
   for(const key of ['source','target','legacyTarget','english'] as const){const td=document.createElement('td');const input=document.createElement('input');input.maxLength=key==='source'||key==='english'?100:150;input.value=t[key]||'';input.setAttribute('aria-label',labels[key]);if(key==='legacyTarget')input.placeholder='留空沿用当前名';input.addEventListener('input',()=>t[key]=input.value);td.append(input);tr.append(td);}
   const typeCell=document.createElement('td');const select=document.createElement('select');select.setAttribute('aria-label','类型');
   for(const [v,label] of [['name','专名'],['phrase','短语']]){const o=document.createElement('option');o.value=v;o.textContent=label;select.append(o);}select.value=t.kind;select.addEventListener('change',()=>t.kind=select.value);typeCell.append(select);tr.append(typeCell);
   const td=document.createElement('td');const check=document.createElement('input');check.type='checkbox';check.checked=t.ambiguous;check.setAttribute('aria-label','歧义词');check.addEventListener('change',()=>t.ambiguous=check.checked);td.append(check);tr.append(td);
-  const delCell=document.createElement('td');const del=document.createElement('button');del.textContent='×';del.setAttribute('aria-label','删除 '+t.source);del.addEventListener('click',()=>{terms.splice(index,1);drawTerms();markTermsDraft();});delCell.append(del);tr.append(delCell);body.append(tr);
+  const delCell=document.createElement('td');const del=document.createElement('button');del.textContent='×';del.setAttribute('aria-label','删除 '+t.source);
+  del.addEventListener('click',async()=>{
+   del.disabled=true;
+   try{
+    await commitNativeEditor();
+    const currentIndex=terms.indexOf(t);
+    if(currentIndex>=0){terms.splice(currentIndex,1);drawTerms();markTermsDraft();}
+   }catch(e){setTermSaveStatus((e as Error).message,true);}
+   finally{del.disabled=false;}
+  });
+  delCell.append(del);tr.append(delCell);body.append(tr);
  }
  updateTermsHint(matches.length);
 }
 $('termSearch').addEventListener('input',()=>drawTerms());
-bind('addTerm',()=>{terms.unshift({source:'',target:'',legacyTarget:'',english:'',kind:'name',ambiguous:false});$<HTMLInputElement>('termSearch').value='';drawTerms();markTermsDraft();});
-const sameTerm=(a?:Term,b?:Term)=>a===b||!!a&&!!b&&a.source===b.source&&a.target===b.target&&a.english===b.english&&a.kind===b.kind&&a.ambiguous===b.ambiguous&&(a.legacyTarget||'')===(b.legacyTarget||'');
+bind('addTerm',async()=>{
+ await commitNativeEditor();
+ const row={source:'',target:'',legacyTarget:'',english:'',kind:'name',ambiguous:false};
+ newTermRows.add(row);terms.unshift(row);
+ $<HTMLInputElement>('termSearch').value='';drawTerms();markTermsDraft();
+});
+const sameTerm=(a?:Term,b?:Term)=>a===b||!!a&&!!b&&a.source===b.source&&a.target===b.target&&a.english===b.english&&a.kind===b.kind&&a.ambiguous===b.ambiguous&&(a.legacyTarget||'')===(b.legacyTarget||'')&&!!a.outgoingStandalone===!!b.outgoingStandalone;
 function mergeTerms(base:Term[],local:Term[],remote:Term[]){
  const index=(list:Term[])=>new Map(list.map(t=>[t.source.toUpperCase(),t]));
  const before=index(base),mine=index(local),theirs=index(remote);
@@ -176,20 +195,50 @@ function showTermConflicts(remoteTag:string,remote:Term[]){
   label.append(select);box.append(label);
  }
  const apply=document.createElement('button');apply.textContent='采用选择并合并词库';
- apply.onclick=()=>{
+ apply.onclick=async()=>{
+  try{await commitNativeEditor();}catch(e){setTermSaveStatus((e as Error).message,true);return;}
   if(JSON.stringify(terms)!==revision){showTermConflicts(remoteTag,remote);notice('词库草稿已变化，请重新核对冲突。',true);return;}
   conflicts.forEach((item,i)=>{const value=choices[i].value==='mine'?item.mine:item.theirs;if(value)merged.set(item.key,value);else merged.delete(item.key);});
-  terms=Array.from(merged.values());savedTerms=remote;termsTag=remoteTag;termsDirty=true;box.hidden=true;drawTerms();notice('已合并，点击“保存词库”写入。');
+  terms=Array.from(merged.values());savedTerms=remote;termsTag=remoteTag;box.hidden=true;drawTerms();markTermsDraft();setTermSaveStatus('已合并，请点击「保存词库」。');
  };
  box.append(apply);
 }
+function prepareNewTermAliases(){
+ const canonicalNames=new Map(terms.filter(t=>!newTermRows.has(t)&&t.kind==='name'&&t.english&&t.source.toUpperCase()===t.english.toUpperCase())
+  .map(t=>[t.english.toUpperCase(),t]));
+ const sources=new Set(terms.map(t=>t.source.trim().toUpperCase()));
+ const addedAliases:string[]=[];
+ for(const row of terms){
+  if(!newTermRows.has(row)||row.kind!=='name')continue;
+  const source=row.source.trim(),target=row.target.trim(),english=row.english.trim();
+  const canonical=canonicalNames.get((english||source).toUpperCase());
+  if(!source||!canonical)continue;
+  if(source.toUpperCase()===canonical.english.toUpperCase()){
+   // The existing name row owns the English match. A new Chinese name on a
+   // duplicate draft is a separate alias and retains the original name row.
+   const aliasKey=target.toUpperCase();
+   if(target.length>100||!/[\u3400-\u9fff]/.test(target)||sources.has(aliasKey)||target===canonical.target)continue;
+   row.source=target;row.target=target;row.english=canonical.english;
+   sources.add(aliasKey);addedAliases.push(target+' → '+canonical.english);
+  }else if(!target){
+   row.target=canonical.target;row.english=canonical.english;
+   addedAliases.push(source+' → '+canonical.english);
+  }
+ }
+ if(addedAliases.length){drawTerms();markTermsDraft();}
+ return addedAliases;
+}
 function validateTermsDraft(snapshot:Term[]){
- const seen=new Set<string>();
+ const seen=new Map<string,number>();
  for(let i=0;i<snapshot.length;i++){
   const row=snapshot[i],key=row.source.toUpperCase();
-  const issue=!row.source.trim()?'填写原词':!row.target.trim()?'填写当前中文':seen.has(key)?'原词重复，请编辑已有词条':'';
-  if(issue){focusTerm(i);throw new Error('第 '+(i+1)+' 条：'+issue);}
-  seen.add(key);
+  const issue=!row.source.trim()?'请填写匹配词。':!row.target.trim()?'请填写中文译名。':seen.has(key)?
+   '匹配词「'+row.source+'」已存在。添加昵称时，匹配词填你打字用的叫法，例如「尖尖头」，标准英文名填「Yamato」。':'';
+  if(issue){
+   const first=seen.get(key),index=first!==undefined&&newTermRows.has(terms[first])?first:i;
+   focusTerm(index);throw new Error('第 '+(index+1)+' 条：'+issue);
+  }
+  seen.set(key,i);
  }
 }
 function focusTerm(index:number){
@@ -199,36 +248,57 @@ function focusTerm(index:number){
 }
 bind('saveTerms',async()=>{
  if(!settingsInitialized)return;
- if(settingsComposing)throw new Error('请先完成输入法选词。');
- await commitNativeEditor();
- let snapshot=clone(terms);
- validateTermsDraft(snapshot);
- for(let attempt=0;attempt<2;attempt++){
-  try{
-   await api('terms','PUT',snapshot);
-   savedTerms=snapshot;termsDirty=JSON.stringify(terms)!==JSON.stringify(snapshot);
-   $('termConflicts').hidden=true;updateTermsHint();
-   notice(termsDirty?'词库已保存，后续修改仍待保存。':'词库已保存，免费翻译缓存已清除。');
-   return;
-  }catch(e){
-   if(!(e instanceof ApiError)||e.status!==409||attempt!==0){
-    const row=/^第 (\d+) 条/.exec((e as Error).message);
-    if(row&&JSON.stringify(terms)===JSON.stringify(snapshot)){
-     focusTerm(Number(row[1])-1);
+ termsSaving=true;$<HTMLButtonElement>('discardTermsDraft').disabled=true;
+ try{
+  if(settingsComposing)throw new Error('请先完成输入法选词。');
+  setTermSaveStatus('正在保存词库…');
+  await commitNativeEditor();
+  const addedAliases=prepareNewTermAliases();
+  for(let attempt=0;attempt<2;attempt++){
+   const draftRows=terms.slice(),snapshot=clone(draftRows);
+   validateTermsDraft(snapshot);
+   try{
+    await api('terms','PUT',snapshot);
+    draftRows.forEach(row=>newTermRows.delete(row));
+    savedTerms=snapshot;termsDirty=JSON.stringify(terms)!==JSON.stringify(snapshot);
+    $('termConflicts').hidden=true;updateTermsHint();
+    const message=termsDirty?'词库已保存，后续修改仍待保存。':addedAliases.length===1?'词库已保存。'+addedAliases[0]+'。':'词库已保存，发送翻译已使用新词库。';
+    setTermSaveStatus(message);notice(message);
+    return;
+   }catch(e){
+    if(!(e instanceof ApiError)||e.status!==409){
+     const row=/^第 (\d+) 条/.exec((e as Error).message);
+     if(row&&JSON.stringify(terms)===JSON.stringify(snapshot))focusTerm(Number(row[1])-1);
+     throw e;
     }
-    throw e;
+    const latest=await api('terms');
+    await commitNativeEditor();
+    validateTermsDraft(terms);
+    const {merged,conflicts}=mergeTerms(savedTerms,terms,latest.items);
+    if(conflicts.length||attempt===1){showTermConflicts(latest.tag,latest.items);throw e;}
+    terms=Array.from(merged.values());termsTag=latest.tag;savedTerms=latest.items;drawTerms();markTermsDraft();
    }
-   const latest=await api('terms');
-   const {merged,conflicts}=mergeTerms(savedTerms,terms,latest.items);
-   if(conflicts.length){showTermConflicts(latest.tag,latest.items);throw e;}
-   snapshot=clone(Array.from(merged.values()));terms=clone(snapshot);
-   termsTag=latest.tag;savedTerms=latest.items;drawTerms();
   }
+ }catch(e){
+  const message='词库未保存，当前草稿已保留。'+(e as Error).message;
+  setTermSaveStatus(message,true);throw new Error(message);
+ }finally{
+  termsSaving=false;$<HTMLButtonElement>('discardTermsDraft').disabled=false;
  }
 });
 bind('exportTerms',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(terms,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='deadlock-terms.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 bind('importTerms',()=>$<HTMLInputElement>('termFile').click());
-$('termFile').addEventListener('change',async()=>{try{const file=$<HTMLInputElement>('termFile').files?.[0];if(!file)return;if(file.size>2*1024*1024)throw new Error('词库文件过大');const values=JSON.parse(await fileText(file));if(!Array.isArray(values)||values.length>5000||values.some(t=>!t||typeof t.source!=='string'||typeof t.target!=='string'||typeof t.english!=='string'||!['name','phrase'].includes(t.kind)||typeof t.ambiguous!=='boolean'||(t.legacyTarget!==undefined&&(typeof t.legacyTarget!=='string'||t.legacyTarget.length>150))))throw new Error('词库格式不正确');terms=values;drawTerms();markTermsDraft();notice('已载入词库，点击“保存词库”后生效。');}catch(e){notice((e as Error).message,true);}});
+$('termFile').addEventListener('change',async()=>{
+ const input=$<HTMLInputElement>('termFile'),file=input.files?.[0];if(!file)return;
+ try{
+  if(file.size>2*1024*1024)throw new Error('词库文件过大');
+  const values=JSON.parse(await fileText(file));
+  if(!Array.isArray(values)||values.length>5000||values.some(t=>!t||typeof t.source!=='string'||typeof t.target!=='string'||typeof t.english!=='string'||!['name','phrase'].includes(t.kind)||typeof t.ambiguous!=='boolean'||(t.legacyTarget!==undefined&&(typeof t.legacyTarget!=='string'||t.legacyTarget.length>150))||(t.outgoingStandalone!==undefined&&typeof t.outgoingStandalone!=='boolean')))throw new Error('词库格式不正确');
+  await commitNativeEditor();
+  terms=values;drawTerms();markTermsDraft();notice('已载入词库，点击「保存词库」后生效。');
+ }catch(e){setTermSaveStatus((e as Error).message,true);notice((e as Error).message,true);}
+ finally{input.value='';}
+});
 bind('stop',async()=>{await api('stop','POST',{});notice('后台已停止。再次使用时请运行启动器。');});
 let statusRefreshing=false,outgoingRefreshing=false;
 async function refresh(){if(statusRefreshing||settingsClosing)return;statusRefreshing=true;try{const status=await api('status');drawLlmRequests(status.requests?.recent||status.diagnostics?.llmRequests||[]);$('messages').textContent=status.engine.messages;$('pending').textContent=status.engine.pending;if(status.requests){const r=status.requests;$('queueStatus').textContent='免费翻译并发 '+r.fast.active+'/'+r.fast.limit+' · 大模型翻译并发 '+r.llm.active+'/'+r.llm.limit+' · 服务排队 '+(r.fast.waiting+r.llm.waiting)+' · 待发送 '+(status.sending?.pending||0);const receive=status.engine.scheduling;if(receive)$('queueStatus').textContent+=' · 接收'+(receive.burst?'并发':'逐条')+'（未完成 '+receive.unfinished+' / 触发 '+receive.threshold+'）';}$('termCount').textContent=status.terms;$('connection').textContent='后台已连接';renderDiagnostics(status.diagnostics);drawKeepAlive(status.diagnostics?.keepAlive);if(settingsInitialized)publishSettingsState('ready');$('gameStatus').textContent=status.engine.connected?'游戏已连接 · 译文仅对自己显示':'等待游戏连接 · 后台可以先进行试译';const m=status.gameEvidence?.metrics;$('displayStatus').textContent=m?'显示诊断：暂缓 '+(m.hudWaits||0)+' · 重试恢复 '+(m.hudRetryRecovered||0)+' · 原生过期 '+(m.hudNativeExpired||0)+' · 面板销毁 '+(m.hudPanelGone||0)+' · 重试结束 '+(m.hudRetryDropped||0)+' · 独立区写入 '+(m.feedRendered||0)+'（写入不等同于屏幕可见）':'';$('readerStatus').textContent=m?'读取计数：聊天栏 '+(m.regularRows||0)+' / HUD '+(m.hudRows||0)+' / 大厅 '+(m.lobbyRows||0)+(m.hotkeyDrops?'。有 '+(m.hotkeyDrops)+' 次快捷键未能取到聊天输入，可再按一次当前发送快捷键。':m.channelWaits?'。有 '+(m.channelWaits)+' 条消息等待频道确认，原文已保留。':m.channelFaults?'。检测到发送频道可能不一致，已暂停继续发送。':''):'';}catch(e){$('connection').textContent='后台未连接';renderRuntimeIssues(null,e);publishSettingsState('offline');}finally{statusRefreshing=false;}}
@@ -236,7 +306,7 @@ Promise.all([api('config'),api('terms')]).then(([c,t])=>{loadFields(c);terms=t.i
 
 function drawKeepAlive(status:any){const node=document.getElementById('llmKeepAliveStatus');if(!node)return;if(!status){node.textContent='保活状态暂不可用，请确认后台版本。';return;}const labels:Record<string,string>={disabled:'自动保活已关闭',waiting:'等待下次保活',warming:'预热中，真实翻译会优先执行','waiting-for-game':'等待游戏连接',unconfigured:'未配置大模型密钥',unused:'当前未启用大模型翻译',busy:'翻译繁忙，本次保活跳过',cooldown:'翻译服务正在冷却，保活暂缓',succeeded:'预热成功',failed:'保活失败，稍后按退避间隔重试','rate-limited':'服务限流，已延后保活',unauthorized:'密钥或权限错误，保存修正后的设置再试',interrupted:'已给真实翻译让路',cancelled:'保活已取消','configuration-changed':'配置已变更，等待新设置'};node.textContent=(labels[status.state]||'等待保活')+' · 请求 '+(status.requests||0)+' / 成功 '+(status.successes||0)+(status.lastAttemptUtc?' · 最近 '+new Date(status.lastAttemptUtc).toLocaleTimeString()+' / '+status.lastElapsedMs+' ms':'')+(status.httpStatus&&status.httpStatus!==200?' · HTTP '+status.httpStatus:'');}
 bind('llmKeepAliveNow',async()=>{const button=$<HTMLButtonElement>('llmKeepAliveNow');button.disabled=true;try{notice('正在按已保存配置预热一次，可能消耗少量 API 额度。');const result=await api('llm/keep-alive','POST',{});drawKeepAlive(result);notice(result.state==='succeeded'?'模型预热完成。':'本次预热结束，请查看保活状态。');}catch(e){notice((e as Error).message,true);}finally{button.disabled=false;}});
-type OutgoingItem={waitReason?:string;partStatuses?:{part:number;state:string;submittedAt?:number;observedAt?:number;reason?:string}[];partIndex?:number;partCount?:number;sendCharacters?:number;sendCharacterLimit?:number;truncated?:boolean;omittedCharacters?:number;isPreset?:boolean;translation?:string,targetLanguage?:string,targetLanguageName?:string,id:string,state:string,channel:string,displayMode:string,original:string,english:string,error:string,sendText:string};
+type OutgoingItem={waitReason?:string;isVoice?:boolean;canRetryVoice?:boolean;partStatuses?:{part:number;state:string;submittedAt?:number;observedAt?:number;reason?:string}[];partIndex?:number;partCount?:number;sendCharacters?:number;sendCharacterLimit?:number;truncated?:boolean;omittedCharacters?:number;isPreset?:boolean;translation?:string,targetLanguage?:string,targetLanguageName?:string,id:string,state:string,channel:string,displayMode:string,original:string,english:string,error:string,sendText:string};
 type OutgoingRow={row:HTMLElement,state:HTMLElement,original:HTMLElement,english:HTMLElement,reason:HTMLElement,pending:HTMLElement,copySend:HTMLButtonElement,retry:HTMLElement,item:OutgoingItem};
 const outgoingRows=new Map<string,OutgoingRow>();
 function putText(node:HTMLElement,value:string){if(node.textContent!==value)node.textContent=value;}
@@ -269,9 +339,18 @@ function drawOutgoing(items:OutgoingItem[]){
   putText(view.pending,(item.state==='failed'?'当前段保留内容：':item.state==='submitted'?'提交内容：':'待发送：')+(item.sendText||'（尚未生成）')+lengthHint);
   view.copySend.hidden=!item.sendText;
   const retryParts=item.state==='submitted'?(item.partStatuses||[]).filter(p=>p.state==='echo_unobserved'):[];
-  const retryKey=retryParts.map(p=>p.part).join(',');
+  const retryKey=retryParts.map(p=>p.part).join(',')+(item.canRetryVoice?'voice':'');
   if(view.retry.dataset.parts!==retryKey){
    view.retry.dataset.parts=retryKey;clearChildren(view.retry);
+   if(item.canRetryVoice){
+    const button=document.createElement('button');button.textContent='重试语音翻译';
+    button.onclick=async()=>{
+     button.disabled=true;
+     try{await api('outgoing/retry','POST',{id:item.id,part:-1});notice('已加入原频道的翻译发送队列。');}
+     catch(e){notice((e as Error).message,true);button.disabled=false;}
+    };
+    view.retry.append(button);
+   }
    for(const part of retryParts){
     const button=document.createElement('button');button.textContent='重新提交第 '+(part.part+1)+' 段';
     let confirmed=false;
@@ -436,7 +515,7 @@ async function pollNativeEditor(session:NativeEditSession){
     finishNativeEditor(session,'编辑结果无效，原内容保持不变。',true);
    }else{
     field.value=result.value;field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
-    finishNativeEditor(session,'文字已更新，等待自动保存。',false,true);scheduleAutoSave();
+    finishNativeEditor(session,field.closest('#termRows')?'文字已更新，请点击「保存词库」。':'文字已更新，等待自动保存。',false,true);scheduleAutoSave();
    }
    try{await api(nativeEditorPath(session.id),'DELETE');}catch{}return;
   }
@@ -781,7 +860,8 @@ async function pollRecording(generation:number,id:string){
   if(generation!==recordingGeneration)return;
   if(result.state==='completed'){
    if(typeof result.binding!=='string'||!result.binding.length||result.binding.length>64)throw new Error('录制返回无效，请使用按键选项。');
-   if(recordingTarget.startsWith('language:')){const item=outgoingLanguageBindings.find(q=>q.id===recordingTarget.slice(9));if(item)item.hotkey=result.binding;drawLanguageBindings();}else if(recordingTarget){const item=quickMessages.find(q=>q.id===recordingTarget);if(item)item.hotkey=result.binding;drawQuickMessages();}else{$<HTMLInputElement>('outgoingHotkey').value=result.binding;syncChordOptions();}await stopRecording();markSettingsDraft();notice('已录制 '+result.label+'，将自动保存；没有发送聊天。');return;
+   if(recordingTarget.startsWith('voice:')){$<HTMLInputElement>(recordingTarget.slice(6)).value=result.binding;refreshVoiceInputSetup();}else if(recordingTarget.startsWith('language:')){const item=outgoingLanguageBindings.find(q=>q.id===recordingTarget.slice(9));if(item)item.hotkey=result.binding;drawLanguageBindings();}else if(recordingTarget){const item=quickMessages.find(q=>q.id===recordingTarget);if(item)item.hotkey=result.binding;drawQuickMessages();}else{$<HTMLInputElement>('outgoingHotkey').value=result.binding;syncChordOptions();}
+   markSettingsDraft();void stopRecording();notice('已录制 '+result.label+'，将自动保存；没有发送聊天。');return;
   }
   if(!['arming','recording'].includes(result.state)){await stopRecording();notice(result.error||'已取消录制。',!!result.error);return;}
   notice(result.error||(result.state==='arming'?'正在启用录制，请先松开按键…':'请按组合键（剩余 '+result.secondsRemaining+' 秒）；Esc 取消，不发送聊天。'),!!result.error);
@@ -799,6 +879,35 @@ async function startRecording(target=''){
  }catch(e){if(generation!==recordingGeneration)return;await stopRecording();notice((e as Error).message+' 可直接使用下方按键选项。',true);}
 }
 bind('recordHotkey',()=>startRecording());
+for(const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-record-voice]'))){
+ button.onclick=async()=>{try{await commitNativeEditor();await startRecording('voice:'+button.dataset.recordVoice);}catch(e){notice((e as Error).message,true);}};
+}
+function refreshVoiceInputSetup(){
+ $('voiceInputSetup').hidden=!$<HTMLInputElement>('voiceInputEnabled').checked||
+  ['voiceInputTeamKey','voiceInputAllKey'].some(id=>$<HTMLInputElement>(id).value.trim());
+}
+for(const event of ['input','change'])$('voiceInputCard').addEventListener(event,refreshVoiceInputSetup);
+function keepVoiceDevice(id:string){
+ const select=$<HTMLSelectElement>('voiceInputDevice');
+ if(id&&!Array.from(select.options).some(option=>option.value===id))select.add(new Option('已选麦克风（当前未列出）',id));
+}
+async function refreshVoiceDevices(){
+ const select=$<HTMLSelectElement>('voiceInputDevice');
+ try{
+  const devices:{id:string;name:string}[]=await api('voice/microphones');
+  const selected=select.value;
+  select.replaceChildren(new Option('Windows 默认输入设备',''));
+  for(const device of devices)select.add(new Option(device.name,device.id));
+  keepVoiceDevice(selected);select.value=selected;
+  putText($('voiceInputDeviceStatus'),'');
+ }catch(e){putText($('voiceInputDeviceStatus'),(e as Error).message);}
+}
+bind('refreshVoiceInputDevices',()=>refreshVoiceDevices());
+document.querySelector('[data-section="voiceInputCard"]')?.addEventListener('click',()=>void refreshVoiceDevices());
+document.querySelector('#voiceInputCard [data-goto-section]')?.addEventListener('click',()=>{
+ document.querySelector<HTMLButtonElement>('[data-page="incoming"]')?.click();
+ document.querySelector<HTMLButtonElement>('[data-section="teammateVoiceCard"]')?.click();
+});
 bind('resetHotkey',async()=>{await stopRecording();$<HTMLInputElement>('outgoingHotkey').value='LAlt+Space';syncChordOptions();markSettingsDraft();notice('已恢复默认左 Alt＋空格，将自动保存。');});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)void stopRecording();});
 window.addEventListener('pagehide',()=>void stopRecording());
@@ -1123,7 +1232,7 @@ function refreshDeepSeekVisibility(){
  if(!$('providers').hidden)void refreshDeepSeekUsage();
 }
 let spendRefresh=false,expenseToastTimer:ReturnType<typeof setTimeout>|undefined;
-const spendCategories:Record<string,string>={incoming:'接收翻译',outgoing:'发送翻译',build:'出装翻译',probe:'试译与连接测试',keepalive:'预热'};
+const spendCategories:Record<string,string>={incoming:'接收翻译',outgoing:'发送翻译',build:'出装翻译',voice:'队友语音',probe:'试译与连接测试',keepalive:'预热'};
 function formatBalance(data:any,details=false){
  if(!data.balance?.length)return data.configured?'余额等待查询':'请先保存 DeepSeek API 密钥';
  const amounts=data.balance.map((b:any)=>b.currency+' '+b.total+(details?'（赠金 '+b.granted+'，充值 '+b.toppedUp+'）':'')).join(' / ');

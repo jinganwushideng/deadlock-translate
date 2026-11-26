@@ -10,7 +10,7 @@ module.exports=function world(source=defaultSource){
   SetURL(url){if(!url.includes('#')&&!url.includes('?')){this.title='DLT:ready';return;}w.lastUrl=url;const p=JSON.parse(decodeURIComponent(url.split('#')[1]||url.split('?d=')[1]));w.packets.push(p);if(w.holdBridge)return;
    for(const m of p.messages)if(!w.jobs.has(m.id)){w.jobs.set(m.id,{...m,readyAt:w.ready(m)});w.requests.push(m);}
    const results=[...new Set([...p.messages.map(m=>m.id),...p.poll])].flatMap(id=>{const j=w.jobs.get(id);if(!j)return [];const done=j.contextOnly||j.readyAt<=w.now;return [{id,text:done&&!j.contextOnly?'译文 '+j.text:'',revision:done&&!j.contextOnly?1:0,stage:j.contextOnly?'skipped':done?'quality':'pending',done}];});
-   this.title='DLT:'+JSON.stringify({seq:p.seq,session:p.session,serverId:w.server,displayPreview:w.previewCommand,results:w.rewriteResults?w.rewriteResults(results):results,logAck:p.logs.at(-1)?.seq||0,capabilities:['diagnostic-logs','multilingual-targets'],config:{...w.config},configuredLlm:true});
+   this.title='DLT:'+JSON.stringify({seq:p.seq,session:p.session,serverId:w.server,displayPreview:w.previewCommand,voice:w.voice,results:w.rewriteResults?w.rewriteResults(results):results,logAck:p.logs.at(-1)?.seq||0,capabilities:['diagnostic-logs','multilingual-targets'],config:{...w.config},configuredLlm:true});
   }
  }
  require('./native-bubble.cjs').install(Panel);

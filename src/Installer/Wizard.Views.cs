@@ -48,7 +48,9 @@ public sealed partial class Wizard
             return;
         }
         await Work(async()=>{
-            var q=Request("certificate");q["renew"]=renew.Checked;await runner!.Run(q);await Inspect();
+            var q=Request("certificate");q["renew"]=renew.Checked;
+            if(!(await RunWithBackendConfirmation(q)).HasValue)return;
+            await Inspect();
             Log("证书检查完成。首次信任后请完整重启 Steam。");
         },true);
     }
@@ -393,12 +395,12 @@ public sealed partial class Wizard
         if (step == 4)
         {
             if (Items(Field(snapshot,"pending")).Any()) DrawMaintenance();
-            else if(Items(Field(health,"checks")).Any())DrawHealthReport(Section("安装后体检"));
+            else if(VisibleHealthChecks().Any())DrawHealthReport(Section("安装后体检"));
             if (Mode != "uninstall")
             {
                 var manual = Section("手动启动项备用"); Row(manual, "", launch, Button("复制", CopyLaunch));
             }
-            var follow = Section("下一步", Mode == "uninstall" ? "如采用手动清理启动项，请移除翻译前缀后再启动游戏。" : "首次信任证书后，完整退出并重启 Steam，再启动游戏测试。");
+            var follow = Section("下一步", Mode == "uninstall" ? "如采用手动清理启动项，请移除翻译前缀后再启动游戏。" : "首次信任证书后，完整退出并重启 Steam，再从游戏库启动 Deadlock。");
             ButtonRow(follow, Button("打开程序目录", () => OpenFolder(completedRuntime.Length > 0 ? completedRuntime : runtime.Text)), Button("打开备份", () => OpenFolder(Path.Combine(state, "backups"))));
         }
     }

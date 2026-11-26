@@ -12,7 +12,8 @@
     [string]$RecoveryTarget,
     [string]$TraceFile,
     [switch]$ValidatePackagePaths,
-    [switch]$RequireEmptyRuntime
+    [switch]$RequireEmptyRuntime,
+    [switch]$RequireStoppedBackend
 )
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Game-SearchPaths.ps1')
@@ -48,7 +49,8 @@ function Safe-File([string]$root,[string]$relative){
     if(@($taskParts|Where-Object {$_ -in @('','.','..') -or $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0}).Count){throw '安装包包含越界或无效文件路径。'}
     $taskPrivate=@('settings.json','secrets.dpapi','install-manifest.json','localhost-certificate.cer','localhost-certificate.dpapi')
     if($taskParts[-1].ToLowerInvariant() -in $taskPrivate -or [IO.Path]::GetExtension($relative).ToLowerInvariant() -in @('.pfx','.dpapi','.cer')){throw '安装包包含个人配置或证书文件，已停止。'}
-    if($taskParts.Length -gt 1 -and $taskParts[0] -notin @('wwwroot','data','LICENSES','source')){throw '安装包包含未支持的程序目录。'}
+    if($taskParts.Length -gt 1 -and $taskParts[0] -notin @('wwwroot','data','LICENSES','source','voice')){throw '安装包包含未支持的程序目录。'}
+    if($taskParts[0] -eq 'voice' -and ($taskParts -join '/') -notmatch '^voice/(DeadlockVoiceWorker\.exe|runtimes/(?:cuda/|vulkan/)?win-x64/(?:whisper|ggml(?:-(?:base|cpu|cuda|vulkan))?-whisper)\.dll)$'){throw '安装包包含未支持的语音组件文件。'}
     if($taskParts.Length -eq 1 -and $taskParts[0] -notmatch '^(DeadlockTranslate\.(exe|pdb|staticwebassets\.endpoints\.json)|dlt_translate_dir\.vpk|pairing\.key|Manage-Mod\.ps1|Configure-Steam\.ps1|Find-Deadlock\.ps1|Game-SearchPaths\.ps1|Install-Safety\.ps1|Installer-Workflow\.ps1|Installer-Transaction\.ps1|Vpk-Recovery\.ps1|Backup-Maintenance\.ps1|Repair-GameConfig\.cmd|Export-Diagnostics\.cmd|Update-Mod\.ps1|Install\.cmd|Uninstall\.cmd|Launch(?:-Admin)?\.cmd|Settings\.cmd|Update\.cmd|覆盖更新\.cmd|Trust-Local-Https\.(ps1|cmd)|Renew-Local-Https\.cmd|LICENSE|NOTICE|SOURCE\.txt|web\.config|.*\.(md|txt|json))$'){
         Throw-DltFault 'package-file-unsupported' 'package-validation' $relative ('安装包包含未支持的程序文件：'+$relative) '请使用配套的完整安装包，或导出日志联系维护者。'
     }
@@ -116,12 +118,19 @@ function Term-Index($items){
     foreach($taskTerm in $items){
         if(-not($taskTerm.source -is [string]) -or -not($taskTerm.target -is [string]) -or -not($taskTerm.english -is [string]) -or -not($taskTerm.ambiguous -is [bool]) -or $taskTerm.kind -notin @('name','phrase') -or $taskTerm.source.Length -notin 1..100 -or $taskTerm.target.Length -notin 1..150 -or $taskTerm.english.Length -gt 100){throw '词库格式无效，更新已停止。'}
         $taskLegacy=$taskTerm.PSObject.Properties['legacyTarget'];if($null -ne $taskLegacy -and (-not($taskLegacy.Value -is [string]) -or $taskLegacy.Value.Length -gt 150)){throw '旧译名格式无效，更新已停止。'}
+        $taskStandalone=$taskTerm.PSObject.Properties['outgoingStandalone'];if($null -ne $taskStandalone -and -not($taskStandalone.Value -is [bool])){throw '昵称匹配规则格式无效，更新已停止。'}
         if($taskMap.ContainsKey($taskTerm.source)){throw '词库包含重复词条。'};$taskMap.Add($taskTerm.source,$taskTerm)
     }
     return ,$taskMap
 }
 function Legacy-TermValue($term){$taskProperty=$term.PSObject.Properties['legacyTarget'];if($null -eq $taskProperty){return ''};return $taskProperty.Value}
-function Same-Term($left,$right){foreach($taskKey in @('source','target','english','kind','ambiguous')){if($left.$taskKey -cne $right.$taskKey){return $false}};return (Legacy-TermValue $left) -ceq (Legacy-TermValue $right)}
+function Same-Term($left,$right){
+    foreach($taskKey in @('source','target','english','kind','ambiguous')){if($left.$taskKey -cne $right.$taskKey){return $false}}
+    $leftStandalone=$left.PSObject.Properties['outgoingStandalone']
+    $rightStandalone=$right.PSObject.Properties['outgoingStandalone']
+    if(($null -ne $leftStandalone -and $leftStandalone.Value -eq $true) -ne ($null -ne $rightStandalone -and $rightStandalone.Value -eq $true)){return $false}
+    return (Legacy-TermValue $left) -ceq (Legacy-TermValue $right)
+}
 function Merge-Terms($old,$updated,$saved){
     $taskPrevious=Term-Index $old;$taskNew=Term-Index $updated;$taskUser=Term-Index $saved
     $taskMerged=[Collections.Generic.List[object]]::new();$taskSeen=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -234,7 +243,8 @@ try{
     $taskOriginalGameinfo=[IO.File]::ReadAllBytes($taskGameinfo)
     $taskGameinfoHash=Hash-Bytes $taskOriginalGameinfo
     $taskGameinfoPlan=Get-DltSearchPathsPlan $taskOriginalGameinfo -EnsureAddons
-    Stop-Backend $RuntimeFolder
+    if($RequireStoppedBackend){Confirm-DltBackendStop @(Get-DltRunningBackends @($RuntimeFolder)) ''}
+    else{Stop-Backend $RuntimeFolder}
     foreach($folder in @($RuntimeFolder,$StateDirectory,(Split-Path $taskTarget -Parent))){Assert-DltWritableDirectory $folder 'update-preflight'}
     $taskCheckTargets=@($taskTarget,$taskManifestPath)
     if($taskGameinfoPlan.Changed){$taskCheckTargets+=$taskGameinfo}

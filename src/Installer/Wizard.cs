@@ -75,9 +75,49 @@ public sealed partial class Wizard : Form {
             if((Mode=="install"||Flag(plan,"fullRepair"))&&Flag(plan,"needsGameRepair")&&!repairGameVpk.Checked){MessageBox.Show("请确认检查页的游戏 VPK 恢复选项。原位置已被占用时只使用新的空槽位。",Text);return;}
             if(Mode=="uninstall"&&!configure.Checked&&MessageBox.Show("需要自行删除所有相关 Steam 账号中的翻译启动前缀，否则残留前缀可能阻止游戏启动。确认采用手动清理？",Text,MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
             if(selected.Length>0&&MessageBox.Show("所选资源包会整体停用，可能同时影响其皮肤或 UI。是否按当前选择继续？",Text,MessageBoxButtons.YesNo,MessageBoxIcon.Warning)!=DialogResult.Yes)return;
-            reviewed=Request("apply");BindReviewedRuntime(reviewed);reviewed["reviewedRecordHash"]=Str(plan,"recordHash");reviewed["reviewFingerprint"]=Str(plan,"reviewFingerprint");reviewed["repairMissing"]=Flag(plan,"needsRepair")&&repairMissing.Checked;reviewed["repairGameVpk"]=Flag(plan,"needsGameRepair")&&repairGameVpk.Checked;reviewed["recoveryTarget"]=Str(Field(plan,"gameVpk"),"target");reviewed["disable"]=selected.Select(c=>new{file=c.File,hash=c.Hash}).ToArray();step=3;Draw();await Work(async()=>{var result=await runner!.Run(reviewed);completedRuntime=Str(result,"runtime");completionNotes=!Flag(result,"complete");foreach(var w in Items(Field(result,"warnings")))Log(w.GetString()!);foreach(var f in Items(Field(result,"failures")))Log(new InstallStepException(f).Message);LogSkippedSteamAccounts(Field(result,"steamAccounts"));Log("核心操作已完成。" );if(Mode!="uninstall"){try{await Task.Run(SaveInstallerSource);}catch(Exception e){audit.Record("installer-source-unavailable",new{type=e.GetType().Name});}}step=4;await Inspect();if(Mode!="uninstall"){try{health=await runner.Run(Request("health"));}catch(Exception e){Log("安装后体检尚未完成："+e.Message);}}},true);if(step==3&&!closeAfterWork){step=0;await Work(Inspect);}return;
+            reviewed=Request("apply");BindReviewedRuntime(reviewed);reviewed["reviewedRecordHash"]=Str(plan,"recordHash");reviewed["reviewFingerprint"]=Str(plan,"reviewFingerprint");reviewed["repairMissing"]=Flag(plan,"needsRepair")&&repairMissing.Checked;reviewed["repairGameVpk"]=Flag(plan,"needsGameRepair")&&repairGameVpk.Checked;reviewed["recoveryTarget"]=Str(Field(plan,"gameVpk"),"target");reviewed["disable"]=selected.Select(c=>new{file=c.File,hash=c.Hash}).ToArray();
+            step=3;Draw();
+            await Work(async()=>{
+                var result=await RunWithBackendConfirmation(reviewed);
+                if(!result.HasValue){step=2;return;}
+                var outcome=result.Value;
+                completedRuntime=Str(outcome,"runtime");completionNotes=!Flag(outcome,"complete");
+                foreach(var w in Items(Field(outcome,"warnings")))Log(w.GetString()!);
+                foreach(var f in Items(Field(outcome,"failures")))Log(new InstallStepException(f).Message);
+                LogSkippedSteamAccounts(Field(outcome,"steamAccounts"));Log("核心操作已完成。");
+                if(Mode!="uninstall"){
+                    try{await Task.Run(SaveInstallerSource);}
+                    catch(Exception e){audit.Record("installer-source-unavailable",new{type=e.GetType().Name});}
+                }
+                step=4;await Inspect();
+                if(Mode!="uninstall"){
+                    try{health=await runner!.Run(Request("health"));}
+                    catch(Exception e){Log("安装后体检尚未完成："+e.Message);}
+                }
+            },true);
+            if(step==3&&!closeAfterWork){step=0;await Work(Inspect);}
+            return;
         }
         if(step==4){step=0;reviewed=null;await Work(Inspect);}
+    }
+    private async Task<JsonElement?> RunWithBackendConfirmation(Dictionary<string,object?> request)
+    {
+        while(true)
+        {
+            try{return await runner!.Run(request);}
+            catch(InstallStepException error) when(Str(error.Failure,"code")=="backend-stop-confirmation")
+            {
+                operationCancellation?.Token.ThrowIfCancellationRequested();
+                var consent=Str(error.Failure,"backendConsent");
+                if(consent.Length!=64 || !consent.All(Uri.IsHexDigit) || Equals(request.GetValueOrDefault("backendConsent"),consent))throw;
+                bool approved=!suppressDialogs && MessageBox.Show(this,
+                    "检测到旧同频后台仍在运行。是否关闭它并继续？\n\n安装器会先请求正常退出。如果它没有响应，会结束这次检测到的同频后台进程。",
+                    "同频 · 关闭旧后台",MessageBoxButtons.YesNo,MessageBoxIcon.Question,MessageBoxDefaultButton.Button2)==DialogResult.Yes;
+                audit.Record("backend-stop-confirmation",new{approved});
+                if(!approved){Log("已保留旧后台，当前步骤已暂停。");return null;}
+                request["backendConsent"]=consent;
+            }
+        }
     }
     void Browse(Control field){using var dialog=new FolderBrowserDialog{Description="请选择目录",UseDescriptionForTitle=true};if(Directory.Exists(field.Text))dialog.InitialDirectory=field.Text;if(dialog.ShowDialog(this)==DialogResult.OK)field.Text=dialog.SelectedPath;}
     async Task Deep(){using var dialog=new FolderBrowserDialog{Description="选择深层扫描的磁盘或目录（最多 60 秒）",UseDescriptionForTitle=true};if(dialog.ShowDialog(this)!=DialogResult.OK)return;cancellation=new();cancelScan.Visible=true;await Work(async()=>{var q=Request("deep");q["scanRoot"]=dialog.SelectedPath;var result=await runner!.Run(q,cancellation.Token);game.Items.Clear();foreach(var p in Items(Field(result,"Paths")))game.Items.Add(p.GetString()!);if(game.Items.Count==1)game.SelectedIndex=0;Log("扫描完成，找到 "+game.Items.Count+" 个候选。"+(Flag(result,"Limited")?"已达到范围/时间限额，可缩小范围或手动输入。":""));});cancellation.Dispose();cancellation=null;}

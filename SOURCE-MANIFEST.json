@@ -1,7 +1,7 @@
 {
-  "version": "0.7.5",
-  "buildId": "0.7.5-8dd088402371",
-  "featureRevision": "translation-reliability-language-hotkeys-and-deepseek-usage",
+  "version": "0.7.6",
+  "buildId": "0.7.6-0a675703de0b",
+  "featureRevision": "teammate-voice-translation-cuda-download",
   "files": [
     {
       "file": ".gitattributes",
@@ -17,7 +17,7 @@
     },
     {
       "file": ".github/workflows/ci.yml",
-      "sha256": "ff9059d9f70ef6c3c7395d7859dfe63d3320eeded539b3578f00950134ab5ccf"
+      "sha256": "fa4a3fa785f1340beffd210404b390772c70924b4022169063017772e770e7b3"
     },
     {
       "file": ".gitignore",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "11cd3c867ce086972df65d0448c7cdb891245511c3eb0ad2a8c351314c84a908"
+      "sha256": "b8aad861c11334316a4b67bbf3fc0602d67ffe87bee8d69e2b51091ffda13863"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "9e5543ee8134f94bf017e9739459e9453a6a05e168116fe5f71b20ded76d6565"
+      "sha256": "114d318c3c75c8bfa2f889c19f31025a44dd1e72ac3ad521aa5212016874a4bf"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -93,7 +93,7 @@
     },
     {
       "file": "docs/README.md",
-      "sha256": "f1a60842e0d60ee3024fe4ab2ff26a3d9188a962df42f9ab704cad1a543273c5"
+      "sha256": "215c046a86e8519d67ccc051315d4ac738080a6dfe479b649f90864cf9748c29"
     },
     {
       "file": "docs/SOURCE-AUDIT.md",
@@ -148,8 +148,12 @@
       "sha256": "db4a36df517062086355ed022f520b8d4245cd6d66f132de2bdf74ffbaae9cda"
     },
     {
+      "file": "docs/UPDATE-0.7.6.md",
+      "sha256": "fc3077ba6012f83f9a7846c249a716552155b043742fcba656ac3524c4c567f9"
+    },
+    {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "9fdf8500414ab0378da767c72da2ebf841690ef05ca2f030066badf1ca652034"
+      "sha256": "316276c2e452cf47bba4e9b97a76d865eb4b4c45da810e9195e80b95e24324a5"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -158,6 +162,10 @@
     {
       "file": "docs/VALIDATION.md",
       "sha256": "a80ab9ff65cacc44546208017546eeecc906e198ffc0e0a1a93b8342b9ecd9fa"
+    },
+    {
+      "file": "docs/VOICE-BENCHMARK.md",
+      "sha256": "d30c1000c06dbbf3e25e18c052d94b9347a501cc1204d0be9220ea5f39a08e5b"
     },
     {
       "file": "LICENSE",
@@ -204,6 +212,14 @@
       "sha256": "19549e9b3203eaf3938f35f98e63fc6b166a16af29936affa3df6ec7e2ae7f8d"
     },
     {
+      "file": "LICENSES/voice-whispercpp-MIT.txt",
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    {
+      "file": "LICENSES/voice-whispernet-MIT.txt",
+      "sha256": "778628a2167e54fcb03f28957004a45f339386d38dc11243b5a8687efcf82937"
+    },
+    {
       "file": "LICENSES/VPKEdit-MIT.txt",
       "sha256": "e37f30f388419437479fedfac04d106a458c7766f2a9dfb24884a654b694fb04"
     },
@@ -233,7 +249,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "f3219653ed2327cc42d20ea2fdc39bd08af3f5dfed4066c764320ccea197dcc3"
+      "sha256": "a29a7fcaf2170703d411d4dd6cdea03d777ebc04210c6ba09bb3ad46d7660f42"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -277,15 +293,15 @@
     },
     {
       "file": "README.md",
-      "sha256": "cbbffcdb503efa60e13322d0d8c5e79a8d8e5c6fd87e2db74f5e51b77be979b9"
+      "sha256": "c333e39dfbecdd45d552af9ee6ac6686935208e9858f636dd8a54f8035cae29e"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
-      "sha256": "211aeea859d78c4f0b7d54e682cd9fddd02ac77277fe8e24d016b81b84d14f7d"
+      "sha256": "f7326ac08b148bf4ac08eab563a7913a48f0b02c540f7621c7a6596f015e1f0e"
     },
     {
       "file": "scripts/build.ps1",
-      "sha256": "b846b0a5cb5f089a89a3531205a380843a0c75ace6483ac827abc2a117c6e17e"
+      "sha256": "aef583e6d5c67cdb5f265c908ff271cc077ea1771d8ec215832e8031a5a43b80"
     },
     {
       "file": "scripts/build_external_updater.py",
@@ -305,7 +321,7 @@
     },
     {
       "file": "scripts/build_terms.py",
-      "sha256": "cbab07828f10f1b39bfd4c6f6ad9ec9e846058d874ecbacdb78f6a0ece1a34cb"
+      "sha256": "97e5557f5cb5da797ec3c43659d6015bb1589fc1e6049edb7367e7e227f6086e"
     },
     {
       "file": "scripts/collect_licenses.py",
@@ -313,55 +329,55 @@
     },
     {
       "file": "scripts/Configure-Steam.ps1",
-      "sha256": "5b7d82f469cfeb6d24789ec9178dec5dc252b988cde063b9ff8ae9dd1e26beea"
+      "sha256": "99901dab3402a61ccca7dad66211724cd8f128d3f2f140c7c9a1e78fbcdc46d0"
     },
     {
       "file": "scripts/Export-Diagnostics.cmd",
-      "sha256": "7fb82c0c9b8f1c8048ce1d14a449ebf694dfe7a7ceceb54ded6d293aa6bf3725"
+      "sha256": "dc6a891ceea1e8d64929f28adcf29994882b25da81477c1e39438f74dd2ab793"
     },
     {
       "file": "scripts/export_source.py",
-      "sha256": "8d0e4588402886ceefe5dd6b394e9c8d30d23818738856f803630b21fb989115"
+      "sha256": "ea96fccfa8252675e398d1537d5a0e54ab626d8519bef2cd7b19296cbe0b1f04"
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
-      "sha256": "740accf8eaf011db70d8c13e4257117af74e1befef95606a385c426b1e163d78"
+      "sha256": "b1ff8a168a2594f891862d3ee94eb43a93790677041c2ec85cd011fd8b0d2db8"
     },
     {
       "file": "scripts/Game-SearchPaths.ps1",
-      "sha256": "974da059a522aaf9a0c193694b33915eeca4717f1ebaf06c0ddfbafa292f5703"
+      "sha256": "f6898dc1003dc6ffdc87350fe5451f61d22c4223998843831bc552c8e01a9dea"
     },
     {
       "file": "scripts/Install-Safety.ps1",
-      "sha256": "c3bfe53fe722ee308b76f7ff2c233b25132311ee554baf6a65377ec1aa9a17b4"
+      "sha256": "1f67db5d3575f499cc06890fff70a868837eb7175f1a15565a37d25535025c6d"
     },
     {
       "file": "scripts/Install.cmd",
-      "sha256": "5e65591f5ce30d76dccfea2163cf11ffc338049d5a26ff3f43cb324b31c1caa4"
+      "sha256": "b7540409851ada6cb08e36ac544e60f5345455ad4a678fae6a9a87d3d4074502"
     },
     {
       "file": "scripts/Installer-Transaction.ps1",
-      "sha256": "be15515ff1d466dea8e3f89b904f9753ac93429c6215d61fe537f898cb78ec2c"
+      "sha256": "22db3b8c992d6d5d5b8db04f766ab7da93dc96cb2cc32a2f561981d4a7147d89"
     },
     {
       "file": "scripts/Installer-Workflow.ps1",
-      "sha256": "9c4884339501618c7d5612187e5c0cbabc44449c2ee7505a61d628a256624fe1"
+      "sha256": "bd7d5f0e160ee6aa60940186d9372a022e44b78a798bce5a312c23b5e3a9a47f"
     },
     {
       "file": "scripts/Launch-Admin.cmd",
-      "sha256": "ab822c4afabd188a5eda05f653f5b044a98061baeb7caf061bad2746b73e1e62"
+      "sha256": "8ee80033acb1c6a159ae0b79220c496e8e48358deb5fb46dcf0ef7eb0acf644b"
     },
     {
       "file": "scripts/Launch.cmd",
-      "sha256": "5763ca3a06606d227e5668243ea0e4eca108ccecafa17ef2055c97b232407af6"
+      "sha256": "e08e0547284ac6375f4688dd7402c9b122bb21af5b4e6ca2ca096abe79828767"
     },
     {
       "file": "scripts/Manage-Mod.ps1",
-      "sha256": "721db16a75d391eabf68bdd452051d45a9f9b903881cb311b82b0c20d0da8d7a"
+      "sha256": "ebadb44aafb9d17e4af0c599336cfa447eff14386c5fd04fe399f453ec05d0a7"
     },
     {
       "file": "scripts/merge_term_defaults.py",
-      "sha256": "27587dc91639a6ae20ce67de0f8782344e5360ac9a9a2a1f12185339232696ba"
+      "sha256": "635c5c125de59196850b26137cd2130f9929789883a7915d6bd3a61a28f82c81"
     },
     {
       "file": "scripts/native_bubble_layout.py",
@@ -373,7 +389,7 @@
     },
     {
       "file": "scripts/package_share.py",
-      "sha256": "c569e1e48c879f6aca8c1e7042d6a36f15ea6c139aebd6874b842c73612a5ec7"
+      "sha256": "4ff58efbb2fbea5cc34ef644f5c034985b7c1c44f0d32d80454785ea49631f4b"
     },
     {
       "file": "scripts/prepare_mod.py",
@@ -385,15 +401,15 @@
     },
     {
       "file": "scripts/Renew-Local-Https.cmd",
-      "sha256": "9e7d1252e02ceb5ae3cdafa203a8195d9bd8116c72159df85ea3c3fc63c68dd5"
+      "sha256": "f6815360c826ec3f065f7fa5f34012ff7c0a93e12aa335bd4a7e353d37437cd0"
     },
     {
       "file": "scripts/Repair-GameConfig.cmd",
-      "sha256": "da3bbf928d5601a07b0a5b3d855826672375edfb38bceb64ee19fc263fafa530"
+      "sha256": "79fcc58ef7016de07f7043c458ad8431733e9cd559775c4ff36dd0742f1ae21c"
     },
     {
       "file": "scripts/Settings.cmd",
-      "sha256": "c66c30ca8a48c59ad651a4a907154e13470268209991284e878da6a361c57877"
+      "sha256": "cffce76fde0502388915e88da3d0947932964a4ffbfafcb06084167db6c08a03"
     },
     {
       "file": "scripts/steam_launch_options.py",
@@ -401,31 +417,31 @@
     },
     {
       "file": "scripts/term_extensions.py",
-      "sha256": "0215df377ca9f2ea57144a2c01a353cb6b8611ff805ecc3718499b7cdaa3d79d"
+      "sha256": "34006898e0b7d6ae761dfe1e376984b574d0f38e575cb42a0b02dc74205dac62"
     },
     {
       "file": "scripts/Trust-Local-Https.cmd",
-      "sha256": "967b9fffb74e0fa2e4fca625143784cc99bd7cd7e5c3e886bc8cc0104949ca69"
+      "sha256": "2a53eab1bb6997e219331dc28b9d7a7729877ecc52209bd938c87a7308afc27a"
     },
     {
       "file": "scripts/Trust-Local-Https.ps1",
-      "sha256": "ec40dd4f6e7afcbc146bba380a072fa01ee6aef50d8616058d8f69b48421a2d4"
+      "sha256": "ee9706b49d13d047986876df2c5a81c9f00684499f2fc103d466988c8ade0a10"
     },
     {
       "file": "scripts/Uninstall.cmd",
-      "sha256": "c22fd869ca6f77dd4152e6825c7e786e8094b1ed5fd971d2f8b387210dc669c4"
+      "sha256": "1b3399e067055ff75dbfadfcb570bc30d220f3226fc34712464de06ef022c160"
     },
     {
       "file": "scripts/Update-Archive.ps1",
-      "sha256": "7948dbd56bfcb11211189fc27090e645670c942b6ea8351d8fa5bd0fe5c1a194"
+      "sha256": "b55d9f3e3169cde0f85e8a3b956bc7db3849ac64c9e2a1cb8c44c3b7a3ed9d9e"
     },
     {
       "file": "scripts/Update-Mod.ps1",
-      "sha256": "9142dabb23546c3ba19f4ccbd8fad8148b1ad1731b4c30597967e6eed4e8df60"
+      "sha256": "971e3df4f9a2293c78a39e9cd8719653117b406c7594a7d8e0bb7a3a3708d5ea"
     },
     {
       "file": "scripts/Vpk-Recovery.ps1",
-      "sha256": "9b476c363b3bb54f6715cc6e3288c8896485c9f547bd1777cdf3b1c6414fb1d9"
+      "sha256": "c1f1c264040936fe3f195a5a570a6265b2e0d3e564bcc355239a046192e2df1a"
     },
     {
       "file": "scripts/vpk.py",
@@ -449,11 +465,11 @@
     },
     {
       "file": "src/Bridge/Bridge.csproj",
-      "sha256": "4865cb4af993574d9e0e1e3a99295a08c96256c93657c4e7dccda7409458c55d"
+      "sha256": "8f20f69ec61bb34bf498f929e0127852042c61cf6d8c7738652fdfca95e0b47c"
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "e10ccafd2356488595d62994e8609e46ad133a74323504a8155e18df073c3bf6"
+      "sha256": "bef926c8115b17fbeb4bcac43a8733e5e0660fa7d74a6e326d4da2f4ad39b706"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -493,7 +509,7 @@
     },
     {
       "file": "src/Bridge/ChatCompletionReader.cs",
-      "sha256": "86e56909babc65d9ccc2c77320547ed34dd1f0e6834f109a7eb62a4ee86a93db"
+      "sha256": "770982e2da26aab314c8b7fad7719c63a3e0ad7e24f623a771494c3d8b8d7cb9"
     },
     {
       "file": "src/Bridge/CommunityLinks.cs",
@@ -501,7 +517,7 @@
     },
     {
       "file": "src/Bridge/Configuration.cs",
-      "sha256": "3856e9e6517ccdf2ad6b185515779d14dbf45d17c4afdc1081c045aaaff1c17e"
+      "sha256": "1554b0fa0b184561334b72a7680ae771860f96f569488fcb9b678177411d92e2"
     },
     {
       "file": "src/Bridge/data/build-abbreviations.json",
@@ -517,7 +533,7 @@
     },
     {
       "file": "src/Bridge/DiagnosticLog.cs",
-      "sha256": "996c9cbb3d30daf8e08f6d94e1fc258ff294c6c46964531c240131cf9f6cba9d"
+      "sha256": "5f63183d4a6cf4b50784335b6f907b7640d3ef0c8bcd7e7fcc8b56b1d24289f7"
     },
     {
       "file": "src/Bridge/GameLifecycle.cs",
@@ -597,7 +613,7 @@
     },
     {
       "file": "src/Bridge/NativeHotkey.cs",
-      "sha256": "e503afa956f359ed68f800556ac03653623d5392ee7c8da9e8a0326bbec0cfe6"
+      "sha256": "a2568a7f9493b0613c69cc91c195fac12b66ad620457dfae1b747c8cdc6b582b"
     },
     {
       "file": "src/Bridge/NativeSettingsEditor.cs",
@@ -605,7 +621,7 @@
     },
     {
       "file": "src/Bridge/Outgoing.cs",
-      "sha256": "da9fe630892fe40925e290e43acd376bc16495675a9ecba1dd1a928e485f4c94"
+      "sha256": "e533479fcd69122e0350557acaeae1c8d60aaf3da6c314bbd89b720907c5d27b"
     },
     {
       "file": "src/Bridge/OutgoingLanguageHotkeys.cs",
@@ -629,7 +645,7 @@
     },
     {
       "file": "src/Bridge/Program.cs",
-      "sha256": "bd206596b26951abb593767bb4e788fcc9648e647ea8ad4e1f0e983eb1060fb0"
+      "sha256": "ee8f590c313175fdf17f6d3111c038724f6e0881b0d7712b670d4ce95852f120"
     },
     {
       "file": "src/Bridge/ProviderFailures.cs",
@@ -641,7 +657,7 @@
     },
     {
       "file": "src/Bridge/Providers.cs",
-      "sha256": "d5e6474b662964ebaccb84e8a8621328cf1c582ddc474618420322c2831fa055"
+      "sha256": "f03c15b3fa33ca16d4ac5549390a5d487ee63e1fa8f6319def4dd1f997406296"
     },
     {
       "file": "src/Bridge/QuickMessageHotkeys.cs",
@@ -669,7 +685,7 @@
     },
     {
       "file": "src/Bridge/Terms.cs",
-      "sha256": "f814524262b47e1d4d155177404864c1badfdeb0e2684843f15342973e316d0c"
+      "sha256": "6c7da46a82d471e1e25b8f77af3f64c55d5e928f8bf891391fd172bd66863d20"
     },
     {
       "file": "src/Bridge/TranslationLanguages.cs",
@@ -677,7 +693,7 @@
     },
     {
       "file": "src/Bridge/TranslationMemo.cs",
-      "sha256": "e40a53c6a85a6bfa344995afae3d5e19c8b9f069fb9a1835e0211201a7bef6c1"
+      "sha256": "c32e74b459fa61e37ab09d869da1b5e023a97ba8f4f0bcb4e7136e402160ee0f"
     },
     {
       "file": "src/Bridge/TranslationOutputException.cs",
@@ -693,7 +709,7 @@
     },
     {
       "file": "src/Bridge/Translators.Completion.cs",
-      "sha256": "4b8ca92f88cad7b4d930680723592e504ba4bfb0efa527bb35d0c7b34286a87a"
+      "sha256": "cab637616102e251e747c87ccf164d5e28fc031dfbdfc36704e7db5c6cc1ee26"
     },
     {
       "file": "src/Bridge/Translators.KeepAlive.cs",
@@ -704,12 +720,40 @@
       "sha256": "265f4bf26a9dfd61f345b436240c2ef32077386a4fff6e6e7a07069161dbf479"
     },
     {
+      "file": "src/Bridge/Voice/VoiceCudaRuntime.cs",
+      "sha256": "a03f5a452565c60bdd905a8f07441ce1e2793f4eee70cc113130afdc4f676c85"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceDictation.cs",
+      "sha256": "0c904072741b6002333c93aad22025c2be74ecdcf1d6e26baa22391a1c446399"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceLatency.cs",
+      "sha256": "c9da16e181b1c6f16a6f4f1713c674f41bb84ac1d148bbcb1ced84f7fff7baeb"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceModels.cs",
+      "sha256": "31df2256acb134d00f4ec5e6204bc0558072bf880ad195d8d53613a84849fb6d"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceOptions.cs",
+      "sha256": "36367ae7316cf782641fa9c9469086e183593a2543f8715b75155467ef17efaf"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceService.cs",
+      "sha256": "4fddfdf6d5f3131add5a28562c0db5888372d8fb181af6f415058174750331e6"
+    },
+    {
+      "file": "src/Bridge/Voice/VoiceTrace.cs",
+      "sha256": "dcacb6fbf21e5ad56943906ecc32adbe6a22293cf135e4630931add4cba2c02a"
+    },
+    {
       "file": "src/Bridge/wwwroot/community-qq.png",
       "sha256": "36638446b1bd7f6eda08d4069dd9b3ca03e1cc7193c95f4be91ccd200543dfbe"
     },
     {
       "file": "src/Bridge/wwwroot/index.html",
-      "sha256": "8dc81cd4c18b563d52e2eaf3ae930e8bf5c139dacf6371b8f308291ac30665c6"
+      "sha256": "4382f9ffde39260d4c6f6ff9b10e314d21f83745e8941eb4bb84db6cdc6ef993"
     },
     {
       "file": "src/Bridge/wwwroot/settings-background-v3-flat.png",
@@ -729,7 +773,15 @@
     },
     {
       "file": "src/Bridge/wwwroot/style.css",
-      "sha256": "c7eb5cb3d5317e93eab471a7f4e02d04f6da0a4534751a76a3d7d55665e99d78"
+      "sha256": "0927c2617d190b0a85882cc7e7e5112ab7a63811ae66d2d84ef6962a49063f42"
+    },
+    {
+      "file": "src/Bridge/wwwroot/voice-benchmark.json",
+      "sha256": "b034bb281315d7bbe9493064cdb1f05e2348dda818f10bb961c96e723a04c13a"
+    },
+    {
+      "file": "src/Bridge/wwwroot/voice-settings.js",
+      "sha256": "4009ba48fa17aef8894e53d015910dc74e7ca5b009517b4f8569da153ae062e9"
     },
     {
       "file": "src/Installer/app.manifest",
@@ -737,7 +789,7 @@
     },
     {
       "file": "src/Installer/Installer.csproj",
-      "sha256": "7c30dc62f9cdc6b86e2893753938dc288000d5e3f3c0cec7987366c0c68553c8"
+      "sha256": "300751d5ec21714f07230c48c1ac126a1662efad67a962b44fe573a5d3f1eade"
     },
     {
       "file": "src/Installer/InstallerAnnouncement.cs",
@@ -785,11 +837,11 @@
     },
     {
       "file": "src/Installer/Wizard.cs",
-      "sha256": "7c508e703ea13735eede6d52e04f63c1b86701c5e6b78382387ea6fb4fa100d2"
+      "sha256": "16d15d7a28ef90ef6e5fb61d331ba6ce56769c7d2aaf767bb9751a6409bd3fe8"
     },
     {
       "file": "src/Installer/Wizard.Maintenance.cs",
-      "sha256": "66dc6e53eb67a5a59cda3505786545ba295d9c5b64e09752a9d65d2842f835f7"
+      "sha256": "5c0599fdd573200a690a7fef6e3c3100d8f2011d19600cdde7604af01a3b3633"
     },
     {
       "file": "src/Installer/Wizard.RuntimeChoice.cs",
@@ -801,11 +853,11 @@
     },
     {
       "file": "src/Installer/Wizard.Views.cs",
-      "sha256": "7aaeed411b6a310e9d10afb88dc7ccf3bdcc47d9aa6dfb5fa5ffd60172547c86"
+      "sha256": "f2d092868fda0478aa90b79d962799c35e508b3d8aa2f43455336e6ab6b5466c"
     },
     {
       "file": "src/Settings/app.ts",
-      "sha256": "1563a5c42405d1ec7629fb392b9d399e0f81940ddb84deb368862ddcfb086f6c"
+      "sha256": "869c3128bd6c4d2f93e2f43e37f44878072d2cdb5fad9d0f2fe565ccb7bc8c20"
     },
     {
       "file": "src/Settings/package-lock.json",
@@ -817,11 +869,79 @@
     },
     {
       "file": "src/Settings/persistence.ts",
-      "sha256": "ad9d860e57a2bff9de958d4b84174484321f109e3189db066f8cc7eaf3292533"
+      "sha256": "42041dba6af240a44c1bcdb36af53871bdfaa57e3fd7b32b820f6f9d9eb93dd9"
     },
     {
       "file": "src/Settings/tsconfig.json",
       "sha256": "94ef5d547c25823fd4bb0983a1b12587c5ad952a6128db3aeca8e403692383f8"
+    },
+    {
+      "file": "src/Shared/CuBlasPackage.cs",
+      "sha256": "cee7603cda33b888bee9f89755f8e7c80d7d0cc2c110001b8b1ae8219f6b8a0e"
+    },
+    {
+      "file": "src/Shared/VoiceCaptionTiming.cs",
+      "sha256": "1c9cb6acfb7aba8f84aa70f5552ab9fe9ecf79022360f24ea6aad712005489ae"
+    },
+    {
+      "file": "src/VoiceWorker/Audio/AudioDspPipeline.cs",
+      "sha256": "3f7b7f8b60c960dbd518afb6a9c2f2edc1120079af9dcde2a7d3828882f0165e"
+    },
+    {
+      "file": "src/VoiceWorker/Audio/VoiceAudioEvidence.cs",
+      "sha256": "7fe98ad43b26d76f03a4560e3a6d783d0e5a837c371ddc140a9da044297e0ca1"
+    },
+    {
+      "file": "src/VoiceWorker/Audio/VoiceSegmenter.cs",
+      "sha256": "fe8d1f40e508a1e6ec6761ae13527d9e1148da5d9ce8bcae435e936d81c10141"
+    },
+    {
+      "file": "src/VoiceWorker/Audio/WasapiProcessCapture.cs",
+      "sha256": "892ba4d5fb27c821cbe8727859f6af4df4f22b4970ecb436838c317305275c4c"
+    },
+    {
+      "file": "src/VoiceWorker/Audio/WavCodec.cs",
+      "sha256": "85faa4ea7d4e75ad9f33baa467957e441d63c5f4d45acc34a716a721d53a35cc"
+    },
+    {
+      "file": "src/VoiceWorker/CaptionConfidence.cs",
+      "sha256": "2abb077841d4e524fed9408263048d4fc0c4b5efcfac45ae695e3b3427be15fc"
+    },
+    {
+      "file": "src/VoiceWorker/CaptionQueue.cs",
+      "sha256": "5f0e3cbe59cc1228d63637de08d9a633900c1335071818f8fcdf8c87292f6199"
+    },
+    {
+      "file": "src/VoiceWorker/CaptionRecovery.cs",
+      "sha256": "c3f0c48d1a8e5e01f26c77d57c45f738bae0fe857afdbcdd006d158f3682ef87"
+    },
+    {
+      "file": "src/VoiceWorker/CudaDependencies.cs",
+      "sha256": "fef1ed9e422b792ed7270266c68afdc8ab4b7caa29ff9f62e4f42e98248a8637"
+    },
+    {
+      "file": "src/VoiceWorker/DraftSchedule.cs",
+      "sha256": "0fe41c109eef4663f3317cc1c133aee91f58a8bf1da5deba966ac3b38a8ba787"
+    },
+    {
+      "file": "src/VoiceWorker/HallucinationFilter.cs",
+      "sha256": "bc061ffbd5ec272d5832ea250c190c3aec062903872ddfef3704ccd938320c9d"
+    },
+    {
+      "file": "src/VoiceWorker/MicrophoneInput.cs",
+      "sha256": "26df1a2a3cc54fcd4b4c9c4ce33c0fe6f2ad12fd87931370fad32546e82ebd72"
+    },
+    {
+      "file": "src/VoiceWorker/Program.cs",
+      "sha256": "fbc489b8c8dbdd6ede2ad969322c0d5231377f83f3c27a93d3ef1c361786b76a"
+    },
+    {
+      "file": "src/VoiceWorker/VoiceRecognition.cs",
+      "sha256": "b851f5d1aa6ab538ab4786121f72558dec4b4fd18df65085e3bf57a09db01ed7"
+    },
+    {
+      "file": "src/VoiceWorker/VoiceWorker.csproj",
+      "sha256": "88c64d8ed9fc896ef12d8ba661673f0a5176d619f9c7956266668e0e675298cc"
     },
     {
       "file": "tests/admin-ui.test.cjs",
@@ -1041,11 +1161,11 @@
     },
     {
       "file": "tests/game-location.test.ps1",
-      "sha256": "9190805233fb1b31c1aaa1c88f8c73753da2e74f39bf981e38c1cf5ee0cedddb"
+      "sha256": "1d57c28b41e6c15c7617b4db4874b57252943facb94efa5ea1baea2ac0907f43"
     },
     {
       "file": "tests/game-searchpaths.test.ps1",
-      "sha256": "dd1f20246b9978eb89a33651b237b5fd7f6426354e079081ea6eb9d31c2060d8"
+      "sha256": "65d454323d91dd91752b85d655ba51446a24971683a5e1627a3a0e1f7128cc98"
     },
     {
       "file": "tests/game-window.test.cjs",
@@ -1065,7 +1185,7 @@
     },
     {
       "file": "tests/helpers/chat-world.cjs",
-      "sha256": "fc5a5805007c3b822996f8ed757c3653d29375eda277c89bf283707c35c9fa10"
+      "sha256": "b0785d3ef81dc9382f3b2849abaabe33be4a8f8b0caa0fbea2823ff4f627974b"
     },
     {
       "file": "tests/helpers/native-bubble.cjs",
@@ -1109,7 +1229,7 @@
     },
     {
       "file": "tests/install-safety.test.ps1",
-      "sha256": "6f2d807281d07f5610177f8a7660148abcd690d86bd8c943dcfd58b4d9be082f"
+      "sha256": "5815ede17d9608c33cbe9319769cced929158108c4dd0d98846d15c912ed3d6f"
     },
     {
       "file": "tests/installer-migration.test.py",
@@ -1129,11 +1249,11 @@
     },
     {
       "file": "tests/installer-workflow.test.py",
-      "sha256": "896a38de8be672904da91bd6301ccf1e53ea5437fb0dfffeb4d4e2e8ada582f5"
+      "sha256": "fe756ef3c80229e7e66919a7caa99150e6251550da4a87bf387612e19c3d1ce6"
     },
     {
       "file": "tests/installer.test.ps1",
-      "sha256": "1cfd8bc43003412ce564aa9f532f597999e701290e73687bc323e5bd4c69432c"
+      "sha256": "e45fb5774b00ba760a3765c8cb28e5578dafa3847e614909d44247b6dcbb9ba2"
     },
     {
       "file": "tests/InstallerTests/InstallerTests.csproj",
@@ -1141,7 +1261,7 @@
     },
     {
       "file": "tests/InstallerTests/Program.cs",
-      "sha256": "d2990528785498394cfdd38227a877bc2a50dd39d743ff7bf3a834bcde9fafe5"
+      "sha256": "63679c0ac09e56508ade29dce42eb7ec44f3986aedac3924c9785affb1d982b8"
     },
     {
       "file": "tests/keepalive-http-ui.test.cjs",
@@ -1221,7 +1341,7 @@
     },
     {
       "file": "tests/native-editor-ui.test.cjs",
-      "sha256": "1b32917ca6098d273640359cd243e60289920f3e660ebdd4fd1539d20965def8"
+      "sha256": "2b3066b7006aee3a78eda933a243270bbf25a40c69cadf4f595e59585657f983"
     },
     {
       "file": "tests/native-editor-window.test.cjs",
@@ -1269,7 +1389,7 @@
     },
     {
       "file": "tests/native-vpk-identity.test.ps1",
-      "sha256": "2ba1cc6cb37fe68f74fd3add72f638bad5c563a1586351a79a863a8ae65708c8"
+      "sha256": "e969f42bbc179124d86c4aef16857f4e1929af0e137fdd5f4699e060eefc9512"
     },
     {
       "file": "tests/NativeEditorTests/NativeEditorTests.csproj",
@@ -1285,7 +1405,7 @@
     },
     {
       "file": "tests/NativeSendTests/Program.cs",
-      "sha256": "1f7c1db9acbcddc53de36bad563b46cfd45364599f2686cd02b44f738d811a0e"
+      "sha256": "3713aedfc277aa40f3e529f307fbb67d5fe6227d59435d2daf44a1091ad5d8af"
     },
     {
       "file": "tests/optimization-ui.test.cjs",
@@ -1313,7 +1433,7 @@
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
-      "sha256": "3c9c27504f38fbc1247d0964a05d211896d812170b4a683363c7a694c827afd9"
+      "sha256": "dcbd776231f709d03ee2d12b412b86b4ece91aa6372f7344516a2d481d5571a7"
     },
     {
       "file": "tests/package-lock.json",
@@ -1417,7 +1537,7 @@
     },
     {
       "file": "tests/send-isolation.test.cjs",
-      "sha256": "74264ddbbbaef149c111eea60b60423f3972d8b36c2d5ead74c9870f0400966d"
+      "sha256": "f6ad380a408b0def3f7dd4e740a960fa1191c8325676321a928e67737034dd2f"
     },
     {
       "file": "tests/SendRecoveryTests/Program.cs",
@@ -1429,7 +1549,7 @@
     },
     {
       "file": "tests/SendTermTests/Program.cs",
-      "sha256": "a66393d482aceaa9c701f8851328f53dbd3a74f38fa8667332749899b1674d3c"
+      "sha256": "568c2b655fe42330cfc9fecb1b862337df6813100886d7b1efe174eb745e23bd"
     },
     {
       "file": "tests/SendTermTests/SendTermTests.csproj",
@@ -1445,7 +1565,7 @@
     },
     {
       "file": "tests/settings-integration-http.test.cjs",
-      "sha256": "d523b2374e734b910ff1bac8f861fc05b43ee91cbe1243e8a430793998a9baf7"
+      "sha256": "bf476874198e38a68d25ed224f2c9622074899a9d34ea3137445039891f2ad2b"
     },
     {
       "file": "tests/settings-reload-ui.test.cjs",
@@ -1493,7 +1613,7 @@
     },
     {
       "file": "tests/StreamingTests/Program.cs",
-      "sha256": "36a8e2578467ac1578c21088bdf51c073071233fb65046b6468840ef710f659e"
+      "sha256": "61840077ae506b022a8abdbb85802dcd3d1b08137e987e74c220dae7e8d78c98"
     },
     {
       "file": "tests/StreamingTests/StreamingTests.csproj",
@@ -1506,6 +1626,10 @@
     {
       "file": "tests/StyleMetricsTests/StyleMetricsTests.csproj",
       "sha256": "ff14f57392fc7f999c0c8bb8dff773bebe1909a3a281343715f8624e8664ace2"
+    },
+    {
+      "file": "tests/teammate-voice.test.cjs",
+      "sha256": "aa9358dbb32b655fbb90cbe98b64f0254c88096c2632e096a628113d2fee1d95"
     },
     {
       "file": "tests/terms-cases.json",
@@ -1533,7 +1657,7 @@
     },
     {
       "file": "tests/update.test.py",
-      "sha256": "5bb339a9b5ebd8868d2b65dcd468e8fa821aac82b68d033f2231a4ead26b50f0"
+      "sha256": "871f2b2b50419a0a2c0777bab7e99e8db03b1ef01a2fec4eef22b6b837e06b87"
     },
     {
       "file": "tests/upgrade-0623-http.test.cjs",
@@ -1548,6 +1672,18 @@
       "sha256": "7011889b5e1b98abae70b4950b406f3f0101f8aff39019adba4f04fa61e6fa6f"
     },
     {
+      "file": "tests/voice-settings-ui.test.cjs",
+      "sha256": "29ee2575f51fb5186f57e8ab5f38780f983f98866e26e87c8b95db032d1c9f77"
+    },
+    {
+      "file": "tests/VoiceGateTests/Program.cs",
+      "sha256": "161c58d7e4c11c055ce01fb0386cb541717f06ccfa54fc6293593c8d3107b0ac"
+    },
+    {
+      "file": "tests/VoiceGateTests/VoiceGateTests.csproj",
+      "sha256": "6365dddb7094ffa548c8830661f2beeba17f2c540f301cc1a961433b692679e0"
+    },
+    {
       "file": "tests/vpk-recovery.test.py",
       "sha256": "c3104cf760a13852608921795eb3a3d5ebf6d4945874ff58f9db2207b71c1522"
     },
@@ -1557,7 +1693,7 @@
     },
     {
       "file": "version.json",
-      "sha256": "957294e76521edd5f504b623c70b3ac958a8fd6a1c3f3990f3f8b3a0417452a3"
+      "sha256": "1bba95863aed0728302a56867028f1d7569f106ec611e69419878a1d76ac1938"
     }
   ]
 }

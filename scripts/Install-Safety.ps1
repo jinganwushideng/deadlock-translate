@@ -62,6 +62,24 @@ function Get-DltFileCheck([string]$Path,[string]$Stage,[switch]$AllowReadOnly,[s
     return $entry
 }
 function Throw-DltCheck($Check){$ex=[IO.IOException]::new($Check.message);$ex.Data['dltFault']=$Check;throw $ex}
+function Get-DltRunningBackends([string[]]$RuntimeFolders) {
+    $paths=@($RuntimeFolders|Where-Object {$_}|ForEach-Object {[IO.Path]::GetFullPath((Join-Path $_ 'DeadlockTranslate.exe'))}|Select-Object -Unique)
+    if(-not $paths.Count){return}
+    Get-CimInstance Win32_Process -Filter "Name='DeadlockTranslate.exe'" -ErrorAction Stop | Where-Object {
+        $_.ExecutablePath -and $_.CreationDate -and $_.ExecutablePath -iin $paths
+    }
+}
+function Confirm-DltBackendStop($Backends,[string]$Consent) {
+    if(-not @($Backends).Count){return}
+    $identities=@($Backends|Sort-Object ExecutablePath,ProcessId|ForEach-Object {
+        $_.ExecutablePath.ToLowerInvariant()+'|'+$_.ProcessId+'|'+([datetime]$_.CreationDate).ToUniversalTime().Ticks
+    })
+    $token=Get-DltBytesHash ([Text.Encoding]::UTF8.GetBytes(($identities -join [char]10)))
+    if($Consent -cne $token){
+        Throw-DltCheck ([ordered]@{code='backend-stop-confirmation';stage='stop-backend';path='';
+            message='检测到本次安装目录的旧同频后台仍在运行。';backendConsent=$token;rollback=@()})
+    }
+}
 function Assert-DltWritableDirectory([string]$Path,[string]$Stage) {
     $probe=$null
     try {

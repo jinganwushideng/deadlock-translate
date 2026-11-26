@@ -340,8 +340,16 @@ function Conflicts([string]$game,$KnownInstall=$null){
         }catch{$result+=@{file=$f.Name;hash=(Hash $f.FullName);kind='unreadable';resources=@('无法检查该资源包')}}
     };return @($result)
 }
-function StopBackend([string]$runtime){
+function Test-DltBackendListener([int]$ProcessId){
+    $listeners=@(Get-NetTCPConnection -LocalAddress '127.0.0.1','::1','0.0.0.0','::' -State Listen -LocalPort 17865 -ErrorAction Stop)
+    return $listeners.Count -gt 0 -and -not @($listeners|Where-Object {$_.OwningProcess -ne $ProcessId}).Count
+}
+function StopBackend([string]$runtime,[int]$ApprovedPid=0){
     if(-not $runtime){return};$own=@(Get-CimInstance Win32_Process -Filter "Name='DeadlockTranslate.exe'"|Where-Object {$_.ExecutablePath -ieq (Join-Path $runtime 'DeadlockTranslate.exe')})
+    if($ApprovedPid){
+        $own=@($own|Where-Object {$_.ProcessId -eq $ApprovedPid})
+        if($own.Count -and -not (Test-DltBackendListener $ApprovedPid)){throw '无法确认旧后台占用的本地端口。'}
+    }
     if(-not $own.Count){return}
     $pairFile=Join-Path $runtime 'pairing.key';if(-not(Test-Path -LiteralPath $pairFile)){if($own.Count){throw '旧后台缺少配对文件，请手动停止。'};return}
     $key=([IO.File]::ReadAllText($pairFile)).Trim();if($key -notmatch '^[0-9a-fA-F]{48}$'){throw '旧后台配对文件无效，请在设置页停止后台。'}
@@ -350,8 +358,50 @@ function StopBackend([string]$runtime){
     $base='http://localhost:17865';$session=Invoke-RestMethod -Method Post -Uri ($base+'/control/'+$key+'/session') -TimeoutSec 3
     $uri=[Uri]$session.url;if($uri.Host -ne 'localhost' -or $uri.Port -ne 17865 -or $uri.Scheme -ne 'http' -or -not $uri.AbsolutePath.StartsWith('/settings/')){throw '后台身份响应无效。'}
     $null=Invoke-WebRequest -UseBasicParsing -Uri $uri -SessionVariable cookies -TimeoutSec 3
+    if($ApprovedPid -and -not (Test-DltBackendListener $ApprovedPid)){throw '旧后台端口已变化。'}
     $null=Invoke-RestMethod -Method Post -Uri ($base+'/api/stop') -WebSession $cookies -Headers @{Origin=$base;'X-DLT-Request'='1'} -TimeoutSec 3
     foreach($p in $own){try{$proc=Get-Process -Id $p.ProcessId -ErrorAction Stop;if(-not $proc.WaitForExit(10000)){throw '旧后台没有正常退出。'}}catch [Microsoft.PowerShell.Commands.ProcessCommandException]{}}
+}
+function Stop-DltApprovedBackend($Backend){
+    $process=Get-Process -Id $Backend.ProcessId -ErrorAction SilentlyContinue
+    if(-not $process){return}
+    $path=$Backend.ExecutablePath
+    try{
+        Assert-DltNoLinks $path
+        if($process.HasExited){return}
+        # Open the process handle before checking its identity so a reused PID is never a kill target.
+        $null=$process.Handle
+        $startDifference=[Math]::Abs($process.StartTime.ToUniversalTime().Ticks-([datetime]$Backend.CreationDate).ToUniversalTime().Ticks)
+        if($process.MainModule.FileName -ine $path -or $startDifference -gt [TimeSpan]::TicksPerMillisecond){
+            Throw-DltFault 'backend-instance-changed' 'stop-backend' $path '旧后台进程已变化，请重新检测。'
+        }
+        $owner=Invoke-CimMethod -InputObject $Backend -MethodName GetOwnerSid -ErrorAction Stop
+        $user=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        if($owner.ReturnValue -ne 0 -or $owner.Sid -ne $user){
+            Throw-DltFault 'backend-owner-mismatch' 'stop-backend' $path '无法确认该后台属于当前 Windows 用户。' '请使用运行旧后台的 Windows 用户重新打开安装器。'
+        }
+        Test-DltStop
+        try{StopBackend ([IO.Path]::GetDirectoryName($path)) $process.Id}catch{}
+        if($process.HasExited){Write-DltInstallTrace 'stop-backend' $path 'graceful-exit';return}
+        Test-DltStop
+        $process.Kill()
+        if(-not $process.WaitForExit(5000)){Throw-DltFault 'backend-stop-timeout' 'stop-backend' $path '已请求结束旧后台，等待进程退出超时。'}
+        Write-DltInstallTrace 'stop-backend' $path 'terminated-after-consent'
+    }catch{
+        if($process.HasExited){return}
+        if($_.Exception.Data.Contains('dltFault')){throw}
+        Throw-DltFault 'backend-stop-failed' 'stop-backend' $path '安装器无法关闭已确认的旧后台。' '如果旧后台以管理员权限运行，请选择“以管理员权限重开”后再试。'
+    }finally{$process.Dispose()}
+}
+function Close-DltBackendsForReview([string[]]$RuntimeFolders){
+    $running=@(Get-DltRunningBackends $RuntimeFolders)
+    Confirm-DltBackendStop $running $q.backendConsent
+    foreach($backend in $running){
+        if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '请退出 Deadlock 后继续。'}
+        Emit '正在关闭已确认的旧同频后台…'
+        Stop-DltApprovedBackend $backend
+    }
+    if($running.Count){Confirm-DltBackendStop @(Get-DltRunningBackends $RuntimeFolders) ''}
 }
 function Get-SelectedSteamUsers {
     $ids=if($q.PSObject.Properties['userIds']){@($q.userIds|Where-Object {$_})}else{@($q.userId|Where-Object {$_})}
@@ -505,7 +555,8 @@ function RemoveOwnedRuntime([string]$runtime,[string]$backup){
         $parts=$entry.file.Replace('\','/').Split('/')
         if([IO.Path]::IsPathRooted($entry.file) -or @($parts|Where-Object {$_ -in @('','.','..') -or $_.TrimEnd(' ','.') -cne $_ -or $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0}).Count){throw '文件清单有越界路径，停止清理。'}
         if($parts[-1].ToLowerInvariant() -in @('settings.json','secrets.dpapi','install-manifest.json','localhost-certificate.cer','localhost-certificate.dpapi') -or [IO.Path]::GetExtension($parts[-1]).ToLowerInvariant() -in @('.pfx','.cer','.dpapi')){$kept++;continue}
-        if($parts.Count -gt 1 -and $parts[0] -notin @('data','wwwroot','LICENSES','source')){$kept++;continue}
+        if($parts.Count -gt 1 -and $parts[0] -notin @('data','wwwroot','LICENSES','source','voice')){$kept++;continue}
+        if($parts[0] -eq 'voice' -and ($parts -join '/') -notmatch '^voice/(DeadlockVoiceWorker\.exe|runtimes/(?:cuda/|vulkan/)?win-x64/(?:whisper|ggml(?:-(?:base|cpu|cuda|vulkan))?-whisper)\.dll)$'){$kept++;continue}
         if($parts.Count -eq 1 -and $parts[0] -notmatch '^(DeadlockTranslate\.(exe|pdb|staticwebassets\.endpoints\.json)|dlt_translate_dir\.vpk|pairing\.key|package-manifest\.json|Install\.cmd|Uninstall\.cmd|Launch(?:-Admin)?\.cmd|Settings\.cmd|Manage-Mod\.ps1|Find-Deadlock\.ps1|Game-SearchPaths\.ps1|Install-Safety\.ps1|Installer-(?:Transaction|Workflow)\.ps1|Vpk-Recovery\.ps1|Configure-Steam\.ps1|Export-Diagnostics\.cmd|Repair-GameConfig\.cmd|Trust-Local-Https\.(ps1|cmd)|Renew-Local-Https\.cmd|LICENSE|NOTICE|SOURCE\.txt|web\.config|README\.md|GUI-INSTALLER\.md|USER-GUIDE\.md|AI-INSTALL-GUIDE\.md|TEST-REPORT\.md|VALIDATION\.md|CHANGELOG\.md|THIRD-PARTY-NOTICES\.md|Steam-Launch-Options\.txt|使用说明-先读我\.txt|AI安装说明书\.txt)$'){$kept++;continue}
         $path=Full (Join-Path $runtime ($parts -join '\'));if(-not $path.StartsWith($runtime+'\',[StringComparison]::OrdinalIgnoreCase)){throw '清理目标超出程序目录。'};NoLinks $path
         if(Test-Path -LiteralPath $path -PathType Leaf){if((Hash $path) -ne $entry.sha256.ToLowerInvariant()){$kept++;continue};$saved=Join-Path (Join-Path $backup 'removed-runtime') ($parts -join '\');[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($saved))|Out-Null;[IO.File]::Copy($path,$saved);if((Hash $saved) -ne $entry.sha256.ToLowerInvariant()){throw '删除前备份校验失败，保留原程序文件。'};if((Hash $path) -ne $entry.sha256.ToLowerInvariant()){$kept++;continue};Remove-DltTrackedFile $path $entry.sha256 'uninstall-runtime';$removed++}
@@ -599,7 +650,7 @@ try{
         'deep'{$result=Find-DeadlockDeep -Roots @($q.scanRoot) -TimeoutSeconds 60}
         'certificate'{
             if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '请先退出游戏，再准备或续期证书。'}
-            if($q.renew){$old=ReadInstall;if($old){StopBackend $old.runtimeFolder}}
+            if($q.renew){$old=ReadInstall;if($old){Close-DltBackendsForReview @($old.runtimeFolder)}}
             $info=CertStatus
             if($info.ready -and -not $q.renew){$result=$info;break}
             Emit '正在准备证书；Windows 信任弹窗需要你亲自确认。'
@@ -682,6 +733,8 @@ try{
                     Throw-DltFault 'file-changed' 'review' '' '游戏文件、程序清单或 Steam 配置在预览后发生变化，请重新检查。'
                 }
             }
+            $backendFolders=@($runtime,$decision.runtimeMove.oldRuntime,$decision.migration.oldRuntime)
+            Close-DltBackendsForReview $backendFolders
             Emit '检查目标文件、写入权限和回退空间…';$null=Readiness $game $runtime $install -Apply
             New-Item -ItemType Directory -Force -Path $backup|Out-Null
             $disabled=@();$installedNow=$false;$coreDone=$false;$warnings=@();$optionalFailures=@();$steamDone=$false;$steamHandled=$false;$steamCleanup=$null;$stage=$null;$adoptedRecordHash='';$savedInvalidRecord=''
@@ -695,15 +748,11 @@ try{
                     if(-not (CertStatus).ready){throw '请先完成第 1 步的证书确认。'}
                     Emit '校验证书私钥…';$p=Start-Process -FilePath (Join-Path $payload 'DeadlockTranslate.exe') -ArgumentList @('--prepare-https','--no-shell','--data-dir',('"'+$state+'"')) -WindowStyle Hidden -PassThru -Wait;if($p.ExitCode){throw '证书私钥无法读取，请使用原安装用户。'}
                     if(-not (CertStatus).ready){throw '证书私钥对应的证书与当前信任不一致，请返回证书步骤重新检测并确认信任。'}
-                    if($decision.runtimeMove -and $decision.runtimeMove.oldRuntime){
-                        Emit '正在正常停止上次目录中的翻译后台…'
-                        StopBackend $decision.runtimeMove.oldRuntime
-                    }
                     if($decision.migration){
                         Emit '正在备份旧安装记录并迁移到当前游戏…';$recordFile=Join-Path $state 'install-manifest.json'
                         if((Hash $recordFile) -ne $decision.recordHash){Throw-DltFault 'file-changed' 'migration-record' $recordFile '旧记录在检测后变化，已保留原文件，请重新检查。'}
                         $migrationRecord=Join-Path $backup 'previous-game-install-manifest.json';[IO.File]::Copy($recordFile,$migrationRecord,$false)
-                        StopBackend $decision.migration.oldRuntime
+                        Confirm-DltBackendStop @(Get-DltRunningBackends @($decision.migration.oldRuntime)) ''
                         $oldVpk=$decision.migration.oldOwnedVpk
                         if($oldVpk){NoLinks $oldVpk;if((Hash $oldVpk) -ne $decision.migration.oldHash.ToLowerInvariant()){Throw-DltFault 'file-changed' 'migration-old-vpk' $oldVpk '旧翻译文件在检测后变化，请重新检查。'}
                             $saved=$oldVpk+'.dlt-migrated-'+[Guid]::NewGuid().ToString('N')+'.bak';Move-DltTrackedFile $oldVpk $saved 'migration-old-vpk';$migrationVpk=@{original=$oldVpk;backup=$saved;hash=$decision.migration.oldHash.ToLowerInvariant()};Write-DltInstallTrace 'migration-old-vpk' $oldVpk 'backed-up-and-disabled' $migrationVpk.hash
@@ -725,7 +774,7 @@ try{
                         Emit '旧安装记录已丢失，将保留数据并成套重装…';$recordFile=Join-Path $state 'install-manifest.json'
                         Write-DltAtomic $recordFile ([Text.UTF8Encoding]::new($false).GetBytes(($install|ConvertTo-Json -Depth 6))) -ExpectedHash '-' -Stage 'record-rebuild';$adoptedRecordHash=Hash $recordFile
                     }
-                    if($install){Emit '正在成套更新后台、设置页和 VPK…';$a=@('-PackageFolder',$payload,'-RuntimeFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');if($decision.runtimeMove){$a+='-RequireEmptyRuntime'};if($q.repairMissing -or $decision.reinstall -or $decision.migration -or $decision.runtimeMove){$a+='-RepairMissingRuntime'};if($q.repairGameVpk -or $decision.reinstall -or $decision.migration){$a+='-RepairGameVpk';if($q.recoveryTarget){$a+=@('-RecoveryTarget',$q.recoveryTarget)}};Run 'Update-Mod.ps1' $a}
+                    if($install){Emit '正在成套更新后台、设置页和 VPK…';$a=@('-PackageFolder',$payload,'-RuntimeFolder',$runtime,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive','-RequireStoppedBackend');if($decision.runtimeMove){$a+='-RequireEmptyRuntime'};if($q.repairMissing -or $decision.reinstall -or $decision.migration -or $decision.runtimeMove){$a+='-RepairMissingRuntime'};if($q.repairGameVpk -or $decision.reinstall -or $decision.migration){$a+='-RepairGameVpk';if($q.recoveryTarget){$a+=@('-RecoveryTarget',$q.recoveryTarget)}};Run 'Update-Mod.ps1' $a}
                     else{
                         if($env:DLT_INSTALL_JOURNAL){
                             Emit '正在复制完整程序并校验各文件…'
@@ -752,9 +801,9 @@ try{
                     $coreDone=$true
                     if($disabled.Count){try{$m=ReadInstall;$previous=@($m.disabledConflicts|Where-Object {$_});$m|Add-Member -NotePropertyName disabledConflicts -NotePropertyValue @($previous+$disabled) -Force;$tempManifest=Join-Path $state ('install-'+[Guid]::NewGuid().ToString('N')+'.tmp');[IO.File]::WriteAllText($tempManifest,($m|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false));Write-DltAtomic (Join-Path $state 'install-manifest.json') ([IO.File]::ReadAllBytes($tempManifest)) -Backup (Join-Path $backup 'manifest-before-conflicts.json') -Stage 'conflict-record';[IO.File]::Delete($tempManifest)}catch{$warnings+='冲突包备份清单保存在本次备份目录，但未合并到安装记录。'}}
                 }elseif($q.mode -eq 'repair'){
-                    if($install){StopBackend $runtime};Emit '正在修复游戏搜索路径…';Run 'Manage-Mod.ps1' @('-Action','Repair','-PackageFolder',$payload,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');$coreDone=$true
+                    Confirm-DltBackendStop @(Get-DltRunningBackends @($runtime)) '';Emit '正在修复游戏搜索路径…';Run 'Manage-Mod.ps1' @('-Action','Repair','-PackageFolder',$payload,'-GamePath',$game,'-StateDirectory',$state,'-NonInteractive');$coreDone=$true
                 }elseif($q.mode -eq 'uninstall'){
-                    if(-not $install){throw '没有可验证的安装记录；请先恢复安装记录。'};StopBackend $runtime
+                    if(-not $install){throw '没有可验证的安装记录；请先恢复安装记录。'};Confirm-DltBackendStop @(Get-DltRunningBackends @($runtime)) ''
                     # Do not remove files while Steam still points to the translator unless manual mode was chosen.
                     if($q.configureSteam){Emit '正在移除此 Steam 目录中指向本程序的启动前缀…';$steamCleanup=RemoveSteamPrefixes $runtime $backup;$steamDone=$true}
                     if(-not (Normalize-DeadlockPath $game)){

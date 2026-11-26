@@ -1,0 +1,45 @@
+{
+  "hardware": "i5-13500H · RTX 4050 Laptop 6 GB · 驱动 617.42",
+  "models": [
+    {
+      "id": "base-q5_1",
+      "name": "Base Q5_1",
+      "note": "轻量。短英语报点出字快，中文噪声和游戏术语容易错。",
+      "seconds": {
+        "cpu": 2.75,
+        "cuda": 0.19,
+        "vulkan": 0.23
+      }
+    },
+    {
+      "id": "small-q5_1",
+      "name": "Small Q5_1",
+      "note": "显卡均衡。中英短句表现稳定，纯噪声样本在 CUDA、Vulkan 出现误字。",
+      "seconds": {
+        "cpu": 10.25,
+        "cuda": 0.35,
+        "vulkan": 0.42
+      }
+    },
+    {
+      "id": "medium-q5_0",
+      "name": "Medium Q5_0",
+      "note": "体积较大。中英短句表现稳定，术语仍有误认，CPU 延迟高。",
+      "seconds": {
+        "cpu": 28.3,
+        "cuda": 0.84,
+        "vulkan": 0.83
+      }
+    },
+    {
+      "id": "large-v3-turbo-q5_0",
+      "name": "Large-v3-Turbo Q5_0",
+      "note": "本轮中文噪声报点保留较完整，仍有术语误认，CPU 延迟高。",
+      "seconds": {
+        "cpu": null,
+        "cuda": 0.96,
+        "vulkan": 1.0
+      }
+    }
+  ]
+}

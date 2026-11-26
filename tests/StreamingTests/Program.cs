@@ -41,6 +41,25 @@ using(var body=JsonDocument.Parse(fixture.LastBody!)){
 }
 await log.FlushAsync();var raw=string.Concat((await log.SnapshotAsync()).Select(b=>Encoding.UTF8.GetString(b)));Check(raw.Contains("LlmUsage")&&raw.Contains("reasoningTokens\":20")&&!raw.Contains("PRIVATE_REASONING")&&!raw.Contains("synthetic current")&&!raw.Contains("same-channel context")&&!raw.Contains("fake-local-key"),"usage log contains numbers and stages without chat/reasoning/key");
 var count=fixture.Calls;Check(await service.TranslateOutgoing("synthetic current",["same-channel context"],cfg.Current,false,CancellationToken.None)=="translated current"&&fixture.Calls==count,"streaming retains exact-context request cache");
+using(var voiceFeed=new Feed())
+using(var voiceResponse=StreamResponse(voiceFeed)){
+ var progress=new System.Collections.Concurrent.ConcurrentQueue<string>();
+ var voiceTelemetry=new LlmTelemetry();
+ var voiceTrace=voiceTelemetry.Begin(cfg.Current,false,0);
+ var read=ChatCompletionReader.Read(voiceResponse,voiceTrace,CancellationToken.None,onPartial:progress.Enqueue);
+ voiceFeed.Put(Chunk(new{reasoning_content="PRIVATE_REASONING"}));
+ await Until(()=>voiceTelemetry.Recent[0].Phase=="thinking");
+ Check(progress.IsEmpty,"voice preview receives no private reasoning");
+ voiceFeed.Put(Chunk(new{content="first"}));
+ await Until(()=>progress.Count==1);
+ Check(progress.Single()=="first"&&!read.IsCompleted,"first voice text is visible before upstream completion");
+ voiceFeed.Put(Chunk(new{content=" second"}));
+ await Until(()=>progress.Count==2);
+ Check(progress.SequenceEqual(new[]{"first","first second"})&&!read.IsCompleted,"voice previews contain accumulated text");
+ voiceFeed.Put(Chunk(new{},"stop")+"data: [DONE]\n\n");
+ voiceFeed.End();
+ Check(await read=="first second","voice streaming still requires a valid complete response");
+}
 foreach(var (api,host,model,enabled,expected) in new[]{("auto","https://api.deepseek.com/v1","deepseek-flash",false,"disabled"),("auto","https://api.deepseek.com.evil.invalid/v1","deepseek-flash",false,""),("auto","https://api.deepseek.com:444/v1","deepseek-flash",false,""),("auto","https://api.deepseek.com/v1","unknown",false,""),("deepseek","https://fixture.invalid/v1","fixture",true,"enabled"),("provider","https://api.deepseek.com/v1","deepseek-flash",false,"")}){
  using var content=LlmRequestOptions.Create(model,"system","input",4096,true,enabled,api,host);using var body=JsonDocument.Parse(await content.ReadAsStringAsync());var actual=body.RootElement.TryGetProperty("thinking",out var t)?t.GetProperty("type").GetString():"";Check(actual==expected,"thinking control obeys exact host/model or explicit format: "+api+" / "+host);
 }

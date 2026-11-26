@@ -56,7 +56,7 @@ def main():
                  'Renew-Local-Https.cmd', 'Steam-Launch-Options.txt', 'web.config',
                  'build-info.json', 'USER-GUIDE.md', '使用说明-先读我.txt', 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md'):
         shutil.copyfile(built / name, package / name)
-    for name in ('data', 'wwwroot', 'LICENSES'):
+    for name in ('data', 'wwwroot', 'LICENSES', 'voice'):
         shutil.copytree(built / name, package / name)
     subprocess.run([sys.executable, str(ROOT / 'scripts/package_docs.py'), '--output', str(package)], check=True)
     for script in ('Configure-Steam.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Installer-Transaction.ps1','Installer-Workflow.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1','Repair-GameConfig.cmd','Export-Diagnostics.cmd'):

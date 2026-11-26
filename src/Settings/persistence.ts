@@ -2,7 +2,7 @@
 let settingsRevision:string|null=null,settingsEpoch=0,savedSettingsEpoch=0;
 let saveInFlight:Promise<void>|null=null,autoSaveTimer:ReturnType<typeof setTimeout>|null=null,saveFailed=false;
 let savedSettings:Record<string,any>={},lastPublicConfig:any=null,conflictPublic:any=null;
-let savedTerms:Term[]=[],termsDirty=false,clipboardInProgress=false,settingsComposing=false;
+let savedTerms:Term[]=[],termsDirty=false,termsSaving=false,clipboardInProgress=false,settingsComposing=false;
 const clone=<T>(value:T):T=>JSON.parse(JSON.stringify(value));
 function saveSuffix(){return nativeBackgroundAvailable?':save:'+(saveFailed?'error':saveInFlight?'saving':nativeEditorSession||settingsEpoch>savedSettingsEpoch?'dirty':'clean'):'';}
 function rememberLoadedConfig(data:any){settingsRevision=typeof data.revision==='string'?data.revision:null;savedSettings=clone(current);lastPublicConfig=data;}
@@ -54,8 +54,12 @@ bind('resolveSettingsConflict',async()=>{
  loadFields({...remote,settings:{...remote.settings,...patch}});lastPublicConfig=remote;savedSettings=clone(remote.settings);conflictPublic=null;$('saveConflict').hidden=true;saveFailed=false;settingsEpoch++;await save();
 });
 bind('useRemoteSettings',async()=>{const remote=await api('config');await cancelNativeEditor();clearAzure=clearLlm=false;$<HTMLInputElement>('azureKey').value='';$<HTMLInputElement>('llmKey').value='';loadFields(remote);savedSettingsEpoch=++settingsEpoch;saveFailed=false;conflictPublic=null;$('saveConflict').hidden=true;setSaveStatus('已采用另一窗口的设置');});
-function markTermsDraft(){termsDirty=true;updateTermsHint();}
-bind('discardTermsDraft',async()=>{await cancelNativeEditor();terms=clone(savedTerms);termsDirty=false;$('termConflicts').hidden=true;drawTerms();notice('词库已恢复到上次保存的内容。');});
+function markTermsDraft(){termsDirty=true;updateTermsHint();if(!termsSaving)setTermSaveStatus('词库有修改，请点击「保存词库」。');}
+bind('discardTermsDraft',async()=>{
+ if(termsSaving)return;
+ await cancelNativeEditor();terms=clone(savedTerms);termsDirty=false;$('termConflicts').hidden=true;drawTerms();
+ setTermSaveStatus('已恢复到上次保存的词库。');notice('词库已恢复到上次保存的内容。');
+});
 let leavingSettings:Promise<void>|null=null;
 function leaveSettings(reload=false):Promise<void>{
  if(settingsReloadRequested||settingsClosing)return Promise.resolve();
@@ -63,7 +67,7 @@ function leaveSettings(reload=false):Promise<void>{
  leavingSettings=finishLeavingSettings(reload).finally(()=>{leavingSettings=null;});return leavingSettings;
 }
 async function finishLeavingSettings(reload:boolean){
- try{await save();if(termsDirty){notice('词库还有未保存的修改，请保存词库或撤销词库修改后再关闭。',true);await selectPage('glossary');return;}
+ try{await save();if(termsSaving||termsDirty){notice(termsSaving?'词库正在保存，请等待保存完成。':'词库还有未保存的修改，请保存词库或撤销词库修改后再关闭。',true);await selectPage('glossary');return;}
   await stopRecording();await stopDisplayPreview();if(reload){settingsReloadRequested=true;window.DltSettingsNavigation?.cancel();if(inGame){$('autoSaveStatus').textContent='正在重新加载…';document.title='DLTSETTINGS:reload:'+(++settingsSignal)+backgroundSuffix()+saveSuffix()+windowLoadSuffix();}else location.reload();return;}
   settingsClosing=true;window.DltSettingsNavigation?.cancel();if(inGame)document.title='DLTSETTINGS:close'+windowLoadSuffix();else{document.querySelector<HTMLElement>('.shell')!.hidden=true;document.body.insertAdjacentHTML('beforeend','<div class="closed-settings"><h2>设置已关闭</h2><p>更改已保存在本机，可重新打开设置。</p><button id="reopenSettings">重新打开</button></div>');$('reopenSettings').onclick=()=>location.reload();}
  }catch(e){notice((e as Error).message,true);}
