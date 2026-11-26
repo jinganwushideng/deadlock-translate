@@ -1105,7 +1105,7 @@
     },
     {
       "file": "tests/deepseek-preset-ui.test.cjs",
-      "sha256": "66dda3299e53ba3718b4b26656fb1b0f86571d2a377d75d77a18515edbdde96a"
+      "sha256": "79b6e84dd992cf39cfe684efaec85d5536b38f57315872c4344a8e23031187d1"
     },
     {
       "file": "tests/diagnostics-http.test.cjs",
@@ -1121,7 +1121,7 @@
     },
     {
       "file": "tests/display-customization-ui.test.cjs",
-      "sha256": "64af0c50695bf18de0e4a43331fad5dde212a714bb1fa5de4775e35b798fc091"
+      "sha256": "bc924cc1f45f71c61b2d77dcf125a95525399fc0fc7a6482d4a8422d629537e5"
     },
     {
       "file": "tests/display-customization.test.cjs",
@@ -1133,7 +1133,7 @@
     },
     {
       "file": "tests/display-settings-ui.test.cjs",
-      "sha256": "b5350435218fe791e652acf310bb08422745d49c602644d41472f0aae057d9a9"
+      "sha256": "5ade4e7cc2c03feb4dbcb1cb4771dd47a6f95335d61ca8f2940a1685da0ced75"
     },
     {
       "file": "tests/DisplaySettingsTests/DisplaySettingsTests.csproj",
@@ -1213,7 +1213,7 @@
     },
     {
       "file": "tests/incoming-style-ui.test.cjs",
-      "sha256": "63bf746a451454aa949d9176307abc830ad2ffbe71fc98c508bed1bd46926eb5"
+      "sha256": "7259d545b3390dac9a4d9062f738accf7663ba1c5dbe099049aa29264d46c503"
     },
     {
       "file": "tests/IncomingStyleTests/IncomingStyleTests.csproj",
@@ -1429,7 +1429,7 @@
     },
     {
       "file": "tests/outgoing-style-ui.test.cjs",
-      "sha256": "207a0ecad38f5e4676c38886f1e6aff99bed134389b1063080bd542c0dafb327"
+      "sha256": "2c19b55f57bfb3d80f1667cbc8bf970ebaa27bcf370bfe2e00f18e130e0c946a"
     },
     {
       "file": "tests/outgoing-ui.test.cjs",
@@ -1469,7 +1469,7 @@
     },
     {
       "file": "tests/receive-burst-ui.test.cjs",
-      "sha256": "1b192e8de7e9ed8fdc5fbfc53d907d3072e2b5acfc5900f3860a01cee4ff046a"
+      "sha256": "57fae64e22a53a439b07df20ac33e3e30a661b027d03f84fb41088b1d1bf8722"
     },
     {
       "file": "tests/ReceiveBurstTests/Program.cs",
@@ -1505,7 +1505,7 @@
     },
     {
       "file": "tests/runtime-alert-ui.test.cjs",
-      "sha256": "19839d99055bb2c87db988072eeab5a507ee3fddaf349fa93c6c6621df83fe01"
+      "sha256": "85f4aaa5716e90fbd3609860361842303fa003f3f53680bd28b28aed8fe3f7f9"
     },
     {
       "file": "tests/RuntimeAlertTests/Program.cs",
@@ -1525,7 +1525,7 @@
     },
     {
       "file": "tests/secret-clipboard-ui.test.cjs",
-      "sha256": "479d54474e4bedabeb62ac9551814a493f45c84241415922c5d6848aafb8418e"
+      "sha256": "7f3af59ce483eb994f26c81e4e7e0656e38e652698fc763f58ccbdd17bbc16ce"
     },
     {
       "file": "tests/SecretClipboardTests/Program.cs",

@@ -12,9 +12,10 @@ const server=http.createServer((req,res)=>{
  else if(url==='/api/providers/deepseek/key'){opens++;res.end('{"opened":true}');}
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:0,pending:0,connected:false},terms:1,diagnostics:{phase:'waiting-for-game',certificate:{state:'ready'},gamePrivileges:{detected:false}}}));
  else if(url==='/api/outgoing')res.end('{"items":[]}');
+ else if(url==='/api/voice'){res.statusCode=503;res.end('{}');}
  else if(url.startsWith('/api/'))res.end('{}');
  else{
-  const file=['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)?url.slice(1):'index.html';
+  const file=['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css','/voice-settings.js'].includes(url)?url.slice(1):'index.html';
   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');
   res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',file)));
  }

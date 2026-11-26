@@ -14,7 +14,8 @@ const server=http.createServer((req,res)=>{
  else if(url==='/api/admin-restart'){adminCalls++;res.end('{}');}
  else if(url==='/api/launch-options')res.end(JSON.stringify({normal:'"D:\\Apps\\DeadlockTranslate\\DeadlockTranslate.exe" --steam-game %command%',admin:'"D:\\Apps\\DeadlockTranslate\\DeadlockTranslate.exe" --admin-compatible --steam-game %command%'}));
  else if(url==='/api/diagnostics/export'){exportCount++;res.end(JSON.stringify({file:'fixture-log.zip'}));}
- else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(url==='/api/voice'){res.statusCode=503;res.end('{}');}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css','/voice-settings.js'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{

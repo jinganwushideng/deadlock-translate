@@ -19,11 +19,12 @@ const server=http.createServer(async(req,res)=>{
   }
   if(url.pathname==='/api/native-editor'){nativeRequests++;return res.end('{}');}
   if(url.pathname==='/api/terms')return res.end('[]');
-  if(url.pathname==='/api/outgoing')return res.end('{"items":[]}');
+  if(url.pathname==='/api/voice'){res.statusCode=503;return res.end('{}');}
+ if(url.pathname==='/api/outgoing')return res.end('{"items":[]}');
   if(url.pathname==='/api/status')return res.end(JSON.stringify({engine:{messages:0,pending:0,connected:true},terms:0,diagnostics:{phase:'connected',certificate:{state:'ready'},hotkey:{available:true},sending:{state:'idle'}}}));
   return res.end('{}');
  }
- const asset=url.pathname.slice(1),name=['style.css','app.js','settings-background.css','settings-background.js','settings-background-v3-flat.png','settings-navigation.js'].includes(asset)?asset:'index.html';
+ const asset=url.pathname.slice(1),name=['style.css','app.js','settings-background.css','settings-background.js','settings-background-v3-flat.png','settings-navigation.js','voice-settings.js'].includes(asset)?asset:'index.html';
  res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',name)));
 });
 const checks=[];function check(ok,name){assert(ok,name);checks.push(name);console.log('PASS '+name);}

@@ -7,8 +7,9 @@ const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','ap
  else if(url==='/api/config')res.end(JSON.stringify({settings,hasLlmKey:true,hasAzureKey:false}));
  else if(url==='/api/terms')res.end('[]');else if(url==='/api/outgoing')res.end('{"items":[]}');
  else if(url==='/api/status')res.end(JSON.stringify({engine:{messages:12,pending:0,connected:true},terms:10,gameEvidence:{metrics:{hudWaits:3,hudRetryRecovered:2,hudNativeExpired:1,feedRendered:4}},diagnostics:{phase:'connected',certificate:{state:'ready'}}}));
+ else if(url==='/api/voice'){res.statusCode=503;res.end('{}');}
  else if(url.startsWith('/api/'))res.end('{}');
- else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
+ else if(['/app.js','/style.css','/settings-navigation.js','/settings-background.js','/settings-background.css','/voice-settings.js'].includes(url)){res.setHeader('Content-Type',url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot',url.slice(1))));}
  else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(root,'src/Bridge/wwwroot/index.html')));}
 });
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({channel:'msedge',headless:true});try{
