@@ -27,6 +27,8 @@ public sealed class Package : IDisposable {
         Payload=await Task.Run(()=>Extract(zipPath,Path.Combine(Root,"payload"),ct),ct);
         using var manifest=JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(Payload,"package-manifest.json"),ct));
         if(manifest.RootElement.GetProperty("version").GetString()!=InstallerVersion.Current)throw new InvalidDataException("安装器与内置程序版本不一致。");
+        var lite=manifest.RootElement.TryGetProperty("edition",out var edition)&&edition.GetString()=="lite";
+        if(lite!=BuildInfo.IsLite)throw new InvalidDataException("安装器和运行包的版本类型不一致。");
         if(!manifest.RootElement.TryGetProperty("buildId",out var build)||build.GetString()!=BuildInfo.Id)throw new InvalidDataException("安装器与内置程序构建不一致，请重新下载完整安装器。");
     }
     public static string Extract(string archive,string destination,CancellationToken ct){

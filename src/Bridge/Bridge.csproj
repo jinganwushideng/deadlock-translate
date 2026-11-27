@@ -24,5 +24,12 @@
     <InternalsVisibleTo Include="BuildCatalogTests" />
     <InternalsVisibleTo Include="NativeSendTests" />
   </ItemGroup>
+  <ItemGroup><Content Remove="wwwroot/lite.html" /></ItemGroup>
+  <PropertyGroup Condition="'$(LiteEdition)' == 'true'">
+    <CompressionEnabled>false</CompressionEnabled>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(LiteEdition)' == 'true'">
+    <Content Remove="wwwroot/voice-settings.js;wwwroot/voice-benchmark.json" />
+  </ItemGroup>
   <ItemGroup><Content Update="data\**;wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
 </Project>

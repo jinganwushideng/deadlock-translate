@@ -139,9 +139,10 @@ $taskBefore=[IO.File]::ReadAllBytes($taskGameinfo)
 $taskBeforeHash=Get-DltHash $taskGameinfo
 $taskPathPlan=Get-DltSearchPathsPlan $taskBefore -EnsureAddons
 $taskChanged=$taskPathPlan.Changed
-$taskInstalledVersion=$null
-foreach($taskMetadataName in @('package-manifest.json','build-manifest.json')){if(Test-Path -LiteralPath (Join-Path $PackageFolder $taskMetadataName)){$taskInstalledVersion=(Get-Content -LiteralPath (Join-Path $PackageFolder $taskMetadataName) -Raw -Encoding UTF8|ConvertFrom-Json).version;break}}
+$taskInstalledVersion=$null;$taskEdition=$null
+foreach($taskMetadataName in @('package-manifest.json','build-manifest.json')){if(Test-Path -LiteralPath (Join-Path $PackageFolder $taskMetadataName)){$taskMetadata=Get-Content -LiteralPath (Join-Path $PackageFolder $taskMetadataName) -Raw -Encoding UTF8|ConvertFrom-Json;$taskInstalledVersion=$taskMetadata.version;$taskEdition=$taskMetadata.edition;break}}
 $taskState=[ordered]@{target=$taskTarget;vpkHash=(Get-FileHash -LiteralPath $taskPackage).Hash;version=$taskInstalledVersion;runtimeFolder=[IO.Path]::GetFullPath($PackageFolder);gameinfoChanged=($taskChanged -and $taskPathPlan.AddedAddon);gameinfoBefore=[Convert]::ToBase64String($taskBefore);gameinfoAfterHash=$null}
+if($taskEdition -eq 'lite'){$taskState.edition='lite';$taskState.releaseTag=$taskMetadata.releaseTag}
 $taskVpkCommitted=$false;$taskGiCommitted=$false
 $taskBackup=$taskGameinfo+'.dlt-before-install-'+[Guid]::NewGuid().ToString('N')+'.bak'
 try{

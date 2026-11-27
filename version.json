@@ -1,5 +1,6 @@
 {
   "version": "0.7.6.1",
+  "liteVersion": "0.1.0",
   "chatPipelineFix": "native-parent-size-nudge",
   "featureRevision": "shop-tooltip-layout-compatibility"
 }

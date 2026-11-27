@@ -185,6 +185,54 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn('outgoingStandalone',terms['女巫'])
         self.assertEqual(terms['黑子']['target'],'我自己的岚梦昵称')
 
+    def test_lite_switch_retires_owned_voice_and_migrates_shared_profiles(self):
+        voice = 'voice/DeadlockVoiceWorker.exe'
+        other = 'voice/runtimes/cuda/win-x64/whisper.dll'
+        for file, data in [(voice, b'old worker'), (other, b'user replacement')]:
+            path = self.runtime / file
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        write_json(self.runtime/'package-manifest.json', dict(version='0.6.1', files=[
+            dict(file=voice, sha256=digest(b'old worker')),
+            dict(file=other, sha256=digest(b'other bytes'))
+        ]))
+        write_json(self.state/'lite/terms.json', [term('lite-only','personal lite translation')])
+        write_json(self.state/'settings.json',dict(outgoingHotkey='F8',incomingTargetLanguage='ja',mode='quality',voiceInputTeamKey='F9'))
+        write_json(self.state/'lite/settings.json',dict(outgoingHotkey='F4',mode='fast'))
+        (self.state/'secrets.dpapi').unlink()
+        original = (self.state/'terms.json').read_bytes()
+        self.metadata(edition='lite')
+        self.assertEqual(self.run_update(explicit=True), 0, self.output)
+        self.assertFalse((self.runtime/voice).exists())
+        self.assertEqual((self.runtime/other).read_bytes(), b'user replacement')
+        self.assertEqual((self.state/'terms.json').read_bytes(), original)
+        lite_terms = self.state/'lite/terms.json'
+        shared = json.loads(lite_terms.read_text(encoding='utf-8-sig'))
+        self.assertTrue({'edited','lite-only','custom','added'} <= {t['source'] for t in shared})
+        self.assertFalse({'retired','deleted'} & {t['source'] for t in shared})
+        lite_settings = self.state/'lite/settings.json'
+        settings = json.loads(lite_settings.read_text(encoding='utf-8-sig'))
+        self.assertEqual((settings['outgoingHotkey'],settings['incomingTargetLanguage'],settings['mode']),('F8','ja','fast'))
+        self.assertNotIn('voiceInputTeamKey',settings)
+        self.assertEqual(json.loads((self.state/'install-manifest.json').read_text())['edition'], 'lite')
+        write_json(lite_terms, [t for t in shared if t['source']!='custom']+[term('new-lite','new term')])
+        write_json(lite_settings, {**settings,'outgoingHotkey':'F10','outgoingDisplayMode':'bilingual'})
+        lite = lite_terms.read_bytes()
+        full_worker = self.package/voice
+        full_worker.parent.mkdir(parents=True)
+        full_worker.write_bytes(b'full worker restored')
+        self.files[voice] = b'full worker restored'
+        self.metadata()
+        self.assertEqual(self.run_update(explicit=True), 0, self.output)
+        self.assertEqual((self.runtime/voice).read_bytes(), b'full worker restored')
+        full_terms = json.loads((self.state/'terms.json').read_text(encoding='utf-8-sig'))
+        self.assertIn('new-lite',{t['source'] for t in full_terms})
+        self.assertNotIn('custom',{t['source'] for t in full_terms})
+        self.assertEqual(lite_terms.read_bytes(), lite)
+        full_settings=json.loads((self.state/'settings.json').read_text(encoding='utf-8-sig'))
+        self.assertEqual((full_settings['outgoingHotkey'],full_settings['outgoingDisplayMode'],full_settings['mode'],full_settings['voiceInputTeamKey']),
+                         ('F10','bilingual','quality','F9'))
+
     def test_removed_default_nickname_is_dropped_when_unedited(self):
         old_haze_alias = dict(source='黑子', target='岚梦', english='Haze', kind='name', ambiguous=True, outgoingStandalone=True)
         write_json(self.runtime/'data/terms.json',[*self.old_terms,old_haze_alias])
@@ -192,6 +240,16 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(self.run_update(),0,self.output)
         terms=json.loads((self.state/'terms.json').read_text(encoding='utf-8-sig'))
         self.assertNotIn('黑子',{t['source'] for t in terms})
+
+    def test_migrated_hotkey_does_not_break_full_edition_shortcuts(self):
+        write_json(self.runtime/'package-manifest.json',dict(version='0.6.1',edition='lite'))
+        write_json(self.state/'settings.json',dict(outgoingHotkey='F8',voiceInputTeamKey='LAlt+F9'))
+        write_json(self.state/'lite/settings.json',dict(outgoingHotkey='Alt+F9',outgoingTargetLanguage='ja'))
+        (self.state/'secrets.dpapi').unlink()
+        self.assertEqual(self.run_update(explicit=True),0,self.output)
+        full=json.loads((self.state/'settings.json').read_text(encoding='utf-8-sig'))
+        self.assertEqual((full['outgoingHotkey'],full['voiceInputTeamKey'],full['outgoingTargetLanguage']),('F8','LAlt+F9','ja'))
+        self.assertIn('dlt:edition-hotkey-conflict',self.output)
 
     def test_legacy_name_edits_and_empty_schema_fields_preserved(self):
         self.old_terms[0]['legacyTarget']='default old name'

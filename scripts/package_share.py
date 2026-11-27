@@ -21,14 +21,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-folder', type=Path)
     parser.add_argument('--archive-dir', type=Path)
+    parser.add_argument('--lite', action='store_true')
     args = parser.parse_args()
-    build_info = stamp(check=True)
+    build_info = stamp(check=True, lite=args.lite)
+    product = 'DeadlockTranslate-Lite' if args.lite else 'DeadlockTranslate'
     version_info = json.loads((ROOT / 'version.json').read_text(encoding='utf-8-sig'))
-    version = version_info['version']
+    version = build_info['version']
     release = ROOT / 'release' / version
     args.output_folder = args.output_folder or release
     args.archive_dir = args.archive_dir or release
-    built = ROOT / 'dist' / f'DeadlockTranslate-{version}'
+    built = ROOT / 'dist' / f'{product}-{version}'
     built_identity = json.loads((built/'build-info.json').read_text(encoding='utf-8-sig'))
     if built_identity != build_info: raise SystemExit('Runtime build differs from source; build the complete runtime before packaging.')
     built_manifest = json.loads((built/'build-manifest.json').read_text(encoding='utf-8-sig'))
@@ -38,10 +40,10 @@ def main():
         if not artifact.resolve().is_relative_to(built.resolve()) or not artifact.is_file() or sha(artifact).lower() != item['sha256'].lower():
             raise SystemExit('Built runtime file changed after verification: '+item['file'])
 
-    package = args.output_folder / f'DeadlockTranslate-{version}'
+    package = args.output_folder / f'{product}-{version}'
     if package.exists():
         raise SystemExit('Output directory already exists; choose a new staging directory.')
-    archive = args.archive_dir / f'DeadlockTranslate-{version}-win-x64.zip'
+    archive = args.archive_dir / f'{product}-{version}-win-x64.zip'
     if archive.exists():
         raise SystemExit('Archive already exists; choose another output directory.')
     files = public_files()
@@ -56,13 +58,18 @@ def main():
                  'Renew-Local-Https.cmd', 'Steam-Launch-Options.txt', 'web.config',
                  'build-info.json', 'USER-GUIDE.md', '使用说明-先读我.txt', 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md'):
         shutil.copyfile(built / name, package / name)
-    for name in ('data', 'wwwroot', 'LICENSES', 'voice'):
-        shutil.copytree(built / name, package / name)
-    subprocess.run([sys.executable, str(ROOT / 'scripts/package_docs.py'), '--output', str(package)], check=True)
+    for name in ('data', 'wwwroot', 'LICENSES') if args.lite else ('data', 'wwwroot', 'LICENSES', 'voice'):
+        ignore = shutil.ignore_patterns('*.br', '*.gz') if args.lite and name == 'wwwroot' else None
+        shutil.copytree(built / name, package / name, ignore=ignore)
+    subprocess.run([sys.executable, str(ROOT / 'scripts/package_docs.py'), '--output', str(package), *(['--lite'] if args.lite else [])], check=True)
     for script in ('Configure-Steam.ps1','Find-Deadlock.ps1','Game-SearchPaths.ps1','Install-Safety.ps1','Installer-Transaction.ps1','Installer-Workflow.ps1','Vpk-Recovery.ps1','Backup-Maintenance.ps1','Repair-GameConfig.cmd','Export-Diagnostics.cmd'):
         shutil.copyfile(ROOT / 'scripts' / script, package / script)
-    for original, name in ((ROOT / 'README.md', 'README.md'), (ROOT / 'CHANGELOG.md', 'CHANGELOG.md'),
-                           (ROOT / ('docs/UPDATE-'+version+'.md'), 'UPDATE-'+version+'.md'), (ROOT / 'docs/VALIDATION.md', 'VALIDATION.md'), (ROOT / 'docs/TEST-REPORT.md', 'TEST-REPORT.md')):
+    readme = 'docs/LITE.md' if args.lite else 'README.md'
+    changelog = 'docs/LITE-CHANGELOG.md' if args.lite else 'CHANGELOG.md'
+    update_notes = changelog if args.lite else f'docs/UPDATE-{version}.md'
+    for original, name in ((ROOT/readme, 'README.md'), (ROOT/changelog, 'CHANGELOG.md'),
+                           (ROOT/update_notes, f'UPDATE-{version}.md'), (ROOT/'docs/VALIDATION.md', 'VALIDATION.md'),
+                           (ROOT/'docs/TEST-REPORT.md', 'TEST-REPORT.md')):
         shutil.copyfile(original, package / name)
     source = package / 'source'
     source.mkdir()
@@ -74,6 +81,8 @@ def main():
     (package / 'SOURCE.txt').write_text('本包包含与运行程序版本一致的可编辑公开源码；构建说明见源码 docs/BUILDING.md。\n源码不包含个人 API Key、配置或证书，也不包含游戏原始资源和外部编译工具。\n', encoding='utf-8-sig')
     manifest = dict(version=version, buildId=build_info['buildId'], featureRevision=version_info.get('featureRevision'), files=[dict(file=f.relative_to(package).as_posix(), bytes=f.stat().st_size, sha256=sha(f))
                     for f in sorted(package.rglob('*')) if f.is_file()])
+    if args.lite:
+        manifest.update(edition='lite', releaseTag=build_info['releaseTag'])
     (package / 'package-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
     # Fresh installs and upgrades must accept exactly the same published payload.
     subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -92,6 +101,9 @@ def main():
                 raise SystemExit('Archive file hash mismatch: ' + item['file'])
     checksum = sha(archive)
     archive.with_suffix('.zip.sha256').write_text(checksum + '  ' + archive.name + '\n', encoding='ascii')
+    if args.lite:
+        print(json.dumps(dict(package=str(package),archive=str(archive),sha256=checksum,files=len(manifest['files'])),ensure_ascii=False))
+        return
     updater = build_updater(args.archive_dir / '覆盖更新.cmd')
     updater.with_suffix('.cmd.sha256').write_text(sha(updater) + '  ' + updater.name + '\n', encoding='utf-8-sig')
     for name in ('AI安装说明书.txt', 'AI-INSTALL-GUIDE.md', 'Configure-Steam.ps1', 'Install-Safety.ps1','Installer-Transaction.ps1','Vpk-Recovery.ps1'):

@@ -94,6 +94,26 @@ function Assert-DltWritableDirectory([string]$Path,[string]$Stage) {
         $ex=[IO.IOException]::new('目录写入检查失败。',$_.Exception);$ex.Data['dltFault']=Get-DltFault $_ $Stage $Path;throw $ex
     }
 }
+function Get-DltInstalledEditionInfo($Install,[string]$Runtime){
+    $folder=if($Install.runtimeFolder){[string]$Install.runtimeFolder}else{$Runtime}
+    if($folder -and [IO.Path]::IsPathRooted($folder)){
+        $file=Join-Path $folder 'package-manifest.json'
+        if([IO.File]::Exists($file)){
+            Assert-DltNoLinks $file
+            try{
+                $metadata=[IO.File]::ReadAllText($file,[Text.Encoding]::UTF8)|ConvertFrom-Json
+                if($metadata.version -eq $Install.version){return $metadata}
+            }catch{}
+        }
+    }
+    return $Install
+}
+function Test-DltVersionReplacement($Installed,$Next){
+    $oldLite=$Installed.edition -eq 'lite';$newLite=$Next.edition -eq 'lite'
+    if($oldLite -ne $newLite){return $true}
+    if($newLite -and $Next.releaseTag -eq ('lite-v'+$Next.version) -and $Installed.releaseTag -ne ('lite-v'+$Installed.version)){return $true}
+    return $Installed.version -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?$' -or [version]$Installed.version -le [version]$Next.version
+}
 function Write-DltAtomic([string]$Path,[byte[]]$Bytes,[string]$ExpectedHash='', [string]$Backup='',[switch]$AllowReadOnly,[string]$Stage='commit') {
     if(-not $Stage.StartsWith('rollback')){Test-DltStop}
     if($env:DLT_INSTALL_JOURNAL -and -not $script:DltRestoring -and -not $Stage.StartsWith('rollback')){

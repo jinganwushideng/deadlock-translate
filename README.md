@@ -4,7 +4,7 @@
 
 技术结构：Panorama 游戏界面＋本地 .NET 后台＋TypeScript 设置页。翻译调用云端服务，本地不运行翻译模型。
 
-当前正式版为 **0.7.6.1**，修复 Deadlock 更新后打开商店时的闪退。QQ 反馈群 **923443423**。[本版更新说明](docs/UPDATE-0.7.6.1.md)
+完整版当前为 **0.7.6.1**，修复 Deadlock 更新后打开商店时的闪退。QQ 反馈群 **923443423**。[完整版更新说明](docs/UPDATE-0.7.6.1.md)
 
 翻译服务推荐、费用参考和模型 ID 填写要求见[使用说明](docs/USER-GUIDE.md)。
 
@@ -18,6 +18,7 @@
 
 ## 直接下载安装
 
+- [精简版 0.1.0](https://github.com/jinganwushideng/deadlock-translate/releases/tag/lite-v0.1.0) 提供文字聊天收发翻译和个人词库。从完整版切换时，直接运行精简版安装器即可迁移常用设置。[精简版使用说明](docs/LITE.md)
 - [GitHub Releases](https://github.com/jinganwushideng/deadlock-translate/releases)
 - [夸克网盘](https://pan.quark.cn/s/edde8867941a)
 - [百度网盘](https://pan.baidu.com/s/5vlaAkKuSSR2eTMtVUgCWdQ)

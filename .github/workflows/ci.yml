@@ -56,6 +56,8 @@ jobs:
         run: |
           npm ci --ignore-scripts
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node node_modules/typescript/bin/tsc -p tsconfig.lite.json --noEmit
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm run build
       - name: Build backend
         run: dotnet build src/Bridge -c Release

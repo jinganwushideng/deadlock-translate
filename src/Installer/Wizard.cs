@@ -32,7 +32,7 @@ public sealed partial class Wizard : Form {
         this.resume=resume;
         requestedSteamIds=steamIds??resume?.UserIds??[];
         steamOnly=steamIds!=null||resume?.SteamOnly==true;
-        Text="同频 · Deadlock 翻译安装器";
+        Text=BuildInfo.IsLite?"同频精简版 · Deadlock 翻译安装器":"同频 · Deadlock 翻译安装器";
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Font=new Font("Microsoft YaHei UI",10);BackColor=bg;ForeColor=ink;
         ClientSize=new Size(1080,750);MinimumSize=new Size(980,650);StartPosition=FormStartPosition.CenterScreen;

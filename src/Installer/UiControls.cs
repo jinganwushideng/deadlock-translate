@@ -161,7 +161,7 @@ internal sealed class StepNavigation : Control
         }
         var bottom = Math.Max(X(510), Height - X(108));
         e.Graphics.DrawLine(line, X(28), bottom, Width - X(28), bottom);
-        e.Graphics.DrawString("安装 / 更新 / 维护", labelFont, cream, X(28), bottom + X(19));
+        e.Graphics.DrawString(BuildInfo.IsLite ? "精简版安装器" : "安装 / 更新 / 维护", labelFont, cream, X(28), bottom + X(19));
         e.Graphics.DrawString("v" + InstallerVersion.Current + " · " + BuildInfo.Id.Split('-').Last()[..8], smallFont, soft, X(29), bottom + X(51));
     }
 }

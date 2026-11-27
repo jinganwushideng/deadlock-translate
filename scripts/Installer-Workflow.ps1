@@ -33,6 +33,12 @@ function Run([string]$script,[string[]]$arguments,[string]$stage){
         Write-DltInstallTrace 'child-process' $script ($category+':exit='+$childExit)
         Throw-DltFault $category $stage '' ($script+' 未完成，退出码 '+$childExit+'；错误类别 '+$category+'。') '请重试本步骤或导出日志；已保留脚本阶段和退出码，不需要删除配置或证书。'
     }
+    if($script -eq 'Update-Mod.ps1' -and $out -contains 'dlt:edition-hotkey-conflict'){
+        Emit '其他聊天设置和词库已迁移。发送键与完整版现有快捷键冲突，已保留完整版原发送键。'
+    }
+    if($script -eq 'Update-Mod.ps1' -and $out -contains 'dlt:edition-llm-profile-retained'){
+        Emit '原版本未保存大模型密钥，且两个版本使用不同 API 地址。本次沿用目标版本已有的大模型服务和密钥。'
+    }
 }
 function Readiness([string]$game,[string]$runtime,$install,[switch]$Apply){
     NoLinks $state
@@ -178,7 +184,7 @@ function ValidateTargets([string]$game,[string]$runtime,$install,[switch]$NewRun
         $recorded=$runtime -ieq (Get-DltRecordedRuntime $install $game)
         if(-not $validRuntime -and -not $recorded -and -not($NewRuntime -and (Test-DltEmptyRuntime $runtime))){throw '无法确认程序目录。请选择原目录或独立的空目录。'}
         $meta=Get-Content -LiteralPath (Join-Path $payload 'package-manifest.json') -Raw -Encoding UTF8|ConvertFrom-Json
-        if($q.mode -in @('install','repair') -and $install.version -and [version]$install.version -gt [version]$meta.version){throw '已有版本比本安装器更新，请下载新版安装器；不会降级覆盖。'}
+        if($q.mode -in @('install','repair') -and -not(Test-DltVersionReplacement (Get-DltInstalledEditionInfo $install $runtime) $meta)){throw '已有版本比本安装器更新，请下载新版安装器；不会降级覆盖。'}
     }elseif($q.mode -eq 'install' -and (Test-Path -LiteralPath $runtime) -and @(Get-ChildItem -LiteralPath $runtime -Force).Count){throw '首次安装目录必须为空；已有程序请先恢复安装记录。'}
 }
 function CertStatus {
@@ -681,6 +687,7 @@ try{
             if(($decision.reinstall -or $decision.migration -or $decision.runtimeMove) -and $install){$needsRepair=$true}
             $reinstallInfo=if($decision.reinstall){@{kind=$decision.reinstall.kind;originalRuntime=$decision.reinstall.originalRuntime;runtime=$runtime;message=$decision.reinstall.message;recordState=$decision.recordState}}else{$null}
             $result=@{reinstallSuggested=[bool]($q.mode -eq 'uninstall' -and -not $install);reinstall=$reinstallInfo;fullRepair=[bool]($q.mode -eq 'repair' -and ($install -or $decision.reinstall));gameVpk=$vpkState;runtimeIntegrity=$integrity;needsGameRepair=[bool]($vpkState -and $vpkState.requiresRepair);game=$game;runtime=$runtime;installed=[bool]$install;needsRepair=[bool]$needsRepair;version=if($install){$install.version}else{''};conflicts=@($conflicts);launch=$launch;gameRunning=[bool](Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue);certificate=(CertStatus)}
+            $result.installedEdition=if($install -and (Get-DltInstalledEditionInfo $install $runtime).edition -eq 'lite'){'lite'}else{'full'}
             $result.migration=if($decision.migration){@{oldGame=$decision.migration.oldGame;newGame=$game;oldState=$decision.migration.oldState;message=$decision.migration.message}}else{$null}
             $result.gameCorrection=$script:DltGameCorrection
             $result.runtimeMove=$decision.runtimeMove

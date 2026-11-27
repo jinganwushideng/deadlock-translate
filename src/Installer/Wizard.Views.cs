@@ -264,6 +264,8 @@ public sealed partial class Wizard
     {
         DrawMaintenance();
         var operation = Section("选择操作"); Row(operation, "", mode);
+        if (BuildInfo.IsLite)
+            Note(operation, "你正在安装同频精简版 " + InstallerVersion.Current + "。精简版提供文字聊天翻译与词库，使用独立的版本号和更新通道。");
         Note(operation, Flag(snapshot, "installed") ? "已检测到 " + Str(snapshot, "installedVersion") + "，更新将沿用原程序目录。" : "首次安装将使用独立程序目录。");
         var cert = Field(snapshot, "certificate");
         var valid = ready && Flag(cert, "ready");
@@ -326,7 +328,13 @@ public sealed partial class Wizard
     void DrawReview()
     {
         var summary = Section(Mode == "install" ? Flag(plan, "installed") ? "覆盖更新" : "首次安装" : Mode == "repair" ? "修复安装" : "卸载游戏组件");
-        Label(summary, Mode == "install" && Flag(plan, "installed") ? "当前 " + Str(plan, "version") + "  →  " + InstallerVersion.Current : "请核对以下位置与选项。");
+        var targetEdition = BuildInfo.IsLite ? "精简版" : "完整版";
+        var installedEdition = Str(plan, "installedEdition") == "lite" ? "精简版" : "完整版";
+        Label(summary, Mode == "install" && Flag(plan, "installed")
+            ? installedEdition + " " + Str(plan, "version") + "  →  " + targetEdition + " " + InstallerVersion.Current
+            : "本安装包为同频" + targetEdition + " " + InstallerVersion.Current);
+        if (Mode != "uninstall" && Flag(plan, "installed") && installedEdition != targetEdition)
+            Note(summary, "直接安装当前版本即可切换。安装器会自动带入个人词库、收发语言、发送快捷键、收发开关、双语选项和大模型配置与密钥。");
         Label(summary, "游戏：" + game.Text + "\n程序：" + runtime.Text + "\n启动项：" + (ConfigureSelectedSteam ? "自动配置" : "手动配置") + (Mode != "uninstall" ? "\n已勾选账号：" + user.CheckedItems.Count : ""));
         var correction=Field(plan,"gameCorrection");
         if(correction.ValueKind==JsonValueKind.Object)Note(summary,Str(correction,"message")+"\n原选择："+Str(correction,"requested"));

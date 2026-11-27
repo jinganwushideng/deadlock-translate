@@ -19,7 +19,7 @@ internal sealed record UpdateCache(DateTimeOffset? LastAttempt = null, DateTimeO
     UpdateMirrors? Mirrors = null);
 internal sealed record UpdateStatus(string CurrentVersion, bool Available, string? Version, string? Summary, long Size,
     DateTimeOffset? LastChecked, DateTimeOffset? RetryAt, string? CheckError, string Download, long Downloaded, string? DownloadError, bool Automatic,
-    UpdateMirrors? Mirrors, string? MirrorVersion, bool MirrorAvailable);
+    UpdateMirrors? Mirrors, string? MirrorVersion, bool MirrorAvailable, string? PublishedVersion = null);
 internal sealed record UpdateDownloadRoute(string Source,string Url,string Reason,double? BytesPerSecond,long SampleBytes,string Message);
 
 internal sealed class ReleaseUpdates : IDisposable
@@ -35,6 +35,9 @@ internal sealed class ReleaseUpdates : IDisposable
     private static readonly Regex FolderVersion = new(@"(?:最新版本|最新版)\s*[:：]?\s*(v?[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*$",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Uri Latest = new($"https://api.github.com/repos/{Repository}/releases/latest");
+    private const string ReleaseList = $"https://api.github.com/repos/{Repository}/releases";
+    private const string LiteTagPrefix = "lite-v";
+    private readonly bool lite;
     private readonly string root;
     private readonly string current;
     private readonly HttpClient http;
@@ -50,6 +53,10 @@ internal sealed class ReleaseUpdates : IDisposable
     internal const int GitHubMinimumBytesPerSecond=512*1024;
 
     public async Task<UpdateDownloadRoute> SelectDownloadChannel(CancellationToken token){
+        if(lite){
+            await Check(false,token);
+            return new("github",CurrentInstallerUrl(),"lite",null,0,"已选择 GitHub 上的精简版安装包。");
+        }
         if(!await routeGate.WaitAsync(0,token))throw new IOException("正在检测 GitHub 下载速度，请稍候。");
         try{
             var watch=Stopwatch.StartNew();
@@ -63,7 +70,7 @@ internal sealed class ReleaseUpdates : IDisposable
                     using var metadata=await http.GetAsync(Latest,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
                     metadata.EnsureSuccessStatusCode();
                     using var document=JsonDocument.Parse(await ReadLimited(metadata.Content,65536,deadline.Token));
-                    release=ReadRelease(document.RootElement);
+                    release=ReadRelease(document.RootElement,lite);
                 }
                 if(release==null||!ValidReleaseUrls(release)||release.Installer.Bytes<2)
                     throw new IOException("无法确认 GitHub 安装包。");
@@ -95,11 +102,12 @@ internal sealed class ReleaseUpdates : IDisposable
         }finally{routeGate.Release();}
     }
 
-    public ReleaseUpdates(string stateRoot, string current, HttpMessageHandler? transport = null, Func<DateTimeOffset>? clock = null)
+    public ReleaseUpdates(string stateRoot, string current, HttpMessageHandler? transport = null, Func<DateTimeOffset>? clock = null, bool lite = false)
     {
-        root = Path.Combine(stateRoot, "release-updates");
+        root = Path.Combine(stateRoot, lite ? "release-updates-lite" : "release-updates");
         this.current = current;
         now = clock ?? (() => DateTimeOffset.UtcNow);
+        this.lite = lite;
         http = new HttpClient(transport ?? new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = Timeout.InfiniteTimeSpan };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("DeadlockTranslate/" + current);
     }
@@ -156,7 +164,7 @@ internal sealed class ReleaseUpdates : IDisposable
     }
 
     private bool IsNew(UpdateRelease? release) => ParseVersion(release?.Version) is { } next && next > ParseVersion(current);
-    private string PackagePath(string version) => Path.Combine(root, $"DeadlockTranslate-Setup-{version}.exe");
+    private string PackagePath(string version) => Path.Combine(root, InstallerName(version,lite));
     private string HashPath(string version) => PackagePath(version) + ".sha256";
     public UpdateStatus Status()
     {
@@ -172,7 +180,8 @@ internal sealed class ReleaseUpdates : IDisposable
                 release?.Installer.Bytes ?? 0, cache.LastSuccess, cache.RetryAt, cache.Error,
                 state, downloadVersion == release?.Version ? downloaded : 0, downloadVersion == release?.Version ? downloadError : null, cache.Automatic,
                 mirrors, mirrorVersion, ParseVersion(mirrorVersion) > ParseVersion(cache.Dismissed) &&
-                    ParseVersion(mirrorVersion) > ParseVersion(release?.Version));
+                    ParseVersion(mirrorVersion) > ParseVersion(release?.Version),
+                lite && cache.Release is { } published && ValidReleaseUrls(published) ? published.Version : null);
         }
     }
 
@@ -190,20 +199,35 @@ internal sealed class ReleaseUpdates : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
         UpdateCache result;
         try {
-            using var response = await http.GetAsync(Latest, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.Forbidden) {
-                var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - utc) ?? TimeSpan.FromMinutes(30);
-                result = cache with { Error = "GitHub 暂时限制检查频率。", RetryAt = utc.AddSeconds(Math.Clamp(retry.TotalSeconds, 60, 86400)) };
-            } else {
+            UpdateRelease? release = null;
+            for (var page = 1; ; page++) {
+                var uri = lite ? new Uri($"{ReleaseList}?per_page=30&page={page}") : Latest;
+                using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden) {
+                    var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - utc) ?? TimeSpan.FromMinutes(30);
+                    result = cache with { Error = "GitHub 暂时限制检查频率。", RetryAt = utc.AddSeconds(Math.Clamp(retry.TotalSeconds, 60, 86400)) };
+                    break;
+                }
                 response.EnsureSuccessStatusCode();
-                using var doc = JsonDocument.Parse(await ReadLimited(response.Content, 256 * 1024, timeout.Token));
-                var release = ReadRelease(doc.RootElement);
+                using var doc = JsonDocument.Parse(await ReadLimited(response.Content, lite ? 2 * 1024 * 1024 : 256 * 1024, timeout.Token));
+                if (lite) {
+                    if (doc.RootElement.ValueKind != JsonValueKind.Array) throw new JsonException("Invalid release list");
+                    foreach (var entry in doc.RootElement.EnumerateArray())
+                        if (ReadRelease(entry, true) is { } candidate && ParseVersion(candidate.Version) > ParseVersion(release?.Version))
+                            release = candidate;
+                    // Only use the relation flag, never a URL read from a response.
+                    if (response.Headers.TryGetValues("Link", out var links) &&
+                        links.Any(link => link.Contains("rel=\"next\"", StringComparison.Ordinal))) continue;
+                } else {
+                    release = ReadRelease(doc.RootElement);
+                }
                 result = cache with { LastSuccess = utc, RetryAt = null, Release = release, Error = null, Mirrors = null };
+                break;
             }
         } catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or IOException or JsonException or OperationCanceledException) {
             result = cache with { Error = "无法读取 GitHub 更新，可以稍后重试。", RetryAt = utc.AddMinutes(2) };
         }
-        if (result.Error != null) {
+        if (result.Error != null && !lite) {
             var versions = await Task.WhenAll(TryReadMirror(ReadQuark, token), TryReadMirror(ReadBaidu, token));
             result = result with { Mirrors = new(versions[0], versions[1]) };
         }
@@ -301,19 +325,23 @@ internal sealed class ReleaseUpdates : IDisposable
         }
     }
 
-    internal static UpdateRelease? ReadRelease(JsonElement root)
+    internal static UpdateRelease? ReadRelease(JsonElement root, bool lite = false)
     {
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("tag_name", out var tag) || tag.ValueKind != JsonValueKind.String ||
             !root.TryGetProperty("draft", out var draft) || draft.ValueKind != JsonValueKind.False ||
             !root.TryGetProperty("prerelease", out var prerelease) || prerelease.ValueKind != JsonValueKind.False ||
-            ParseVersion(tag.GetString()) == null || !root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
-        var version = tag.GetString()!.TrimStart('v');
-        string file = $"DeadlockTranslate-Setup-{version}.exe";
+            !root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
+        var prefix = lite ? LiteTagPrefix : "v";
+        var tagName = tag.GetString()!;
+        if (!tagName.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        var version = tagName[prefix.Length..];
+        if (version.StartsWith('v') || ParseVersion(version) == null) return null;
+        string file = InstallerName(version,lite);
         ReleaseAsset? Pick(string name, long limit) {
             foreach (var a in assets.EnumerateArray()) {
                 if (a.ValueKind != JsonValueKind.Object || !a.TryGetProperty("name", out var n) || n.ValueKind != JsonValueKind.String || n.GetString() != name) continue;
                 if (!a.TryGetProperty("browser_download_url", out var url) || url.ValueKind != JsonValueKind.String ||
-                    url.GetString() != $"https://github.com/{Repository}/releases/download/v{version}/{name}" ||
+                    url.GetString() != ReleaseAssetUrl(version, lite, name) ||
                     !a.TryGetProperty("size", out var size) || size.ValueKind != JsonValueKind.Number || !size.TryGetInt64(out var count) || count <= 0 || count > limit) return null;
                 var digest = a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null;
                 if (digest != null && !Regex.IsMatch(digest, "^sha256:[a-fA-F0-9]{64}$")) return null;
@@ -347,9 +375,23 @@ internal sealed class ReleaseUpdates : IDisposable
         throw new IOException("更新文件重定向次数过多。");
     }
 
-    private static bool ValidReleaseUrls(UpdateRelease release) => ParseVersion(release.Version) != null && release.Installer!=null && release.Checksum!=null &&
-        release.Installer.Url == $"https://github.com/{Repository}/releases/download/v{release.Version}/DeadlockTranslate-Setup-{release.Version}.exe" &&
+    private bool ValidReleaseUrls(UpdateRelease release) => ParseVersion(release.Version) != null && release.Installer!=null && release.Checksum!=null &&
+        release.Installer.Url == ReleaseAssetUrl(release.Version, lite, InstallerName(release.Version,lite)) &&
         release.Checksum.Url == release.Installer.Url + ".sha256";
+
+    private static string ReleaseAssetUrl(string version, bool lite, string name)
+        => $"https://github.com/{Repository}/releases/download/{(lite ? LiteTagPrefix : "v")}{version}/{name}";
+
+    private static string InstallerName(string version, bool lite)
+        => $"DeadlockTranslate{(lite ? "-Lite" : "")}-Setup-{version}.exe";
+
+    public string CurrentInstallerUrl()
+    {
+        var release = Read().Release;
+        if (release is null || !IsNew(release) || !ValidReleaseUrls(release))
+            throw new IOException("请先检查可用的精简版更新。");
+        return release.Installer.Url;
+    }
 
     public void Dismiss()
     {

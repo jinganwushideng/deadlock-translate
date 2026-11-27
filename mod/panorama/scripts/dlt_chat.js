@@ -3,7 +3,8 @@
 // Separately maintained DeadlockTranslate implementation.
 // Independent Panorama adapter. No OCR, process memory access or console-based chat sending.
 // Pairing value is generated locally by the build; it is not a provider API key.
-var BUILD_ID = '0.7.6.1-2168aced6ea5';
+var BUILD_ID = '0.7.6.1-64d1e3406f27';
+var LITE = false;
 var CLIENT_VERSION = BUILD_ID.split('-')[0];
 var DLTOpenSettings = function () {};
 var DLTChatInputFocused = function () {};
@@ -2223,6 +2224,7 @@ var DLTChatInputChanged = function () {};
             if (typeof state.config.fontSize !== 'number' || !isFinite(state.config.fontSize) || state.config.fontSize < 12 || state.config.fontSize > 24) state.config.fontSize = 17;
             syncOwnDisplay(); maintainFeed();
         }
+        if (!LITE) {
         if (payload.displayPreview) acceptDisplayPreview(payload.displayPreview);
         var voice = payload.voice;
         if (state.voiceEnabled !== !!(voice && voice.enabled)) {
@@ -2234,6 +2236,7 @@ var DLTChatInputChanged = function () {};
         updateVoiceCaption(state.voiceEnabled ? voice.caption : null, state.voiceEnabled ? voice.previous : null);
         updateVoiceDebug(voice && voice.debug);
         showDictation(payload.dictation, payload.outgoing);
+        }
         if (!state.config.incomingScope) state.config.incomingScope = 'all_players';
         if (!state.config.incomingTargetLanguage) state.config.incomingTargetLanguage = 'zh-Hans';
         if (!state.config.outgoingTargetLanguage) state.config.outgoingTargetLanguage = 'en';
@@ -2409,6 +2412,7 @@ var DLTChatInputChanged = function () {};
             chatOpen: chatOpen, chatChannel: nativeChannel(), settingsOpen: settingsOpen, hotkeySeen: state.hotkeySeen, deepSeekNoticeSeen: state.deepSeekSeen || 0, outgoing: state.outgoingQueue.slice(0, 3),
             outgoingSent: state.outgoingSent.slice(0, 12), outgoingPartAcks: state.outgoingPartAcks.slice(0, 12), outgoingWaiting: waiting.slice(0, 12),
             outgoingStatus: state.statusSupported ? state.outgoingStatus.slice(0, 24) : undefined, outgoingRefused: state.outgoingRefused.slice(0, 12), serverId: state.serverId || '', logs: state.diagSupported || !state.serverId ? state.logs.slice(0, 8) : [] };
+        if (!LITE) {
         if (state.voiceEnabled) payload.teammateSpeaking = speaking;
         if (state.measureVoiceHud && state.voiceShown && state.voiceShown.length) payload.voiceShown = state.voiceShown;
         payload.voiceInputMatch = !!state.matchIdentity && state.matchIdentity !== '0';
@@ -2424,6 +2428,7 @@ var DLTChatInputChanged = function () {};
             maxReplyChars: buildText.maxReplyChars || 0, decodeErrors: buildText.decodeErrors || 0, timeouts: buildText.timeouts || 0,
             clickToCollectMs: buildText.collectDelayMs, clickToDispatchMs: buildText.dispatchDelayMs
         };
+        }
         if (editorCommand) {
             // Reuse the already initialised browser/HTTPS channel. Editor text is
             // isolated from incoming/outgoing chat and is never a translation job.

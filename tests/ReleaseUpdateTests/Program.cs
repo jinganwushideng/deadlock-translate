@@ -111,7 +111,48 @@ try {
     }
     using var unsafeRelease=JsonDocument.Parse(Fixture.Release("https://untrusted.example/"));
     Check(ReleaseUpdates.ReadRelease(unsafeRelease.RootElement)==null,"rejects off-repository asset links");
+    const string official="https://github.com/jinganwushideng/deadlock-translate/releases/download/v0.7.3.1/";
+    using var fullOnly=JsonDocument.Parse(Fixture.Release(official));
+    var wrongTag=Fixture.Release(official).Replace("DeadlockTranslate-Setup-", "DeadlockTranslate-Lite-Setup-");
+    using var liteOnly=JsonDocument.Parse(LiteReleases.Release("0.1.0"));
+    using var wrongEditionTag=JsonDocument.Parse(wrongTag);
+    Check(ReleaseUpdates.ReadRelease(fullOnly.RootElement,true)==null &&
+          ReleaseUpdates.ReadRelease(liteOnly.RootElement)==null &&
+          ReleaseUpdates.ReadRelease(wrongEditionTag.RootElement,true)==null &&
+          ReleaseUpdates.ReadRelease(liteOnly.RootElement,true)?.Installer.Url.Contains("/lite-v0.1.0/")==true,
+          "each edition only accepts its own update installer and checksum");
+    using var liteUpdater=new ReleaseUpdates(Path.Combine(root,"lite"),"0.1.0",
+        new LiteReleases(wrongTag, LiteReleases.Release("0.1.2"), LiteReleases.Release("0.1.10")),lite:true);
+    var liteUpdate=await liteUpdater.Check(false,default);
+    Check(liteUpdate.Available && liteUpdate.Version=="0.1.10" && liteUpdate.PublishedVersion=="0.1.10",
+        "Lite follows release pages and chooses the greatest Lite version, independent of full releases");
+    Check(liteUpdater.CurrentInstallerUrl().Contains("/lite-v0.1.10/"),"download opens the selected Lite tag");
+    using var noLiteUpdater=new ReleaseUpdates(Path.Combine(root,"no-lite"),"0.1.0",new LiteReleases(wrongTag),lite:true);
+    var noLite=await noLiteUpdater.Check(false,default);
+    Check(!noLite.Available && noLite.PublishedVersion is null && noLite.LastChecked is not null && noLite.CheckError is null,
+        "success with no Lite release is distinct from being current");
 }finally{if(Directory.Exists(root))Directory.Delete(root,true);}
+
+sealed class LiteReleases(params string[] records) : HttpMessageHandler
+{
+    internal static string Release(string version)
+    {
+        var name=$"DeadlockTranslate-Lite-Setup-{version}.exe";
+        var url=$"https://github.com/jinganwushideng/deadlock-translate/releases/download/lite-v{version}/";
+        return JsonSerializer.Serialize(new {tag_name="lite-v"+version,draft=false,prerelease=false,assets=
+            new[]{new{name,browser_download_url=url+name,size=1024},new{name=name+".sha256",browser_download_url=url+name+".sha256",size=100}}});
+    }
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
+    {
+        var uri=request.RequestUri!;
+        if(uri.Host!="api.github.com" || !uri.AbsolutePath.EndsWith("/releases"))throw new IOException("Wrong release endpoint");
+        var first=uri.Query.EndsWith("page=1");
+        var page=records.Length<=1?records:first?records[..1]:records[1..];
+        var response=new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("["+string.Join(",",page)+"]")};
+        if(first&&records.Length>1)response.Headers.TryAddWithoutValidation("Link","<https://not-followed.example/>; rel=\"next\"");
+        return Task.FromResult(response);
+    }
+}
 
 sealed class Fixture : HttpMessageHandler
 {

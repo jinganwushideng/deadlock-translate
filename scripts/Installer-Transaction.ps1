@@ -125,7 +125,9 @@ function Assert-DltJournalTarget($Tx,[string]$Path){
         $name=[IO.Path]::GetFileName($p)
         if($name -notin @('settings.json','secrets.dpapi','install-manifest.json') -and [IO.Path]::GetExtension($name) -notin @('.dpapi','.cer','.pfx')){return}
     }
-    if($p -in @((Join-Path $Tx.state 'install-manifest.json'),(Join-Path $Tx.state 'terms.json'))){return}
+    if($p -in @((Join-Path $Tx.state 'install-manifest.json'),(Join-Path $Tx.state 'terms.json'),
+        (Join-Path $Tx.state 'settings.json'),(Join-Path $Tx.state 'secrets.dpapi'),
+        (Join-Path $Tx.state 'lite\terms.json'),(Join-Path $Tx.state 'lite\settings.json'),(Join-Path $Tx.state 'lite\secrets.dpapi'))){return}
     if([IO.Path]::GetDirectoryName($p) -ieq $Tx.state -and [IO.Path]::GetFileName($p) -match '^(uninstalled-[a-f0-9]{32}\.json|install-manifest\.json\.invalid-[a-f0-9]{32}\.bak)$'){return}
     if($Tx.backup -and $p.StartsWith($Tx.backup.TrimEnd('\')+'\',$comparison) -and $Tx.backup.StartsWith((Join-Path $Tx.state 'backups')+'\',$comparison)){return}
     if($p.StartsWith((Join-Path $Tx.state 'backups')+'\',$comparison) -and $p -match '\\update-[^\\]+\\duplicate-pak\d{2,3}_dir\.vpk\.bak$'){return}

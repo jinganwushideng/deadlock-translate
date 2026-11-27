@@ -9,7 +9,7 @@ public sealed partial class Wizard
     private bool closeAfterWork;
     private JsonElement health;
     private string? conflictTransaction;
-    private readonly ReleaseUpdates releaseUpdates = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeadlockTranslate"), InstallerVersion.Current);
+    private readonly ReleaseUpdates releaseUpdates = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeadlockTranslate", BuildInfo.IsLite ? "lite" : ""), InstallerVersion.Current, lite:BuildInfo.IsLite);
 
     private void DrawMaintenance()
     {
@@ -158,6 +158,7 @@ public sealed partial class Wizard
             Button("夸克网盘 ↗",()=>OpenChannel(ReleaseUpdates.QuarkShare)),
             Button("百度网盘 ↗",()=>OpenChannel(ReleaseUpdates.BaiduShare))
         ]);
+        if(BuildInfo.IsLite)channels.Visible=false;
         buttons.Controls.AddRange([check,download,cancel,start]);
         layout.Controls.Add(label);layout.Controls.Add(notes);layout.Controls.Add(buttons);layout.Controls.Add(channels);dialog.Controls.Add(layout);
         string? error=null;string? routeStatus=null;bool checking=false,routing=false;
@@ -171,13 +172,15 @@ public sealed partial class Wizard
             var result=releaseUpdates.Status();
             var version=result.MirrorAvailable?$" · 网盘文件夹标记新版 {result.MirrorVersion}":
                 result.Version!=null?$" · GitHub {result.Version} · {result.Size/1048576.0:F1} MB":
-                result.CheckError!=null?" · GitHub 版本暂无法确认":result.LastChecked!=null?" · GitHub 暂无新版":" · 尚未检查更新";
+                result.CheckError!=null?" · GitHub 版本暂无法确认":
+                result.LastChecked!=null?(BuildInfo.IsLite&&result.PublishedVersion==null?" · GitHub 暂无精简版安装包":" · GitHub 暂无新版"):" · 尚未检查更新";
             label.Text=$"当前 {result.CurrentVersion}"+version+
                 (routing?" · 正在检测 GitHub 下载速度":checking?" · 正在检查":result.Download=="downloading"?$" · {result.Downloaded/1048576.0:F1} MB 已下载":"");
             var mirrorDetails=result.Mirrors is { } mirrors?
                 $"网盘文件夹标记 · 夸克 {mirrors.QuarkVersion??"暂无法确认"} · 百度 {mirrors.BaiduVersion??"暂无法确认"}":null;
             var description=string.Join(Environment.NewLine,new[]{routeStatus,error,result.CheckError,result.DownloadError,mirrorDetails,
-                "下载更新会检测 GitHub 安装包链接，达到 512 KB/s 时打开 GitHub 发布页，连接失败、超时或过慢时打开夸克网盘。","网盘打开后，请按标有「最新版」的文件夹名确认版本，下载完整安装器。",result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
+                BuildInfo.IsLite?"下载更新会打开 GitHub 上的精简版安装包。":"下载更新会检测 GitHub 安装包链接，达到 512 KB/s 时打开 GitHub 发布页，连接失败、超时或过慢时打开夸克网盘。",
+                BuildInfo.IsLite?null:"网盘打开后，请按标有「最新版」的文件夹名确认版本，下载完整安装器。",result.Summary}.Where(x=>!string.IsNullOrWhiteSpace(x)));
             if(notes.Text!=description)notes.Text=description;
             check.Enabled=!checking&&!routing;download.Enabled=!checking&&!routing&&result.Download!="downloading";cancel.Enabled=result.Download=="downloading";start.Enabled=result.Download=="ready";
         }
@@ -190,7 +193,7 @@ public sealed partial class Wizard
         check.Click+=async(_,_)=>{checking=true;Render();await Act(async()=>{await releaseUpdates.Check(false,lifetime.Token);});checking=false;if(!dialog.IsDisposed)Render();};
         download.Click+=async(_,_)=>{
             if(routing||checking)return;
-            routing=true;routeStatus="正在检测 GitHub 下载速度，最多约 6 秒…";Render();
+            routing=true;routeStatus=BuildInfo.IsLite?"正在检查精简版安装包…":"正在检测 GitHub 下载速度，最多约 6 秒…";Render();
             await Act(async()=>{
                 var route=await releaseUpdates.SelectDownloadChannel(lifetime.Token);
                 lifetime.Token.ThrowIfCancellationRequested();

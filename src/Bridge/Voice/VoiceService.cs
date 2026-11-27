@@ -256,7 +256,7 @@ internal sealed class VoiceService : IAsyncDisposable
                 }
             }
             if (changed && speechChanged.CurrentCount == 0) speechChanged.Release();
-            hotkey?.Dictation.Observe(gameSession, nextMatch, hotkey.IsForegroundProcess(workerPid));
+            hotkey?.Dictation?.Observe(gameSession, nextMatch, hotkey.IsForegroundProcess(workerPid));
             if (enabled || WorkerAvailable && nextMatch && hotkey is not null && VoiceDictation.CanUse(config.Current))
                 supervisor ??= Task.Run(Run);
             var debug = options.TestMode && (inMatch || teammateSpeaking.HasValue) ? TestView(compatible, enabled) : null;
@@ -275,7 +275,7 @@ internal sealed class VoiceService : IAsyncDisposable
         testStage = testHud = null;
         testEvidence = null;
         if (!keepHud) { available = false; speaking = false; matchActive = false; }
-        hotkey?.Dictation.Cancel();
+        hotkey?.Dictation?.Cancel();
         ClearCaptionTurns();
         activeBackend = null;
         executionBackend = null;
@@ -347,7 +347,7 @@ internal sealed class VoiceService : IAsyncDisposable
                             {
                                 failed = true;
                                 problem = ex is IOException ? ex.Message : "语音引擎启动失败，请核对模型和识别设备。";
-                                hotkey?.Dictation.Fail(problem);
+                                hotkey?.Dictation?.Fail(problem);
                                 ReportTest("voice-worker-error", failure: ex.GetType().Name,
                                     visible: testStage is not ("voice-control-error" or "voice-capture-error" or "voice-engine-error" or "voice-asr-error"));
                                 activeBackend = null;
@@ -490,7 +490,7 @@ internal sealed class VoiceService : IAsyncDisposable
                     endedAt = currentTurn?.EndedAt;
                     previousEndedAt = previousTurn?.EndedAt;
                     ready = status == "ready";
-                    mic = hotkey?.Dictation.Poll(ready, fresh && matchActive && hotkey.IsForegroundProcess(pid));
+                    mic = hotkey?.Dictation?.Poll(ready, fresh && matchActive && hotkey.IsForegroundProcess(pid));
                 }
                 if (!ready) { await Task.Delay(120, token); continue; }
                 using var writeTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -595,7 +595,7 @@ internal sealed class VoiceService : IAsyncDisposable
                 {
                     lock (gate)
                         if (generation == epoch && matchActive && hotkey?.IsForegroundProcess(workerPid) == true)
-                            hotkey.Dictation.Receive(micId.GetString() ?? "", root.GetProperty("micState").GetString() ?? "",
+                            hotkey.Dictation?.Receive(micId.GetString() ?? "", root.GetProperty("micState").GetString() ?? "",
                                 root.TryGetProperty("text", out var micText) ? micText.GetString() : null);
                     continue;
                 }

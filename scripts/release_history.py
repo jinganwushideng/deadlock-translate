@@ -1,5 +1,6 @@
 """Validate the installer's concise, append-only version history before packaging."""
 import datetime
+import argparse
 import json
 from pathlib import Path
 import re
@@ -43,12 +44,17 @@ def validate(document, current, changelog):
     return entries
 
 
-def check(root=ROOT):
-    version = json.loads((root/'version.json').read_text(encoding='utf-8-sig'))['version']
-    doc = json.loads((root/'docs/UPDATE-HISTORY.json').read_text(encoding='utf-8-sig'))
-    return validate(doc, version, (root/'CHANGELOG.md').read_text(encoding='utf-8-sig'))
+def check(root=ROOT, lite=False):
+    versions = json.loads((root/'version.json').read_text(encoding='utf-8-sig'))
+    version = versions['liteVersion' if lite else 'version']
+    history = root/('docs/LITE-UPDATE-HISTORY.json' if lite else 'docs/UPDATE-HISTORY.json')
+    changelog = root/('docs/LITE-CHANGELOG.md' if lite else 'CHANGELOG.md')
+    doc = json.loads(history.read_text(encoding='utf-8-sig'))
+    return validate(doc, version, changelog.read_text(encoding='utf-8-sig'))
 
 
 if __name__ == '__main__':
-    entries = check()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lite', action='store_true')
+    entries = check(lite=parser.parse_args().lite)
     print(json.dumps(dict(current=entries[0]['version'], versions=len(entries), oldest=entries[-1]['version'], historyRetained=True)))

@@ -119,3 +119,10 @@ textarea{max-width:min(100%,850px)}.table-wrap{max-width:100%;overflow:auto}.tab
     .card .voice-switch { min-height: 78px; }
     .voice-switch-track { width: 56px; height: 30px; }
 }
+
+.lite-author-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.lite-author-grid .card{margin:0;min-height:0}
+.lite-author-qr{display:block;width:min(100%,180px);height:auto;margin:14px 0 0;border-radius:6px}
+.lite-release-version{font-size:1.05em}
+.lite-release-version strong{margin-left:6px;color:var(--mint)}
+@media(max-width:960px){.lite-author-grid{grid-template-columns:1fr}}

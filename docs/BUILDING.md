@@ -32,6 +32,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 `
 
 出装翻译后台另外还原固定版本的 KV3、LZ4、Zstd 解码依赖；`collect_licenses.py` 同步收集其许可。只附带解码所需程序集，不附带 Source 2 Viewer 的图形渲染依赖。`BuildCatalogTests` 使用程序生成的 KV3/protobuf 样例，不需要个人 Steam 缓存，也不调用付费接口。
 
+构建精简版时，在完整构建命令末尾加上 `-Lite`。再运行 `python scripts/package_share.py --lite --output-folder RELEASE_DIR --archive-dir RELEASE_DIR` 和 `python scripts/build_installer.py --lite --release-dir RELEASE_DIR`，将 `RELEASE_DIR` 替换为精简版的发布目录。精简版号取自 `version.json` 的 `liteVersion`。
+
 ## 只开发后台和网页
 
 无需游戏即可编译：

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>同频精简版</title><link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/settings-background.css"></head>
+<body>
+<div class="shell">
+<aside><div class="brand"><span class="mark">同</span><span>同频精简版</span></div>
+<nav aria-label="翻译设置">
+<button data-lite-page="incoming" class="active">接收翻译</button>
+<button data-lite-page="outgoing">发送翻译</button>
+<button data-lite-page="glossary">游戏词库</button>
+<button data-lite-page="author">作者信息</button>
+</nav></aside>
+<main>
+<header><h1 id="pageTitle">接收翻译</h1><div class="header-status">
+<span id="connection" role="status">连接后台中…</span>
+<button id="updateBadge" type="button" hidden>有新版</button>
+<button id="inputRecoveryButton" type="button">输入修复</button>
+<button id="saveLite" type="button">保存翻译设置</button>
+<button id="closeLite" type="button">关闭设置</button>
+</div></header>
+<div id="contentScroll">
+<p id="notice" role="status"></p>
+<div id="nativeInputHelp" class="page" hidden>
+<label hidden><input type="checkbox" id="nativeInputEnabled" checked> 使用原位中文输入</label>
+<p id="nativeInputStatus" class="hint" role="status"></p><button id="cancelNativeInput" type="button" hidden>取消输入</button>
+</div>
+<div id="inputRecovery" class="card" hidden>
+<p id="inputRecoveryStatus"></p><div class="toolbar"><button id="directSettingsInput">使用网页输入</button><button id="restoreNativeInput">恢复原位输入</button></div>
+</div>
+<section id="incoming" class="page"><article class="card">
+<label class="switch-line">启用接收翻译<input id="enabled" type="checkbox"></label>
+<label>译文语言<select id="incomingTargetLanguage"></select></label>
+<div id="incomingCustomFields" class="grid" hidden>
+<label>自定义语言名称<input id="incomingCustomLanguage" maxlength="80"></label>
+<label>免费服务语言代码<input id="incomingCustomLanguageCode" maxlength="32" placeholder="如 nl"></label>
+</div>
+<label>翻译引擎<select id="mode"><option value="fast">免费翻译</option><option value="quality">大模型翻译</option></select></label>
+<p class="hint">译文跟随原消息，打开聊天记录可回看。</p>
+</article></section>
+<section id="outgoing" class="page" hidden><article class="card">
+<label class="switch-line">启用发送翻译<input id="outgoingEnabled" type="checkbox"></label>
+<label>目标语言<select id="outgoingTargetLanguage"></select></label>
+<div id="outgoingCustomFields" class="grid" hidden>
+<label>自定义语言名称<input id="outgoingCustomLanguage" maxlength="80"></label>
+<label>免费服务语言代码<input id="outgoingCustomLanguageCode" maxlength="32" placeholder="如 nl"></label>
+</div>
+<input id="outgoingHotkey" type="hidden">
+<div class="grid">
+<label>Ctrl<select id="sendCtrl"></select></label>
+<label>Alt<select id="sendAlt"></select></label>
+<label>Shift<select id="sendShift"></select></label>
+<label>主键<select id="sendKey"></select></label>
+</div>
+<div class="toolbar"><button id="recordSendKey" type="button">录制快捷键</button><button id="resetSendKey" type="button">恢复默认</button></div>
+<p class="hint" id="sendKeyStatus" role="status"></p>
+<p class="hint">打开游戏聊天框输入文字，再按已保存的快捷键收起聊天框并发送译文。普通回车按游戏原文发送。</p>
+<label>翻译引擎<select id="outgoingMode"><option value="fast">免费翻译</option><option value="quality">大模型翻译</option></select></label>
+<label class="switch-line">附上原文<input id="outgoingDisplayMode" type="checkbox"></label>
+<p class="hint">每条最多 80 个字符，较长内容会在当前频道分条发送，最多 8 条。</p>
+</article></section>
+<section id="glossary" class="page" hidden><article class="card" id="glossary-section-3"><div class="section-head"><div><h3>术语词库</h3><p class="hint"><strong>匹配词（原词）</strong>是聊天里实际出现的文字，可以是中文昵称、英文或缩写。<strong>中文译名</strong>用于显示中文翻译。<strong>标准英文名</strong>是发送翻译时使用的游戏英文名。</p><p class="hint">例如想把「尖尖头」译成 Yamato，就把它们分别填到匹配词和标准英文名。有内置英文名时，中文译名可以留空自动补齐。编辑完点「保存词库」。</p></div><button id="addTerm">添加词条</button></div><div class="toolbar"><input id="termSearch" placeholder="搜索新旧名称、英雄、装备或缩写" aria-label="搜索词库"><button id="exportTerms">导出</button><button id="importTerms">导入 JSON</button><input id="termFile" type="file" accept="application/json" hidden=""></div><div class="table-wrap"><table><thead><tr><th>匹配词</th><th>中文译名</th><th>旧中文</th><th>标准英文名</th><th>类型</th><th>歧义</th><th></th></tr></thead><tbody id="termRows"></tbody></table></div><p class="hint" id="termHint"></p><div id="termConflicts" class="save-conflict" hidden></div><button id="saveTerms" class="primary">保存词库</button><button id="discardTermsDraft" type="button" class="subtle">撤销词库修改</button><p id="termSaveStatus" class="hint" role="status">多个昵称可以使用同一个标准英文名。</p></article></section>
+<section id="author" class="page" hidden><div class="lite-author-grid"><article class="card">
+<h3>ともり_一生</h3>
+<div class="toolbar"><button id="bilibili">打开 B 站主页</button><button id="github">打开 GitHub 项目</button></div>
+<p>反馈 QQ 群 923443423</p>
+<img class="lite-author-qr" src="/community-qq.png" width="180" height="320" alt="反馈群二维码">
+</article><article class="card">
+<h3>精简版更新</h3>
+<p class="lite-release-version">已安装 <strong id="installedLiteVersion"></strong></p>
+<p id="releaseState" class="hint" role="status">正在读取发布状态…</p>
+<div class="toolbar"><button id="checkUpdates">检查更新</button><button id="openUpdate" hidden>下载新版精简版</button></div>
+</article></div></section>
+<article id="providerCard" class="card page" hidden>
+<h3>大模型服务</h3>
+<div class="grid">
+<label>API 地址<input id="llmBaseUrl" type="url" maxlength="240" placeholder="https://api.deepseek.com"></label>
+<label>通用模型名<input id="model" maxlength="150" placeholder="deepseek-flash"></label>
+</div>
+<label>API 密钥<input id="llmKey" type="password" maxlength="300" autocomplete="off"></label>
+<button id="pasteLiteKey" type="button">粘贴密钥</button>
+<p class="hint">密钥保存在本机，切换版本时由安装器迁移。</p>
+<p id="providerModelHint" class="hint" hidden></p>
+</article>
+</div></main></div>
+<script src="/settings-background.js"></script><script src="/app.js"></script>
+</body></html>

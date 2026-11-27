@@ -143,6 +143,181 @@ function Merge-Terms($old,$updated,$saved){
     return ,$taskMerged.ToArray()
 }
 
+function Read-ProfileFile([string]$Path){
+    No-Links $Path
+    if(-not(Test-Path -LiteralPath $Path)){return @{path=$Path;bytes=$null;hash='-'}}
+    $bytes=[IO.File]::ReadAllBytes($Path)
+    return @{path=$Path;bytes=$bytes;hash=(Hash-Bytes $bytes)}
+}
+function Read-ProfileJson($File){
+    [Text.Encoding]::UTF8.GetString($File.bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+}
+function Read-ProfileTerms($File){
+    if(-not $File.bytes){return}
+    # Windows PowerShell emits a JSON array as one pipeline object.
+    $rows=Read-ProfileJson $File
+    foreach($row in $rows){$row}
+}
+function New-ProfileByteChange($File,[byte[]]$Bytes,[string]$Name){
+    $hash=Hash-Bytes $Bytes
+    if($hash -ne $File.hash){return @{before=$File;bytes=$Bytes;hash=$hash;name=$Name}}
+}
+function New-ProfileChange($File,$Value,[string]$Name){
+    $bytes=[Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $Value -Depth 32))
+    New-ProfileByteChange $File $bytes $Name
+}
+function Read-ProfileSecrets($File){
+    $secrets=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    if($File.hash -eq '-'){return ,$secrets}
+    $plain=$null
+    try{
+        Add-Type -AssemblyName System.Security
+        $plain=[Security.Cryptography.ProtectedData]::Unprotect($File.bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        $document=[Text.Encoding]::UTF8.GetString($plain) | ConvertFrom-Json
+        if($document -isnot [pscustomobject]){throw 'Invalid credentials'}
+        foreach($entry in $document.PSObject.Properties){
+            if($entry.Value -isnot [string]){throw 'Invalid credential value'}
+            $secrets.Add($entry.Name,$entry.Value)
+        }
+        return ,$secrets
+    }catch{
+        throw '无法解密或读取大模型密钥。请使用保存该密钥的 Windows 用户切换版本。'
+    }finally{
+        if($null -ne $plain){[Array]::Clear($plain,0,$plain.Length)}
+    }
+}
+function New-ProfileSecretChange($File,$Secrets){
+    $plain=$null
+    try{
+        $plain=[Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $Secrets -Compress))
+        $encrypted=[Security.Cryptography.ProtectedData]::Protect($plain,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        New-ProfileByteChange $File $encrypted 'secrets.dpapi'
+    }catch{
+        throw '无法加密保存迁移的大模型密钥。'
+    }finally{
+        if($null -ne $plain){[Array]::Clear($plain,0,$plain.Length)}
+    }
+}
+function Get-LlmProfileDefaults {
+    return [ordered]@{
+        llmBaseUrl='https://api.deepseek.com'; llmPreset='auto'; llmCustomBaseUrl=''; model='deepseek-flash'
+        llmCustomModel=''; llmCustomIncomingModel=''; llmCustomOutgoingModel=''
+        llmMaxTokens=4096; llmThinkingEnabled=$true; llmThinkingApi='auto'; llmStreaming=$true
+        llmIndependentProfiles=$false; incomingModel=''; outgoingModel=''; incomingThinking=$null; outgoingThinking=$null
+    }
+}
+function Test-UnconfiguredLlmProfile($Settings){
+    $defaults=Get-LlmProfileDefaults
+    foreach($key in $defaults.Keys){
+        $value=$Settings.PSObject.Properties[$key]
+        if(-not $value){continue}
+        if($key -eq 'llmPreset' -and $value.Value -eq 'deepseek'){continue}
+        if($key -eq 'llmBaseUrl' -and $value.Value -in @('https://api.deepseek.com/','https://api.deepseek.com/v1','https://api.deepseek.com/v1/')){continue}
+        if($value.Value -cne $defaults[$key]){return $false}
+    }
+    return $true
+}
+function Copy-LlmProfileSettings($Source,$Next,[bool]$HasSourceKey,[bool]$HasDestinationKey){
+    $keys=(Get-LlmProfileDefaults).Keys
+    if(-not $HasSourceKey -and -not @($keys | Where-Object {$Source.PSObject.Properties[$_]}).Count){return}
+    $sourceAddress=if($Source.llmBaseUrl){$Source.llmBaseUrl}else{'https://api.deepseek.com'}
+    $targetAddress=if($Next.llmBaseUrl){$Next.llmBaseUrl}else{'https://api.deepseek.com'}
+    # An existing key stays with its configured provider when the source has no saved LLM credential.
+    if(-not $HasSourceKey -and $HasDestinationKey -and $sourceAddress.TrimEnd('/') -cne $targetAddress.TrimEnd('/')){
+        $script:DltEditionLlmProfileRetained=$true
+        return
+    }
+    foreach($key in $keys){
+        $value=$Source.PSObject.Properties[$key]
+        if($value){$Next | Add-Member -NotePropertyName $key -NotePropertyValue $value.Value -Force}
+        else{$Next.PSObject.Properties.Remove($key)}
+    }
+}
+function Get-LegacyLiteLlmMigration([string]$FullDirectory,[string]$LiteDirectory){
+    $sourceSecretFile=Read-ProfileFile (Join-Path $FullDirectory 'secrets.dpapi')
+    if($sourceSecretFile.hash -eq '-'){return}
+    $targetSettings=Read-ProfileFile (Join-Path $LiteDirectory 'settings.json')
+    $next=if($targetSettings.bytes){Read-ProfileJson $targetSettings}else{
+        [pscustomobject]@{mode='fast';outgoingMode='fast';outgoingSplitLong=$true;deepSeekCostPopup=$false}
+    }
+    if($next -isnot [pscustomobject] -or -not(Test-UnconfiguredLlmProfile $next)){return}
+    $targetSecretFile=Read-ProfileFile (Join-Path $LiteDirectory 'secrets.dpapi')
+    $targetSecrets=Read-ProfileSecrets $targetSecretFile
+    if($targetSecrets.ContainsKey('llm')){$targetSecrets.Clear();return}
+    $sourceSecrets=Read-ProfileSecrets $sourceSecretFile
+    try{
+        if(-not $sourceSecrets['llm']){return}
+        $sourceSettings=Read-ProfileFile (Join-Path $FullDirectory 'settings.json')
+        $source=if($sourceSettings.bytes){Read-ProfileJson $sourceSettings}else{[pscustomobject]@{}}
+        if($source -isnot [pscustomobject]){throw '原完整版的大模型设置格式无效，无法迁移。'}
+        Copy-LlmProfileSettings $source $next $true $false
+        $targetSecrets['llm']=$sourceSecrets['llm']
+        $changes=@(New-ProfileChange $targetSettings $next 'settings.json')
+        $changes+=@(New-ProfileSecretChange $targetSecretFile $targetSecrets)
+        return @{inputs=@($sourceSettings,$sourceSecretFile,$targetSettings,$targetSecretFile);changes=$changes}
+    }finally{
+        $sourceSecrets.Clear()
+        $targetSecrets.Clear()
+    }
+}
+function Test-ProfileShortcutOverlap([string]$First,[string]$Second){
+    $left=$First -split '\+';$right=$Second -split '\+'
+    if($left[-1].Trim() -ine $right[-1].Trim()){return $false}
+    foreach($modifier in @('Ctrl|Control','Alt','Shift')){
+        $pattern='^(L|R)?('+$modifier+')$'
+        $a=@($left | Where-Object {$_.Trim() -match $pattern})
+        $b=@($right | Where-Object {$_.Trim() -match $pattern})
+        if(($a.Count -eq 0) -ne ($b.Count -eq 0)){return $false}
+        if($a.Count -and $b.Count){
+            $aSide=[regex]::Match($a[0].Trim(),$pattern,'IgnoreCase').Groups[1].Value
+            $bSide=[regex]::Match($b[0].Trim(),$pattern,'IgnoreCase').Groups[1].Value
+            if($aSide -and $bSide -and $aSide -ine $bSide){return $false}
+        }
+    }
+    return $true
+}
+function New-SwitchedSettings($Source,$Destination,[bool]$Lite,[bool]$HasSourceKey,[bool]$HasDestinationKey){
+    $sourceSettings=if($Source.bytes){Read-ProfileJson $Source}else{[pscustomobject]@{}}
+    $next=if($Destination.bytes){Read-ProfileJson $Destination}else{[pscustomobject]@{}}
+    if($sourceSettings -isnot [pscustomobject] -or $next -isnot [pscustomobject]){throw '聊天设置格式无效，未执行版本切换。'}
+    if($Lite -and -not $Destination.bytes){
+        $next=[pscustomobject]@{mode='fast';outgoingMode='fast';outgoingSplitLong=$true;deepSeekCostPopup=$false}
+    }
+    $keys=@('enabled','outgoingEnabled','incomingTargetLanguage','incomingCustomLanguage','incomingCustomLanguageCode',
+        'outgoingTargetLanguage','outgoingCustomLanguage','outgoingCustomLanguageCode','outgoingDisplayMode','outgoingHotkey')
+    foreach($key in $keys){
+        $value=$sourceSettings.PSObject.Properties[$key]
+        if(-not $value -or $null -eq $value.Value){continue}
+        if($key -eq 'outgoingHotkey' -and -not $Lite){
+            $otherKeys=@($next.quickMessages | Where-Object {$_.enabled} | ForEach-Object {$_.hotkey})
+            $otherKeys+=@($next.outgoingLanguageBindings | Where-Object {$_.enabled} | ForEach-Object {$_.hotkey})
+            $otherKeys+=@($next.voiceInputTeamKey,$next.voiceInputAllKey,$next.voiceInputTranslateKey,$next.voiceInputChannelKey)
+            $conflicts=@($otherKeys | Where-Object {$_ -and (Test-ProfileShortcutOverlap $value.Value $_)})
+            if($conflicts.Count){
+                $script:DltEditionHotkeyConflict=$true
+                continue
+            }
+        }
+        $next | Add-Member -NotePropertyName $key -NotePropertyValue $value.Value -Force
+    }
+    Copy-LlmProfileSettings $sourceSettings $next $HasSourceKey $HasDestinationKey
+    return $next
+}
+function Merge-FirstSwitchTerms($Active,$Inactive,$OldDefaults,$NewDefaults){
+    $activeIndex=Term-Index $Active
+    $previous=Term-Index $OldDefaults
+    $next=Term-Index $NewDefaults
+    foreach($item in $Inactive){
+        $before=if($previous.ContainsKey($item.source)){$previous[$item.source]}else{$null}
+        $upcoming=if($next.ContainsKey($item.source)){$next[$item.source]}else{$null}
+        if(($before -and (Same-Term $item $before)) -or ($upcoming -and (Same-Term $item $upcoming))){continue}
+        if($activeIndex.ContainsKey($item.source)){
+            if($before -and (Same-Term $activeIndex[$item.source] $before)){$activeIndex[$item.source]=$item}
+        }elseif(-not $before){$activeIndex.Add($item.source,$item)}
+    }
+    return ,@($activeIndex.Values)
+}
+
 try{
     $PackageFolder=Full-Path $PackageFolder;$StateDirectory=Full-Path $StateDirectory
     if($ValidatePackagePaths){
@@ -184,8 +359,7 @@ try{
         $taskMetadata=Read-Json $taskPackageManifest;$taskEntries=@($taskMetadata.artifacts)
     }
     if($taskMetadata.version -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?$' -or -not $taskEntries.Count -or $taskEntries.Count -gt 2000){throw '新包清单或版本无效。'}
-    $taskVersion=[Version]$taskMetadata.version
-    if($taskInstall.version -match '^\d+\.\d+\.\d+(?:\.\d+)?$' -and [Version]$taskInstall.version -gt $taskVersion){throw '不允许覆盖成更旧版本；请使用同版或新版安装包。'}
+    if(-not(Test-DltVersionReplacement (Get-DltInstalledEditionInfo $taskInstall $RuntimeFolder) $taskMetadata)){throw '不允许覆盖成更旧版本；请使用同版或新版安装包。'}
     $taskFiles=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
     $taskHashes=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach($taskEntry in $taskEntries){
@@ -236,20 +410,90 @@ try{
     $taskCritical=@($taskIntegrity.issues|Where-Object {$_.code -in @('hash-mismatch','invalid-pairing-format','pairing-vpk-mismatch','version-mismatch','record-runtime-mismatch')})
     if($taskCritical.Count -and $RuntimeFolder -ine $PackageFolder){$RepairMissingRuntime=$true;Write-Output '检测到运行文件不匹配，将从已校验的新包成套修复；个人设置、密钥、证书和自定义词库保留。'}
     if($PackageFolder -ine $RuntimeFolder -and ((Is-Inside $PackageFolder $RuntimeFolder) -or (Is-Inside $RuntimeFolder $PackageFolder))){throw '新旧目录不能互相包含，请把新包解压到独立目录。'}
-    $taskMerged=$null;$taskUserTerms=Join-Path $StateDirectory 'terms.json';$taskOldDefaults=Join-Path $RuntimeFolder 'data\terms.json'
-    $taskTermsReadHash=$null
-    if((Test-Path -LiteralPath $taskUserTerms) -and $PackageFolder -ine $RuntimeFolder -and -not $RepairMissingRuntime){No-Links $taskUserTerms;No-Links $taskOldDefaults;if(-not(Test-Path -LiteralPath $taskOldDefaults)){throw '旧默认词库缺失，无法安全保留自定义词库。'};$taskTermsReadHash=Hash-File $taskUserTerms;$taskMerged=Merge-Terms (Read-Json $taskOldDefaults) (Read-Json $taskFiles['data/terms.json']) (Read-Json $taskUserTerms)}
+    $taskLite=$taskMetadata.edition -eq 'lite'
+    $taskOldPackage=Join-Path $RuntimeFolder 'package-manifest.json'
+    $taskOldMetadata=$null
+    if(Test-Path -LiteralPath $taskOldPackage -PathType Leaf){
+        No-Links $taskOldPackage
+        try{$taskOldMetadata=Read-Json $taskOldPackage}catch{}
+    }
+    $taskWasLite=(Get-DltInstalledEditionInfo $taskInstall $RuntimeFolder).edition -eq 'lite'
+    $taskSwitchEdition=$taskWasLite -ne $taskLite
+    $taskTermsDirectory=if($taskLite){Join-Path $StateDirectory 'lite'}else{$StateDirectory}
+    $taskPreviousRuntime=if($taskInstall.runtimeFolder){$taskInstall.runtimeFolder}else{$RuntimeFolder}
+    $taskOldDefaults=Join-Path $taskPreviousRuntime 'data\terms.json'
+    $taskRetired=@()
+    if($taskLite -and -not $taskWasLite){
+        foreach($entry in @($taskOldMetadata.files)){
+            $relative=[string]$entry.file
+            if($relative -notmatch '^(?:voice/(?:DeadlockVoiceWorker\.exe|runtimes/(?:cuda/|vulkan/)?win-x64/(?:whisper|ggml(?:-(?:base|cpu|cuda|vulkan))?-whisper)\.dll)|wwwroot/(?:voice-settings\.js|voice-benchmark\.json))$' -or
+               $entry.sha256 -notmatch '^[a-fA-F0-9]{64}$' -or $taskFiles.ContainsKey($relative)){continue}
+            $path=Safe-File $RuntimeFolder $relative
+            if((Test-Path -LiteralPath $path -PathType Leaf) -and (Hash-File $path) -eq $entry.sha256){
+                $taskRetired+=@{relative=$relative;source=$path;hash=$entry.sha256}
+            }
+        }
+    }
     $taskGameinfo=Join-Path $GamePath 'game\citadel\gameinfo.gi';No-Links $taskGameinfo
     $taskOriginalGameinfo=[IO.File]::ReadAllBytes($taskGameinfo)
     $taskGameinfoHash=Hash-Bytes $taskOriginalGameinfo
     $taskGameinfoPlan=Get-DltSearchPathsPlan $taskOriginalGameinfo -EnsureAddons
     if($RequireStoppedBackend){Confirm-DltBackendStop @(Get-DltRunningBackends @($RuntimeFolder)) ''}
     else{Stop-Backend $RuntimeFolder}
+    $taskProfileChanges=@();$taskProfileInputs=@()
+    $taskDestinationTerms=Read-ProfileFile (Join-Path $taskTermsDirectory 'terms.json')
+    if($taskSwitchEdition){
+        $sourceDirectory=if($taskWasLite){Join-Path $StateDirectory 'lite'}else{$StateDirectory}
+        $sourceSettings=Read-ProfileFile (Join-Path $sourceDirectory 'settings.json')
+        $sourceTerms=Read-ProfileFile (Join-Path $sourceDirectory 'terms.json')
+        $sourceSecretFile=Read-ProfileFile (Join-Path $sourceDirectory 'secrets.dpapi')
+        $taskProfileInputs=@($sourceSettings,$sourceTerms,$sourceSecretFile)
+        $sourceSecrets=Read-ProfileSecrets $sourceSecretFile
+        $hasSourceLlm=$sourceSecrets.ContainsKey('llm')
+        if($sourceSettings.bytes -or $hasSourceLlm){
+            $targetSettings=Read-ProfileFile (Join-Path $taskTermsDirectory 'settings.json')
+            $targetSecretFile=Read-ProfileFile (Join-Path $taskTermsDirectory 'secrets.dpapi')
+            $targetSecrets=Read-ProfileSecrets $targetSecretFile
+            $taskProfileInputs+=@($targetSettings,$targetSecretFile)
+            $targetLlm=$targetSecrets['llm']
+            $taskProfileChanges+=@(New-ProfileChange $targetSettings (New-SwitchedSettings $sourceSettings $targetSettings $taskLite $hasSourceLlm ([bool]$targetLlm)) 'settings.json')
+            if($hasSourceLlm -and (-not $targetSecrets.ContainsKey('llm') -or $sourceSecrets['llm'] -cne $targetLlm)){
+                $targetSecrets['llm']=$sourceSecrets['llm']
+                $taskProfileChanges+=@(New-ProfileSecretChange $targetSecretFile $targetSecrets)
+            }
+            $targetSecrets.Clear()
+        }
+        $sourceSecrets.Clear()
+        $oldDefaultFile=Read-ProfileFile $taskOldDefaults
+        if($sourceTerms.bytes -or $oldDefaultFile.bytes){
+            $active=@(if($sourceTerms.bytes){Read-ProfileTerms $sourceTerms}else{Read-ProfileTerms $oldDefaultFile})
+            $oldDefaults=@(Read-ProfileTerms $oldDefaultFile)
+            $newDefaults=@(Read-ProfileTerms (Read-ProfileFile $taskFiles['data/terms.json']))
+            $previousEdition=if($taskWasLite){'lite'}else{'full'}
+            if($taskDestinationTerms.bytes -and $taskInstall.sharedProfileEdition -ne $previousEdition){
+                $active=Merge-FirstSwitchTerms $active @(Read-ProfileTerms $taskDestinationTerms) $oldDefaults $newDefaults
+            }
+            $merged=Merge-Terms $oldDefaults $newDefaults $active
+            $taskProfileChanges+=@(New-ProfileChange $taskDestinationTerms $merged 'terms.json')
+        }
+    }elseif($taskDestinationTerms.bytes -and $PackageFolder -ine $RuntimeFolder -and -not $RepairMissingRuntime){
+        $oldDefaultFile=Read-ProfileFile $taskOldDefaults
+        if(-not $oldDefaultFile.bytes){throw '旧默认词库缺失，无法安全保留自定义词库。'}
+        $merged=Merge-Terms @(Read-ProfileTerms $oldDefaultFile) @(Read-ProfileTerms (Read-ProfileFile $taskFiles['data/terms.json'])) @(Read-ProfileTerms $taskDestinationTerms)
+        $taskProfileChanges+=@(New-ProfileChange $taskDestinationTerms $merged 'terms.json')
+    }
+    if($taskLite -and $taskWasLite -and -not $taskInstall.llmProfileMigration){
+        $legacyProfile=Get-LegacyLiteLlmMigration $StateDirectory $taskTermsDirectory
+        if($legacyProfile){
+            $taskProfileInputs+=@($legacyProfile.inputs)
+            $taskProfileChanges+=@($legacyProfile.changes)
+        }
+    }
     foreach($folder in @($RuntimeFolder,$StateDirectory,(Split-Path $taskTarget -Parent))){Assert-DltWritableDirectory $folder 'update-preflight'}
-    $taskCheckTargets=@($taskTarget,$taskManifestPath)
+    $taskCheckTargets=@($taskTarget,$taskManifestPath)+@($taskRetired|ForEach-Object {$_.source})
     if($taskGameinfoPlan.Changed){$taskCheckTargets+=$taskGameinfo}
     foreach($file in $taskEntries){$taskCheckTargets+=Safe-File $RuntimeFolder $file.file}
-    if($null -ne $taskMerged){$taskCheckTargets+=$taskUserTerms}
+    $taskCheckTargets+=@($taskProfileChanges | ForEach-Object {$_.before.path})
     foreach($target in $taskCheckTargets){
         $check=Get-DltFileCheck $target 'update-preflight' -AllowReadOnly:($target -ieq $taskGameinfo)
         if($check.blocking){Throw-DltCheck $check}
@@ -263,8 +507,9 @@ try{
     [IO.File]::WriteAllBytes((Join-Path $taskBackup 'install-manifest-before.json'),$taskOriginalManifest);if($taskVpkExisted){[IO.File]::WriteAllBytes((Join-Path $taskBackup 'translation-before.vpk'),$taskOriginalVpk)}
     [IO.File]::WriteAllBytes((Join-Path $taskBackup 'gameinfo-before.gi'),$taskOriginalGameinfo)
     $taskGameinfoCommitted=$false
-    $taskDuplicateBackups=@()
-    $taskPlan=@();$taskCommitted=[Collections.Generic.List[object]]::new();$taskVpkCommitted=$false;$taskTermsCommitted=$false;$taskManifestCommitted=$false;$taskUserRaw=$null
+    $taskDuplicateBackups=@();$taskRetiredBackups=@()
+    $taskPlan=@();$taskCommitted=[Collections.Generic.List[object]]::new();$taskVpkCommitted=$false;$taskManifestCommitted=$false
+    $taskProfileCommitted=[Collections.Generic.List[object]]::new()
     $taskFiles[(Split-Path $taskPackageManifest -Leaf)]=$taskPackageManifest
     $taskHashes[(Split-Path $taskPackageManifest -Leaf)]=Hash-File $taskPackageManifest
     foreach($taskRelative in $taskFiles.Keys){
@@ -272,7 +517,12 @@ try{
         if(Test-Path -LiteralPath $taskDestination){if($RequireEmptyRuntime){Throw-DltFault 'file-changed' 'runtime-preflight' $taskDestination '新的程序目录已出现同名文件，请重新预览。'};$taskBeforeHash=Hash-File $taskDestination;New-Item -ItemType Directory -Force -Path (Split-Path $taskSaved -Parent)|Out-Null;Copy-Item -LiteralPath $taskDestination -Destination $taskSaved;if((Hash-File $taskSaved) -ne $taskBeforeHash){throw '旧程序备份校验失败。'}}
         $taskPlan+=[pscustomobject]@{relative=$taskRelative;source=$taskFiles[$taskRelative];destination=$taskDestination;backup=$taskSaved;beforeHash=$taskBeforeHash;newHash=$taskHashes[$taskRelative]}
     }
-    if(Test-Path -LiteralPath $taskUserTerms){$taskUserRaw=[IO.File]::ReadAllBytes($taskUserTerms);[IO.File]::WriteAllBytes((Join-Path $taskBackup 'user-terms-before.json'),$taskUserRaw)}
+    foreach($change in $taskProfileChanges){
+        if($change.before.bytes){
+            $name='user-'+[IO.Path]::GetFileNameWithoutExtension($change.name)+'-before'+[IO.Path]::GetExtension($change.name)
+            [IO.File]::WriteAllBytes((Join-Path $taskBackup $name),$change.before.bytes)
+        }
+    }
     $taskPlan|ConvertTo-Json -Depth 4|Set-Content (Join-Path $taskBackup 'file-plan.json') -Encoding utf8
     try{
         foreach($duplicate in @($taskGameState.duplicates)){
@@ -283,7 +533,6 @@ try{
         if($taskGameState.state -eq 'duplicate'){Assert-DltRecoveryConflicts $taskAddons $taskFiles['dlt_translate_dir.vpk'] $taskTarget}
         if(Get-Process -Name deadlock,citadel -ErrorAction SilentlyContinue){throw '游戏在更新前重新启动，已停止。'}
         if((Hash-File $taskManifestPath) -ne $taskInitialManifestHash){throw '安装记录在准备期间变化，已停止。'}
-        if($taskTermsReadHash -and (Hash-Bytes $taskUserRaw) -ne $taskTermsReadHash){throw '自定义词库在准备期间变化，已停止。'}
         if($taskVpkExisted){if((Hash-File $taskTarget) -ne $taskInstall.vpkHash.ToLowerInvariant()){Throw-DltFault 'file-changed' 'vpk-commit' $taskTarget '游戏 VPK 在准备期间变化，已停止。'}}elseif(Test-Path -LiteralPath $taskTarget){Throw-DltFault 'file-changed' 'vpk-commit' $taskTarget '空 VPK 槽位被占用，未覆盖。'}
         if((Hash-File $taskGameinfo) -ne $taskGameinfoHash){throw '游戏搜索路径在准备期间变化，已停止。'}
         foreach($taskStep in $taskPlan){
@@ -293,6 +542,18 @@ try{
             if((Hash-Bytes $taskBytes) -ne $taskStep.newHash){throw '新包在更新期间变化，已停止。'}
             Replace-Bytes $taskStep.destination $taskBytes $(if($taskStep.beforeHash){$taskStep.beforeHash}else{'-'});$taskCommitted.Add($taskStep)
             if((Hash-File $taskStep.destination) -ne $taskStep.newHash){throw '程序替换后校验失败。'}
+        }
+        foreach($old in $taskRetired){
+            if((Hash-File $old.source) -ne $old.hash){throw '语音组件在切换期间被修改，请重新检查。'}
+            $saved=Join-Path $taskBackup ('retired/'+$old.relative)
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $saved) | Out-Null
+            No-Links $saved
+            [IO.File]::Copy($old.source,$saved,$false)
+            if((Hash-File $saved) -ne $old.hash){throw '语音组件备份校验失败。'}
+            # The durable journal already stores the original source bytes. The
+            # separate update backup is retained independently of that journal.
+            Remove-DltTrackedFile $old.source $old.hash 'retire-full-edition-file'
+            $taskRetiredBackups+=@{source=$old.source;backup=$saved;hash=$old.hash}
         }
         No-Links $taskAddons;[IO.Directory]::CreateDirectory($taskAddons)|Out-Null
         Write-DltAtomic $taskTarget ([IO.File]::ReadAllBytes($taskFiles['dlt_translate_dir.vpk'])) -ExpectedHash $(if($taskVpkExisted){$taskInstall.vpkHash}else{'-'}) -Stage 'game-vpk-commit';$taskVpkCommitted=$true
@@ -304,13 +565,27 @@ try{
             if((Hash-File $taskGameinfo) -ne (Hash-Bytes $taskGameinfoPlan.Bytes)){throw '游戏搜索路径修复后校验失败。'}
             Update-DltGameinfoOwnership $taskInstall $taskOriginalGameinfo $taskGameinfoHash (Hash-File $taskGameinfo) $taskGameinfoPlan.AddedAddon
         }
-        if($null -ne $taskMerged){if((Hash-File $taskUserTerms) -ne (Hash-Bytes $taskUserRaw)){throw '自定义词库在更新期间变化，已停止。'};Replace-Bytes $taskUserTerms ([Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject @($taskMerged) -Depth 6)));$taskTermsCommitted=$true}
+        foreach($profileInput in $taskProfileInputs){
+            if((Read-ProfileFile $profileInput.path).hash -ne $profileInput.hash){throw '个人设置、词库或密钥在安装期间变化，未迁移。'}
+        }
+        foreach($change in $taskProfileChanges){
+            No-Links $change.before.path
+            [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($change.before.path))|Out-Null
+            Write-DltAtomic $change.before.path $change.bytes -ExpectedHash $change.before.hash -Stage 'edition-profile-commit'
+            $taskProfileCommitted.Add($change)
+        }
         $taskInstall.target=$taskTarget;$taskInstall.vpkHash=$taskNewVpkHash
+        if($taskSwitchEdition){$taskInstall|Add-Member -NotePropertyName sharedProfileEdition -NotePropertyValue $(if($taskLite){'lite'}else{'full'}) -Force}
+        if($taskLite){$taskInstall|Add-Member -NotePropertyName llmProfileMigration -NotePropertyValue $true -Force}
+        $taskInstall|Add-Member -NotePropertyName releaseTag -NotePropertyValue $taskMetadata.releaseTag -Force
+        $taskInstall|Add-Member -NotePropertyName edition -NotePropertyValue $(if($taskLite){'lite'}else{'full'}) -Force
         $taskInstall|Add-Member -NotePropertyName version -NotePropertyValue $taskMetadata.version -Force
         $taskInstall|Add-Member -NotePropertyName runtimeFolder -NotePropertyValue $RuntimeFolder -Force
         Replace-Bytes $taskManifestPath ([Text.UTF8Encoding]::new($false).GetBytes(($taskInstall|ConvertTo-Json -Depth 6)))
         $taskManifestCommitted=$true
         Write-Output ('覆盖更新完成：'+$taskMetadata.version)
+        if($script:DltEditionHotkeyConflict){Write-Output 'dlt:edition-hotkey-conflict'}
+        if($script:DltEditionLlmProfileRetained){Write-Output 'dlt:edition-llm-profile-retained'}
         if($RequireEmptyRuntime){Write-Output ('程序已恢复到本次选择的目录：'+$RuntimeFolder)}else{Write-Output ('程序目录保持不变：'+$RuntimeFolder)}
         Write-Output ('备份：'+$taskBackup)
         if($taskGameinfoPlan.Changed){Write-Output ('已修复默认按键配置的搜索路径：'+($taskGameinfoPlan.Added -join ', '))}
@@ -320,8 +595,20 @@ try{
         foreach($taskStep in @($taskCommitted.ToArray())|Sort-Object -Property relative -Descending){try{if((Hash-File $taskStep.destination) -ne $taskStep.newHash){throw 'File changed after commit'};if($taskStep.beforeHash){Replace-Bytes $taskStep.destination ([IO.File]::ReadAllBytes($taskStep.backup))}elseif(Test-Path -LiteralPath $taskStep.destination){Remove-Item -LiteralPath $taskStep.destination}}catch{$taskRollbackErrors+=$taskStep.relative}}
         if($taskVpkCommitted){try{if((Hash-File $taskTarget) -ne $taskNewVpkHash){throw 'VPK changed after commit'};if($taskVpkExisted){Replace-Bytes $taskTarget $taskOriginalVpk}else{Remove-Item -LiteralPath $taskTarget};Write-DltInstallTrace 'rollback-vpk' $taskTarget 'restored'}catch{$taskRollbackErrors+='game-vpk';Write-DltInstallTrace 'rollback-vpk' $taskTarget 'failed'}}
         if($taskGameinfoCommitted){try{if((Hash-File $taskGameinfo) -ne (Hash-Bytes $taskGameinfoPlan.Bytes)){throw 'gameinfo changed after repair'};Replace-Bytes $taskGameinfo $taskOriginalGameinfo}catch{$taskRollbackErrors+='gameinfo'}}
-        if($taskTermsCommitted){try{Replace-Bytes $taskUserTerms $taskUserRaw}catch{$taskRollbackErrors+='terms'}}
+        foreach($change in $taskProfileCommitted){
+            try{
+                if($change.before.bytes){Write-DltAtomic $change.before.path $change.before.bytes -ExpectedHash $change.hash -Stage 'rollback-profile'}
+                elseif((Hash-File $change.before.path) -eq $change.hash){[IO.File]::Delete($change.before.path)}
+                else{throw 'Profile changed after commit'}
+            }catch{$taskRollbackErrors+=$change.before.path}
+        }
         if($taskManifestCommitted){try{Replace-Bytes $taskManifestPath $taskOriginalManifest}catch{$taskRollbackErrors+='manifest'}}
+        foreach($old in $taskRetiredBackups){
+            try{
+                if((Test-Path -LiteralPath $old.source) -or (Hash-File $old.backup) -ne $old.hash){throw 'Retired file or backup changed'}
+                Replace-Bytes $old.source ([IO.File]::ReadAllBytes($old.backup)) '-'
+            }catch{$taskRollbackErrors+=$old.source}
+        }
         foreach($duplicate in $taskDuplicateBackups){try{if(Test-Path -LiteralPath $duplicate.original){throw 'Original slot changed'};if((Hash-File $duplicate.backup) -ne $duplicate.hash){throw 'Backup changed'};[IO.File]::Move($duplicate.backup,$duplicate.original);Write-DltInstallTrace 'rollback-duplicate' $duplicate.original 'restored'}catch{$taskRollbackErrors+='duplicate-vpk';Write-DltInstallTrace 'rollback-duplicate' $duplicate.original 'failed'}}
         $fault=Get-DltFault $taskFailure 'update';$fault.rollback=@($taskRollbackErrors);$fault|Add-Member -NotePropertyName backup -NotePropertyValue $taskBackup -Force;$taskFailure.Exception.Data['dltFault']=$fault
         throw $taskFailure

@@ -11,7 +11,7 @@ public sealed class NativeHotkey : IDisposable {
     private readonly HotkeyState keys=new();
     private readonly QuickMessageHotkeys quick=new();
     public OutgoingLanguageHotkeys Languages {get;}=new();
-    internal VoiceDictation Dictation { get; }
+    internal VoiceDictation? Dictation { get; }
     private readonly HotkeyNoiseSummary noise=new();
     private readonly HotkeyRecorder recorder;
     private volatile bool settingsOpen;private long lastSettingsSeen;
@@ -24,14 +24,14 @@ public sealed class NativeHotkey : IDisposable {
     public NativeHotkey(ConfigStore config,DiagnosticLog? log=null){
         this.config=config;this.log=log;binding=HotkeyChord.Parse(config.Current.OutgoingHotkey);outgoingEnabled=config.Current.OutgoingEnabled;backendElevated=Elevated((uint)Environment.ProcessId);
         recorder=new(view=>log?.Record("hotkey",LogKind.HotkeyRecordingFinished,new(Stage:"recording",Reason:view.State=="expired"?LogReason.Timeout:view.State=="failed"?LogReason.Other:LogReason.None,Binding:view.State=="completed"?view.Binding:null,Flag:view.State=="completed")));
-        Dictation = new(() => Languages.Current);
-        Dictation.Configure(config.Current);
+        if(!BuildInfo.IsLite)Dictation = new(() => Languages.Current);
+        Dictation?.Configure(config.Current);
         Languages.Configure(config.Current);quick.Configure(config.Current);registeredSettings=config.Current;callback=Handle;config.Changed+=Configure;thread=new Thread(Run){IsBackground=true,Name="DLT hotkey",Priority=ThreadPriority.AboveNormal};
         foregroundTimer=new(_=>SampleForeground(),null,0,500);thread.Start();
     }
     private Settings? registeredSettings;
     private readonly object configurationGate=new();
-    private void Configure(){lock(configurationGate){var settings=config.Current;var old=registeredSettings;Languages.Configure(settings);Dictation.Configure(settings);
+    private void Configure(){lock(configurationGate){var settings=config.Current;var old=registeredSettings;Languages.Configure(settings);Dictation?.Configure(settings);
         if(old!=null&&old.OutgoingHotkey==settings.OutgoingHotkey&&old.OutgoingEnabled==settings.OutgoingEnabled&&old.QuickMessages.SequenceEqual(settings.QuickMessages))return;
         registeredSettings=settings;Volatile.Write(ref binding,HotkeyChord.Parse(settings.OutgoingHotkey));outgoingEnabled=settings.OutgoingEnabled;quick.Configure(settings);Reinitialize();}}
     public void UpdateQuickSession(string session,bool compatible,string channel){quick.Session(session,compatible,channel);Languages.Session(session);versionedCapture=compatible;}
@@ -95,10 +95,10 @@ public sealed class NativeHotkey : IDisposable {
             var now=Environment.TickCount64;var b=Volatile.Read(ref binding);
             var foregroundWindow=GetForegroundWindow();GetWindowThreadProcessId(foregroundWindow,out var currentPid);
             var record=recorder.Process(key,scan,flags,down,up,now,foregroundWindow,SettingsFresh(now));
-            if(record.BlockSending||record.Suppress){keys.Process(b,key,scan,flags,down,up,new(false,false,false,false,false,false));quick.Process(key,scan,flags,down,up,now,false);Languages.Process(key,flags,down,up,keys.Held,false);var voiceRelease=Dictation.Process(key,flags,down,up,keys.Held,false);return record.Suppress||voiceRelease?(IntPtr)1:CallNextHookEx(hook,code,w,l);}
+            if(record.BlockSending||record.Suppress){keys.Process(b,key,scan,flags,down,up,new(false,false,false,false,false,false));quick.Process(key,scan,flags,down,up,now,false);Languages.Process(key,flags,down,up,keys.Held,false);var voiceRelease=Dictation?.Process(key,flags,down,up,keys.Held,false)==true;return record.Suppress||voiceRelease?(IntPtr)1:CallNextHookEx(hook,code,w,l);}
             var validForeground=currentPid!=0&&currentPid==foregroundPid&&now-Interlocked.Read(ref foregroundAt)<5000;
             var game=validForeground&&foregroundGame&&gameSameUser!=false;var test=now<Interlocked.Read(ref testUntil);var settings=SettingsFresh(now);var testAllowed=validForeground&&(foregroundBrowser||(game&&(!chatOpen||settings)));
-            if(Dictation.Process(key,flags,down,up,keys.Held,game&&!settings&&!test&&keys.SwallowedKey==0))return (IntPtr)1;
+            if(Dictation?.Process(key,flags,down,up,keys.Held,game&&!settings&&!test&&keys.SwallowedKey==0)==true)return (IntPtr)1;
             if(Languages.Process(key,flags,down,up,keys.Held,versionedCapture&&keys.SwallowedKey==0&&!quick.HasSuppressedKey&&outgoingEnabled&&game&&!settings&&!test&&AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen))))return (IntPtr)1;
             if(quick.Process(key,scan,flags,down,up,now,outgoingEnabled&&game&&!chatOpen&&!settings&&!test&&AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen))))return (IntPtr)1;
             var decision=keys.Process(b,key,scan,flags,down,up,new(outgoingEnabled,chatOpen,AllowsCapture(true,true,now,Interlocked.Read(ref lastSeen)),game&&!settings,testAllowed,test));
@@ -123,7 +123,7 @@ public sealed class NativeHotkey : IDisposable {
                 FlushNoise(Environment.TickCount64);
                 quick.RecoverRelease(key=>(GetAsyncKeyState(key)&0x8000)!=0);
                 Languages.RecoverRelease(key=>(GetAsyncKeyState(key)&0x8000)!=0);
-                Dictation.RecoverReleases(key=>(GetAsyncKeyState(key)&0x8000)!=0);
+                Dictation?.RecoverReleases(key=>(GetAsyncKeyState(key)&0x8000)!=0);
                 if(!recorder.Active(Environment.TickCount64))recorder.RecoverReleases(key=>(GetAsyncKeyState(key)&0x8000)!=0);
                 if(recorder.IsArming(Environment.TickCount64)&&!recorder.HasSuppressedKeys&&keys.SwallowedKey==0&&!quick.HasSuppressedKey&&!Languages.HasSuppressedKey&&ReadModifiers()==0){Install();if(hook==IntPtr.Zero)recorder.Fail("录制监听无法启动，可使用按键选项，或重建监听后重试。");else recorder.Activate(Environment.TickCount64,GetForegroundWindow(),SettingsFresh(Environment.TickCount64));}
                 if(Volatile.Read(ref reinitializePending)!=0&&!recorder.Active(Environment.TickCount64)&&!recorder.HasSuppressedKeys){if(keys.SwallowedKey!=0)keys.RecoverRelease((GetAsyncKeyState(keys.SwallowedKey)&0x8000)!=0);var actual=ReadModifiers();if(keys.SwallowedKey==0&&!quick.HasSuppressedKey&&!Languages.HasSuppressedKey&&actual==0){Interlocked.Exchange(ref reinitializePending,0);Install();Interlocked.Increment(ref reinitialized);log?.Record("hotkey",LogKind.HotkeyReinitialized);}}

@@ -204,7 +204,7 @@ def patch_chat_input(xml):
     return patched
 
 
-def prepare():
+def prepare(lite=False):
     source = root/'artifacts/decompiled/panorama/layout/chat.xml'
     source.parent.mkdir(parents=True, exist_ok=True)
     viewer = pathlib.Path(os.environ.get('DLT_RESOURCE_VIEWER', str(root/'tools/vrf/Source2Viewer-CLI.exe')))
@@ -240,15 +240,19 @@ def prepare():
     key_path = root/'artifacts/pairing.key'
     if not key_path.exists(): key_path.write_text(secrets.token_hex(24),encoding='ascii')
     hero_labels=json.loads((root/'artifacts/hero-labels.json').read_text(encoding='utf-8'))
-    stage = root/'artifacts/addon/content/citadel'
+    addon = root/'artifacts'/('addon-lite' if lite else 'addon')
+    stage = addon/'content/citadel'
     for f in (root/'mod').rglob('*'):
         if not f.is_file(): continue
         dest = stage/f.relative_to(root/'mod'); dest.parent.mkdir(parents=True,exist_ok=True)
         value=f.read_text(encoding='utf-8').replace('__PAIRING__',key_path.read_text().strip())
+        if lite:
+            value=value.replace('var LITE = false;', 'var LITE = true;')
         value=value.replace('var heroLabels = {}; // __DLT_HERO_LABELS__','var heroLabels = '+json.dumps(hero_labels,ensure_ascii=False,separators=(',',':'))+';')
         dest.write_text(value,encoding='utf-8')
-    stage_build_text_layouts(viewer, stage)
-    game_out=root/'artifacts/addon/game/citadel'; game_out.mkdir(parents=True,exist_ok=True)
+    if not lite:
+        stage_build_text_layouts(viewer, stage)
+    game_out=addon/'game/citadel'; game_out.mkdir(parents=True,exist_ok=True)
     (game_out/'gameinfo.gi').write_text('"GameInfo" { "game" "citadel" FileSystem { SearchPaths { Game "citadel" Game "core" } } }',encoding='utf-8')
     return stage,game_out
 
@@ -265,4 +269,6 @@ def conflicts():
     print(json.dumps(results,ensure_ascii=False,indent=2))
 
 if __name__=='__main__':
-    prepare(); conflicts()
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--lite',action='store_true')
+    prepare(parser.parse_args().lite); conflicts()
