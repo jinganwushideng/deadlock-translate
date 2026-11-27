@@ -23,7 +23,7 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "09cdba6a37503396fe22b37432b9e032e21712b87c93a904005a44f380cb82ea"
+      "sha256": "741b6ce855fac613bd5ccee8269501f7954b366d281314dfbda6f5f468739783"
     },
     {
       "file": "CHANGELOG.md",
@@ -263,7 +263,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "eda3722034d786463e83e7e902df232abc820ec23970a2ae893c9cfe271af64e"
+      "sha256": "9f535ecbad6ed6d6c9ed80586685fe4ca25e8ba1a5a0462a38aa1a5ace37f1bc"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -451,7 +451,7 @@
     },
     {
       "file": "scripts/Update-Mod.ps1",
-      "sha256": "13fec201c307eeb5d45a490f0a479aa00b7a552cd5af67d855900a5214a140f3"
+      "sha256": "6660d666a715e0597b065ba86cd4db673a68a008a4daee75eaaa5992ef23b75d"
     },
     {
       "file": "scripts/Vpk-Recovery.ps1",
@@ -483,7 +483,7 @@
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "c8b49fc15467bac29840996870217588aa02d3f2fd1def47a27f69e9c4e99644"
+      "sha256": "31f680267e55f0b58e5f3417fbcad01808dd5f2f5a7329a5c861ba3fb8d96c20"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",

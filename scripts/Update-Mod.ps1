@@ -420,7 +420,11 @@ try{
     $taskWasLite=(Get-DltInstalledEditionInfo $taskInstall $RuntimeFolder).edition -eq 'lite'
     $taskSwitchEdition=$taskWasLite -ne $taskLite
     $taskTermsDirectory=if($taskLite){Join-Path $StateDirectory 'lite'}else{$StateDirectory}
-    $taskPreviousRuntime=if($taskInstall.runtimeFolder){$taskInstall.runtimeFolder}else{$RuntimeFolder}
+    $taskPreviousRuntime=$RuntimeFolder
+    if($taskInstall.runtimeFolder -and $taskInstall.runtimeFolder -ine $RuntimeFolder -and
+       [IO.Path]::IsPathRooted([string]$taskInstall.runtimeFolder) -and (Runtime-Matches $taskInstall.runtimeFolder)){
+        $taskPreviousRuntime=Full-Path $taskInstall.runtimeFolder
+    }
     $taskOldDefaults=Join-Path $taskPreviousRuntime 'data\terms.json'
     $taskRetired=@()
     if($taskLite -and -not $taskWasLite){
