@@ -1699,7 +1699,7 @@
     },
     {
       "file": "tests/update.test.py",
-      "sha256": "8587abc742be7751fea46e91d7cbbdc9f3517523528516bf7f4c738708298db4"
+      "sha256": "9993cb837b37f25129f34a2a0498407d00960e348c6a44089b3abb7d06133953"
     },
     {
       "file": "tests/upgrade-0623-http.test.cjs",

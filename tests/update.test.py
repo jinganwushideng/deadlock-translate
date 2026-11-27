@@ -214,7 +214,7 @@ class UpdateTests(unittest.TestCase):
         settings = json.loads(lite_settings.read_text(encoding='utf-8-sig'))
         self.assertEqual((settings['outgoingHotkey'],settings['incomingTargetLanguage'],settings['mode']),('F8','ja','fast'))
         self.assertNotIn('voiceInputTeamKey',settings)
-        self.assertEqual(json.loads((self.state/'install-manifest.json').read_text())['edition'], 'lite')
+        self.assertEqual(json.loads((self.state/'install-manifest.json').read_text(encoding='utf-8-sig'))['edition'], 'lite')
         write_json(lite_terms, [t for t in shared if t['source']!='custom']+[term('new-lite','new term')])
         write_json(lite_settings, {**settings,'outgoingHotkey':'F10','outgoingDisplayMode':'bilingual'})
         lite = lite_terms.read_bytes()
