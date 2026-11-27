@@ -1,5 +1,6 @@
 import argparse, hashlib, json, pathlib, re, secrets, subprocess, shutil, os
 import xml.etree.ElementTree as ET
+from collections import Counter
 from vpk import Vpk
 from native_bubble_layout import STYLE as NATIVE_BUBBLE_STYLE, patch_native_bubble
 root = pathlib.Path(__file__).resolve().parents[1]
@@ -154,15 +155,32 @@ def patch_build_text_layout(xml, name):
 
 
 def stage_build_text_layouts(viewer, stage):
+    base = Vpk(game/'pak01_dir.vpk')
+    provenance = []
     for name in BUILD_TEXT_LAYOUTS:
         source = root / f'artifacts/decompiled/panorama/layout/{name}.xml'
+        resource = f'panorama/layout/{name}.vxml_c'
         source.parent.mkdir(parents=True, exist_ok=True)
         source.unlink(missing_ok=True)
         subprocess.run([str(viewer), '-i', str(game/'pak01_dir.vpk'), '-o', str(source),
-                        '--vpk_filepath', f'panorama/layout/{name}.vxml_c', '-d'], check=True)
+                        '--vpk_filepath', resource, '-d'], check=True)
+        original = source.read_text(encoding='utf-8-sig')
+        patched = patch_build_text_layout(original, name)
+        verify_build_layout_controls(original, patched, name)
         target = stage / f'panorama/layout/{name}.xml'
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(patch_build_text_layout(source.read_text(encoding='utf-8-sig'), name), encoding='utf-8')
+        target.write_text(patched, encoding='utf-8')
+        provenance.append({'resource': resource, 'baseResourceSha256': hashlib.sha256(base.read(resource)).hexdigest()})
+    (root/'artifacts/build-layout-provenance.json').write_text(json.dumps(provenance, indent=2), encoding='utf-8')
+
+
+def verify_build_layout_controls(original, patched, name):
+    def controls(xml):
+        return Counter((panel.tag, panel.attrib['id']) for panel in ET.fromstring(xml).iter() if 'id' in panel.attrib)
+    native = controls(original)
+    missing = native - controls(patched)
+    if missing:
+        raise ValueError(f'{name} lost native controls: {", ".join(control_id for _, control_id in missing)}')
 
 
 def patch_chat_input(xml):

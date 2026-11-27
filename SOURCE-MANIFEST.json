@@ -1,7 +1,7 @@
 {
-  "version": "0.7.6",
-  "buildId": "0.7.6-0a675703de0b",
-  "featureRevision": "teammate-voice-translation-cuda-download",
+  "version": "0.7.6.1",
+  "buildId": "0.7.6.1-2168aced6ea5",
+  "featureRevision": "shop-tooltip-layout-compatibility",
   "files": [
     {
       "file": ".gitattributes",
@@ -25,11 +25,11 @@
     },
     {
       "file": "build-info.json",
-      "sha256": "b8aad861c11334316a4b67bbf3fc0602d67ffe87bee8d69e2b51091ffda13863"
+      "sha256": "dcb6b75587f932bfb8c99d817c2f0b14da20e8261799ee465d18d5c5d419dc81"
     },
     {
       "file": "CHANGELOG.md",
-      "sha256": "114d318c3c75c8bfa2f889c19f31025a44dd1e72ac3ad521aa5212016874a4bf"
+      "sha256": "4e2ec1d45a593f8d75c87c271ee0c0e1c544a2ff0b46a50a1d5bfeec3e3b2b53"
     },
     {
       "file": "CONTRIBUTING.md",
@@ -93,7 +93,7 @@
     },
     {
       "file": "docs/README.md",
-      "sha256": "215c046a86e8519d67ccc051315d4ac738080a6dfe479b649f90864cf9748c29"
+      "sha256": "33417907e57669e1e2171138bf5ff921bb849aa823a82b80548a9b911cefef68"
     },
     {
       "file": "docs/SOURCE-AUDIT.md",
@@ -148,12 +148,16 @@
       "sha256": "db4a36df517062086355ed022f520b8d4245cd6d66f132de2bdf74ffbaae9cda"
     },
     {
+      "file": "docs/UPDATE-0.7.6.1.md",
+      "sha256": "9d2be42197e93a62a4ba4fb9dbf4fa8c8704a5c7c29c5b242d898c843e161488"
+    },
+    {
       "file": "docs/UPDATE-0.7.6.md",
       "sha256": "fc3077ba6012f83f9a7846c249a716552155b043742fcba656ac3524c4c567f9"
     },
     {
       "file": "docs/UPDATE-HISTORY.json",
-      "sha256": "316276c2e452cf47bba4e9b97a76d865eb4b4c45da810e9195e80b95e24324a5"
+      "sha256": "b88a3c5da8a32dfe7058e8f61325a4def0b94363bc27329e56180e4e4b0141c9"
     },
     {
       "file": "docs/USER-GUIDE.md",
@@ -249,7 +253,7 @@
     },
     {
       "file": "mod/panorama/scripts/dlt_chat.js",
-      "sha256": "a29a7fcaf2170703d411d4dd6cdea03d777ebc04210c6ba09bb3ad46d7660f42"
+      "sha256": "88a681ae3ab9c9dc3b2720bbaed262806648afa3c6f8e97e21193eb2af0739e8"
     },
     {
       "file": "mod/panorama/scripts/dlt_menu.js",
@@ -293,7 +297,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "c333e39dfbecdd45d552af9ee6ac6686935208e9858f636dd8a54f8035cae29e"
+      "sha256": "1b1a195678e4513bdf85412cb3e60e3a4222428bedb8116c5cc9a7b32bf9e4ef"
     },
     {
       "file": "scripts/Backup-Maintenance.ps1",
@@ -337,7 +341,7 @@
     },
     {
       "file": "scripts/export_source.py",
-      "sha256": "ea96fccfa8252675e398d1537d5a0e54ab626d8519bef2cd7b19296cbe0b1f04"
+      "sha256": "0d3b61d6f1572ef89b12217d152aa3c20409d92ab6db945c2063683ab677e078"
     },
     {
       "file": "scripts/Find-Deadlock.ps1",
@@ -393,7 +397,7 @@
     },
     {
       "file": "scripts/prepare_mod.py",
-      "sha256": "e0850cb6203d571ef03af7834a81bda5e14a233e6d978963bb83b14874410d6e"
+      "sha256": "b57f5b28f9852129bb155bf5d0027e17ce88d13f9515449c6766294c3f3bc7f7"
     },
     {
       "file": "scripts/release_history.py",
@@ -465,11 +469,11 @@
     },
     {
       "file": "src/Bridge/Bridge.csproj",
-      "sha256": "8f20f69ec61bb34bf498f929e0127852042c61cf6d8c7738652fdfca95e0b47c"
+      "sha256": "d9f4f6c918c8a4f9f881718a97465caa2de8dbf860dbae87d0666bc111c92944"
     },
     {
       "file": "src/Bridge/BuildInfo.Generated.cs",
-      "sha256": "bef926c8115b17fbeb4bcac43a8733e5e0660fa7d74a6e326d4da2f4ad39b706"
+      "sha256": "75b45043d5a43178d8bfcd8ccd40781e4d20c67a86835e6ee94181646af7127c"
     },
     {
       "file": "src/Bridge/BuildRankNames.cs",
@@ -789,7 +793,7 @@
     },
     {
       "file": "src/Installer/Installer.csproj",
-      "sha256": "300751d5ec21714f07230c48c1ac126a1662efad67a962b44fe573a5d3f1eade"
+      "sha256": "faa10f8f52e5d262fa7e77734f84136c8b2db1fe977565fbe98da6b5779d85b2"
     },
     {
       "file": "src/Installer/InstallerAnnouncement.cs",
@@ -1693,7 +1697,7 @@
     },
     {
       "file": "version.json",
-      "sha256": "1bba95863aed0728302a56867028f1d7569f106ec611e69419878a1d76ac1938"
+      "sha256": "f812b1795eac6dec876e7311a54f9376c3ec7f4a0eee7ea27e82ad464ddc2097"
     }
   ]
 }
